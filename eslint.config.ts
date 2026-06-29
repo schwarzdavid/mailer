@@ -1,14 +1,14 @@
-import eslint from '@eslint/js';
-import prettierConfig from 'eslint-config-prettier/flat';
-import tseslint from 'typescript-eslint';
+import eslint from '@eslint/js'
+import prettierConfig from 'eslint-config-prettier/flat'
+import tseslint from 'typescript-eslint'
 
 export interface BaseConfigOptions {
-  /**
-   * Directory that holds the consuming project's tsconfig. Passed to the
-   * type-aware parser's project service so type-checked rules resolve against
-   * the right project.
-   */
-  tsconfigRootDir: string;
+    /**
+     * Directory that holds the consuming project's tsconfig. Passed to the
+     * type-aware parser's project service so type-checked rules resolve against
+     * the right project.
+     */
+    tsconfigRootDir: string
 }
 
 /**
@@ -17,44 +17,49 @@ export interface BaseConfigOptions {
  * (globals, source type, framework plugins, rule tweaks) on top.
  */
 export function defineBaseConfig({ tsconfigRootDir }: BaseConfigOptions) {
-  return tseslint.config(
-    // Outputs that should never be linted, regardless of project.
-    {
-      ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**'],
-    },
-
-    // Recommended JS + type-aware TypeScript rules.
-    eslint.configs.recommended,
-    ...tseslint.configs.recommendedTypeChecked,
-
-    // Wire the type-aware parser to the consuming project's tsconfig.
-    {
-      languageOptions: {
-        parserOptions: {
-          projectService: true,
-          tsconfigRootDir,
+    return tseslint.config(
+        // Outputs that should never be linted, regardless of project.
+        {
+            ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**'],
         },
-      },
-    },
 
-    // Shared house style. Projects may override these.
-    {
-      rules: {
-        '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/no-floating-promises': 'warn',
-        '@typescript-eslint/no-unsafe-argument': 'warn',
-      },
-    },
+        // Recommended JS + type-aware TypeScript rules.
+        eslint.configs.recommended,
+        ...tseslint.configs.recommendedTypeChecked,
 
-    // Flat-config files aren't part of a tsconfig, so don't type-check them.
-    {
-      files: ['**/eslint.config.*'],
-      extends: [tseslint.configs.disableTypeChecked],
-    },
+        // Wire the type-aware parser to the consuming project's tsconfig.
+        {
+            languageOptions: {
+                parserOptions: {
+                    projectService: true,
+                    tsconfigRootDir,
+                },
+            },
+        },
 
-    // Disable formatting-related rules — Prettier runs as its own command.
-    prettierConfig,
-  );
+        // Shared house style. Projects may override these.
+        {
+            rules: {
+                '@typescript-eslint/no-explicit-any': 'off',
+                '@typescript-eslint/no-floating-promises': 'warn',
+                '@typescript-eslint/no-unsafe-argument': 'warn',
+            },
+        },
+
+        // Flat-config files aren't part of a tsconfig, so don't type-check them.
+        {
+            files: ['**/eslint.config.*'],
+            extends: [tseslint.configs.disableTypeChecked],
+        },
+
+        // Disable formatting-related rules — Prettier runs as its own command.
+        prettierConfig,
+    )
 }
 
-export default defineBaseConfig({ tsconfigRootDir: import.meta.dirname });
+// Root-level lint only. Workspace packages own their own flat config (they
+// extend the base via `defineBaseConfig`), so they're excluded here.
+export default tseslint.config(
+    { ignores: ['apps/**', 'packages/**'] },
+    ...defineBaseConfig({ tsconfigRootDir: import.meta.dirname }),
+)

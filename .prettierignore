@@ -1,0 +1,25 @@
+# Dependencies
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/dist-ssr/
+**/.output/
+**/build/
+
+# Test / coverage artifacts
+**/coverage/
+
+# Generated code
+**/src/generated/
+openapi/
+
+# Turbo cache & TS build info
+**/.turbo/
+**/*.tsbuildinfo
+
+# Lockfiles
+pnpm-lock.yaml
+
+# IDE
+.idea/

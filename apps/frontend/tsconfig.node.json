@@ -20,6 +20,10 @@
     // Disable emitting output during `vue-tsc --build`, which is used for type-checking only.
     "noEmit": true,
 
+    // The shared ESLint base is imported with an explicit `.ts` extension
+    // (`../../eslint.config.ts`). Allowed here because this project never emits.
+    "allowImportingTsExtensions": true,
+
     // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
     // Specified here to keep it out of the root directory.
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
