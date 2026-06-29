@@ -1,42 +1,42 @@
 import {
+    AllowNull,
     AutoIncrement,
     Column,
     CreatedAt,
     DataType,
     Model,
-    NotNull,
     PrimaryKey,
     Table,
     Unique,
     UpdatedAt
 } from "sequelize-typescript";
-import {User} from "./interfaces/user.interface";
+import {User, UserCreate} from "./interfaces/user.interface";
 
 @Table({
     timestamps: true,
     tableName: 'users',
 })
-export class UserModel extends Model<User, Omit<User, 'userId'>> implements User {
+export class UserModel extends Model<User, UserCreate> implements User {
     @PrimaryKey
     @AutoIncrement
-    @NotNull
-    @Column(DataType.BIGINT.UNSIGNED)
+    @AllowNull(false)
+    @Column(DataType.BIGINT)
     declare userId: number;
 
-    @NotNull
+    @AllowNull(false)
     @Column(DataType.STRING(255))
     declare firstName: string;
 
-    @NotNull
+    @AllowNull(false)
     @Column(DataType.STRING(255))
     declare lastName: string;
 
-    @NotNull
+    @AllowNull(false)
     @Unique
     @Column(DataType.STRING(255))
     declare email: string;
 
-    @NotNull
+    @AllowNull(false)
     @Column(DataType.STRING(255))
     declare password: string;
 

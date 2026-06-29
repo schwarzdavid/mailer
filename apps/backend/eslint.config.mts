@@ -1,6 +1,7 @@
 import globals from 'globals';
 import pluginVitest from '@vitest/eslint-plugin';
 import tseslint from 'typescript-eslint';
+// @ts-expect-error - allowTsImport is not possible due to nestjs
 import { defineBaseConfig } from '../../eslint.config.ts';
 
 export default tseslint.config(
