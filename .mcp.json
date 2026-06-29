@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "npx": {
+      "type": "stdio",
+      "command": "@eslint/mcp@latest",
+      "args": [],
+      "env": {}
+    }
+  }
+}

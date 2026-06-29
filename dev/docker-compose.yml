@@ -1,0 +1,5 @@
+name: "schwarzdavid Mailservice Dev"
+
+services:
+  postfix:
+    image: postfix
