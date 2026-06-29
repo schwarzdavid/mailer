@@ -1,7 +1,8 @@
 packages:
-    - 'apps/*'
-    - 'packages/*'
+  - 'apps/*'
+  - 'packages/*'
 allowBuilds:
-    '@swc/core': true
-    unrs-resolver: true
+  '@scarf/scarf': false
+  '@swc/core': true
+  unrs-resolver: true
 includeWorkspaceRoot: true
