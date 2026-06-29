@@ -7,6 +7,7 @@ import {
     NotNull,
     PrimaryKey,
     Table,
+    Unique,
     UpdatedAt
 } from "sequelize-typescript";
 import {User} from "./interfaces/user.interface";
@@ -31,6 +32,7 @@ export class UserModel extends Model<User, Omit<User, 'userId'>> implements User
     declare lastName: string;
 
     @NotNull
+    @Unique
     @Column(DataType.STRING(255))
     declare email: string;
 

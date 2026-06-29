@@ -11,6 +11,8 @@
     "**/*spec.ts",
     "**/*.config.ts",
     "**/*.config.mts",
-    "**/*.config.*.ts"
+    "**/*.config.*.ts",
+    "src/migrate.ts",
+    "src/migrations/**"
   ]
 }

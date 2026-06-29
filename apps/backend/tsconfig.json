@@ -16,5 +16,12 @@
     "incremental": true
   },
   "exclude": ["node_modules", "dist", "**/*.config.ts", "**/*.config.mts", "**/*.config.*.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "CommonJS",
+      "moduleResolution": "node"
+    }
+  }
 }

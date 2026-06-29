@@ -9,7 +9,7 @@ import {UserModule} from './user/user.module';
   imports: [
       ConfigModule.forRoot({
         isGlobal: true,
-        envFilePath: [join(__dirname, '..', '..', '.env')]
+        envFilePath: [join(__dirname, '..', '..', '..', '.env')]
       }),
       SequelizeModule.forRootAsync({
           imports: [ConfigModule],
