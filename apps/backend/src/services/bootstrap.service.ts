@@ -1,8 +1,8 @@
 import {Injectable, Logger, OnApplicationBootstrap} from "@nestjs/common";
-import {UserService} from "./user/user.service";
+import {UserService} from "../modules/user/services/user.service";
 import {ConfigService} from "@nestjs/config";
 import {InjectModel} from "@nestjs/sequelize";
-import {UserModel} from "./user/user.model";
+import {UserModel} from "../modules/user/models/user.model";
 import {randomBytes} from "node:crypto";
 
 @Injectable()

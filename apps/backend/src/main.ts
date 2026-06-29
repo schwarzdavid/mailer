@@ -20,7 +20,7 @@ async function bootstrap() {
   const document = setupOpenAPI(app)
   const logger = new Logger('Bootstrap')
 
-  if(specOnly || process.env.NODE_ENV === 'development') {
+  if(specOnly || process.env.NODE_ENV !== 'production') {
     await saveOpenApiSpec(app, document)
     logger.log('OpenAPI spec saved.')
   }

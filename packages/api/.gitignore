@@ -1,0 +1,4 @@
+assets/openapi.json
+src/openapi
+dist
+node_modules

@@ -10,7 +10,7 @@ import {
     Unique,
     UpdatedAt
 } from "sequelize-typescript";
-import {User, UserCreate} from "./interfaces/user.interface";
+import {User, UserCreate} from "../interfaces/user.interface";
 
 @Table({
     timestamps: true,
