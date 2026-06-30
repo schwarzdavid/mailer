@@ -16,5 +16,6 @@ export default {
         },
         '@hey-api/transformers',
         { name: '@hey-api/client-fetch', throwOnError: true },
+        { name: 'zod', includeInEntry: true },
     ],
 } satisfies UserConfig

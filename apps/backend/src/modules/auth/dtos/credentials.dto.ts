@@ -1,13 +1,11 @@
 import { Credentials } from '../interfaces/credentials.interface';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsString, MinLength } from 'class-validator';
 
 export class CredentialsDto implements Credentials {
-    @IsString()
     @IsEmail()
-    @IsNotEmpty()
     email!: string;
 
+    @MinLength(1, { message: 'ERRORS.VALIDATION.REQUIRED' })
     @IsString()
-    @IsNotEmpty()
     password!: string;
 }

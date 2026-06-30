@@ -17,5 +17,18 @@ export const vuetify = createVuetify({
             ripple: false,
             elevation: 0,
         },
+        VTextField: {
+            variant: 'outlined',
+        },
+        VTextarea: {
+            variant: 'outlined',
+        },
+        VNumberInput: {
+            variant: 'outlined',
+        },
+        VBtn: {
+            color: 'primary',
+            size: 'large',
+        },
     },
 })

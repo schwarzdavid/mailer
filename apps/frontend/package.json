@@ -21,16 +21,21 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
-    "api": "workspace:*",
     "@mdi/font": "^7.4.47",
     "@tanstack/vue-query": "^5.101.2",
+    "@vee-validate/zod": "^4.15.1",
     "@vueuse/core": "^14.3.0",
     "@vueuse/router": "^14.3.0",
+    "api": "workspace:*",
+    "vee-validate": "^4.15.1",
     "vue": "^3.5.38",
+    "vue-i18n": "^11.4.6",
     "vue-router": "^5.1.0",
-    "vuetify": "^4.1.2"
+    "vuetify": "^4.1.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@intlify/unplugin-vue-i18n": "^11.2.4",
     "@playwright/test": "^1.61.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",

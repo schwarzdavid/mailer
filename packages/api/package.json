@@ -11,8 +11,15 @@
   ],
   "module": "./dist/index.ts",
   "main": "./dist/index.ts",
+  "exports": {
+    ".": "./dist/index.ts",
+    "./client": "./dist/client.gen.ts"
+  },
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
     "chokidar-cli": "^3.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
