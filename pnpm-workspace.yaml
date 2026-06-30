@@ -5,4 +5,5 @@ allowBuilds:
   '@scarf/scarf': false
   '@swc/core': true
   unrs-resolver: true
+  vue-demi: true
 includeWorkspaceRoot: true

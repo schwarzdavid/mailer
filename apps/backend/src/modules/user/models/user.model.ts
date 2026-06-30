@@ -10,13 +10,13 @@ import {
     Unique,
     UpdatedAt
 } from "sequelize-typescript";
-import {User, UserCreate} from "../interfaces/user.interface";
+import {FullUser, UserCreate} from "../interfaces/user.interface";
 
 @Table({
     timestamps: true,
     tableName: 'users',
 })
-export class UserModel extends Model<User, UserCreate> implements User {
+export class UserModel extends Model<FullUser, UserCreate> implements FullUser {
     @PrimaryKey
     @AutoIncrement
     @AllowNull(false)

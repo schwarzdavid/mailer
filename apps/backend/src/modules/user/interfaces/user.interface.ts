@@ -3,9 +3,12 @@ export interface User {
     firstName: string,
     lastName: string,
     email: string,
-    password: string,
     createdAt: Date,
     updatedAt: Date,
 }
 
-export type UserCreate = Omit<User, 'userId' | 'createdAt' | 'updatedAt'>
+export interface FullUser extends User {
+    password: string
+}
+
+export type UserCreate = Omit<FullUser, 'userId' | 'createdAt' | 'updatedAt'>

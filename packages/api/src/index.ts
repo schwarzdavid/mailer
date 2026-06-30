@@ -1,1 +1,3 @@
-export * from './openapi'
+export * from './openapi/client'
+
+console.log('hi')

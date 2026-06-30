@@ -6,14 +6,15 @@ export default defineConfig({
     build: {
         lib: {
             entry: resolve(import.meta.dirname, 'src/index.ts'),
-            name: 'api'
+            name: 'api',
+            formats: ['es'],
         }
     },
     plugins: [
         heyApiPlugin({
             config: {
                 input: './assets/openapi.json',
-                output: 'src/openapi'
+                output: {path: 'src/openapi', entryFile: false}
             }
         })
     ]

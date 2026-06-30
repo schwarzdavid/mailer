@@ -1,0 +1,21 @@
+import {createVuetify} from "vuetify/framework";
+
+export const vuetify = createVuetify({
+    theme: {
+        themes: {
+            light: {
+                colors: {
+                    primary: '#ffcf00',
+                    background: '#eaeaea'
+                }
+            }
+        }
+    },
+    defaults: {
+        global: {
+            rounded: false,
+            ripple: false,
+            elevation: 0
+        }
+    }
+})

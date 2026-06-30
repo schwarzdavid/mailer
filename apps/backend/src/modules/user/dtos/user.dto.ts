@@ -1,6 +1,8 @@
 import {User} from "../interfaces/user.interface";
+import {ApiProperty} from "@nestjs/swagger";
 
-export class UserDto implements Omit<User, 'password'> {
+export class UserDto implements User {
+    @ApiProperty({type: Number})
     userId!: number;
     firstName!: string;
     lastName!: string;
