@@ -8,9 +8,9 @@ import {
     PrimaryKey,
     Table,
     Unique,
-    UpdatedAt
-} from "sequelize-typescript";
-import {FullUser, UserCreate} from "../interfaces/user.interface";
+    UpdatedAt,
+} from 'sequelize-typescript';
+import { FullUser, UserCreate } from '../interfaces/user.interface';
 
 @Table({
     timestamps: true,
@@ -41,8 +41,8 @@ export class UserModel extends Model<FullUser, UserCreate> implements FullUser {
     declare password: string;
 
     @CreatedAt
-    declare createdAt: Date
+    declare createdAt: Date;
 
     @UpdatedAt
-    declare updatedAt: Date
+    declare updatedAt: Date;
 }

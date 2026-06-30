@@ -1,8 +1,8 @@
-import {User} from "../interfaces/user.interface";
-import {ApiProperty} from "@nestjs/swagger";
+import { User } from '../interfaces/user.interface';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UserDto implements User {
-    @ApiProperty({type: Number})
+    @ApiProperty({ type: Number })
     userId!: number;
     firstName!: string;
     lastName!: string;
@@ -11,13 +11,13 @@ export class UserDto implements User {
     updatedAt!: Date;
 
     static toDto(user: User): UserDto {
-        const dto = new UserDto()
+        const dto = new UserDto();
 
-        dto.userId = user.userId
-        dto.firstName = user.firstName
-        dto.lastName = user.lastName
-        dto.email = user.email
+        dto.userId = user.userId;
+        dto.firstName = user.firstName;
+        dto.lastName = user.lastName;
+        dto.email = user.email;
 
-        return dto
+        return dto;
     }
 }

@@ -1,5 +1,5 @@
-import {Credentials} from "../interfaces/credentials.interface";
-import {IsEmail, IsNotEmpty, IsString} from "class-validator";
+import { Credentials } from '../interfaces/credentials.interface';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 export class CredentialsDto implements Credentials {
     @IsString()
@@ -10,5 +10,4 @@ export class CredentialsDto implements Credentials {
     @IsString()
     @IsNotEmpty()
     password!: string;
-
 }

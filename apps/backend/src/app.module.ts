@@ -1,19 +1,19 @@
-import {Module} from '@nestjs/common';
-import {ConfigModule, ConfigService} from "@nestjs/config";
-import {join} from "node:path";
-import {SequelizeModule} from "@nestjs/sequelize";
-import {AuthModule} from './modules/auth/auth.module';
-import {UserModule} from './modules/user/user.module';
-import {BootstrapService} from "./services/bootstrap.service";
-import {CacheModule} from "@nestjs/cache-manager";
-import KeyvRedis from "@keyv/redis";
-import {JwtModule} from "@nestjs/jwt";
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { join } from 'node:path';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { AuthModule } from './modules/auth/auth.module';
+import { UserModule } from './modules/user/user.module';
+import { BootstrapService } from './services/bootstrap.service';
+import { CacheModule } from '@nestjs/cache-manager';
+import KeyvRedis from '@keyv/redis';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
-            envFilePath: [join(__dirname, '..', '..', '..', '.env')]
+            envFilePath: [join(__dirname, '..', '..', '..', '.env')],
         }),
         SequelizeModule.forRootAsync({
             imports: [ConfigModule],
@@ -27,43 +27,40 @@ import {JwtModule} from "@nestjs/jwt";
                     password: configService.get<string>('DB_PASSWORD'),
                     database: configService.get<string>('DB_DATABASE'),
                     autoLoadModels: true,
-                }
-            }
+                };
+            },
         }),
         CacheModule.registerAsync({
             isGlobal: true,
             imports: [ConfigModule],
             inject: [ConfigService],
             useFactory(configService: ConfigService) {
-                const host = configService.get<string>('REDIS_HOST', 'localhost')
-                const port = configService.get<string>('REDIS_PORT', '6379')
-                const password = configService.get<string>('REDIS_PASSWORD', '')
+                const host = configService.get<string>('REDIS_HOST', 'localhost');
+                const port = configService.get<string>('REDIS_PORT', '6379');
+                const password = configService.get<string>('REDIS_PASSWORD', '');
 
                 return {
-                    stores: [
-                        new KeyvRedis(`redis://:${password}@${host}:${port}/0`, {namespace: 'cache'})
-                    ],
-                    ttl: 1000 * 60
-                }
+                    stores: [new KeyvRedis(`redis://:${password}@${host}:${port}/0`, { namespace: 'cache' })],
+                    ttl: 1000 * 60,
+                };
             },
         }),
         JwtModule.registerAsync({
             global: true,
-           imports: [ConfigModule],
-           inject: [ConfigService],
-           useFactory(configService: ConfigService) {
-               return {
-                   secret: configService.get<string>('JWT_SECRET', 'no-secret'),
-                   signOptions: {
-                       expiresIn: '31d'
-                   }
-               }
-           }
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory(configService: ConfigService) {
+                return {
+                    secret: configService.get<string>('JWT_SECRET', 'no-secret'),
+                    signOptions: {
+                        expiresIn: '31d',
+                    },
+                };
+            },
         }),
         AuthModule,
-        UserModule
+        UserModule,
     ],
-    providers: [BootstrapService]
+    providers: [BootstrapService],
 })
-export class AppModule {
-}
+export class AppModule {}

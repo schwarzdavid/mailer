@@ -1,7 +1,7 @@
-import type {MigrationParams} from 'umzug';
-import {DataTypes, type QueryInterface} from 'sequelize';
+import type { MigrationParams } from 'umzug';
+import { DataTypes, type QueryInterface } from 'sequelize';
 
-export const up = async ({context: queryInterface}: MigrationParams<QueryInterface>) => {
+export const up = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
     await queryInterface.createTable('users', {
         userId: {
             type: DataTypes.BIGINT,
@@ -41,6 +41,6 @@ export const up = async ({context: queryInterface}: MigrationParams<QueryInterfa
     });
 };
 
-export const down = async ({context: queryInterface}: MigrationParams<QueryInterface>) => {
+export const down = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
     await queryInterface.dropTable('users');
 };

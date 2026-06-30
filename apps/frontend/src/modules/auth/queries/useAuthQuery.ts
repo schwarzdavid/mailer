@@ -1,14 +1,9 @@
-import {useQuery} from "@tanstack/vue-query";
-import {login} from '@mailer/api'
+import { useQuery } from '@tanstack/vue-query'
+import { AuthApi } from 'api'
 
 export function useAuthQuery() {
     return useQuery({
         queryKey: ['auth.user'],
-        queryFn: () => login({
-            body: {
-                email: '',
-                password: ''
-            }
-        })
+        queryFn: () => AuthApi.currentUser(),
     })
 }

@@ -1,4 +1,4 @@
-import {createVuetify} from "vuetify/framework";
+import { createVuetify } from 'vuetify/framework'
 
 export const vuetify = createVuetify({
     theme: {
@@ -6,16 +6,16 @@ export const vuetify = createVuetify({
             light: {
                 colors: {
                     primary: '#ffcf00',
-                    background: '#eaeaea'
-                }
-            }
-        }
+                    background: '#eaeaea',
+                },
+            },
+        },
     },
     defaults: {
         global: {
             rounded: false,
             ripple: false,
-            elevation: 0
-        }
-    }
+            elevation: 0,
+        },
+    },
 })

@@ -1,8 +1,9 @@
 {
-  "name": "@mailer/api",
+  "name": "api",
   "type": "module",
   "scripts": {
-    "build": "openapi-ts"
+    "build": "openapi-ts",
+    "dev": "chokidar \"assets/openapi.json\" -c openapi-ts"
   },
   "files": [
     "dist",
@@ -11,6 +12,7 @@
   "module": "./dist/index.ts",
   "main": "./dist/index.ts",
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.99.0"
+    "@hey-api/openapi-ts": "0.99.0",
+    "chokidar-cli": "^3.0.0"
   }
 }

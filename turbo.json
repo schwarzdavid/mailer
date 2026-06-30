@@ -1,11 +1,6 @@
 {
     "$schema": "https://turborepo.dev/schema.json",
-    "globalDependencies": [
-        "tsconfig.json",
-        "tsconfig.build.json",
-        "eslint.config.ts",
-        "prettier.config.ts"
-    ],
+    "globalDependencies": ["tsconfig.json", "tsconfig.build.json", "eslint.config.ts", "prettier.config.ts"],
     "tasks": {
         "dev": {
             "cache": false,

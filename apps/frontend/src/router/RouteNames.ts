@@ -1,3 +1,3 @@
 export enum RouteNames {
-    LOGIN = 'auth::login'
+    LOGIN = 'auth::login',
 }

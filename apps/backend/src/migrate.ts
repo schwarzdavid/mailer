@@ -1,12 +1,12 @@
 import 'reflect-metadata';
-import {createRequire} from 'node:module';
-import {join} from 'node:path';
-import {NestFactory} from '@nestjs/core';
-import {getConnectionToken} from '@nestjs/sequelize';
-import {Sequelize} from 'sequelize-typescript';
-import {SequelizeStorage, Umzug} from 'umzug';
-import type {QueryInterface} from 'sequelize';
-import {AppModule} from './app.module';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { NestFactory } from '@nestjs/core';
+import { getConnectionToken } from '@nestjs/sequelize';
+import { Sequelize } from 'sequelize-typescript';
+import { SequelizeStorage, Umzug } from 'umzug';
+import type { QueryInterface } from 'sequelize';
+import { AppModule } from './app.module';
 
 const requireMigration = createRequire(__filename);
 
@@ -23,27 +23,27 @@ export const down = async ({context: queryInterface}: MigrationParams<QueryInter
 function buildUmzug(sequelize: Sequelize): Umzug<QueryInterface> {
     return new Umzug({
         migrations: {
-            glob: ['migrations/*.ts', {cwd: __dirname}],
+            glob: ['migrations/*.ts', { cwd: __dirname }],
             // Resolve via require so ts-node transpiles the .ts migration files;
             // umzug's default loader uses dynamic import() which bypasses the ts-node hook.
-            resolve({name, path, context}) {
+            resolve({ name, path, context }) {
                 const migration = requireMigration(path!) as {
-                    up: (params: {context: QueryInterface}) => Promise<unknown>;
-                    down: (params: {context: QueryInterface}) => Promise<unknown>;
+                    up: (params: { context: QueryInterface }) => Promise<unknown>;
+                    down: (params: { context: QueryInterface }) => Promise<unknown>;
                 };
                 return {
                     name,
-                    up: async () => migration.up({context}),
-                    down: async () => migration.down({context}),
+                    up: async () => migration.up({ context }),
+                    down: async () => migration.down({ context }),
                 };
             },
         },
         context: sequelize.getQueryInterface(),
-        storage: new SequelizeStorage({sequelize}),
+        storage: new SequelizeStorage({ sequelize }),
         logger: console,
         create: {
             folder: join(__dirname, 'migrations'),
-            template: filepath => [[filepath, MIGRATION_TEMPLATE]],
+            template: (filepath) => [[filepath, MIGRATION_TEMPLATE]],
         },
     });
 }
