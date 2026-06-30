@@ -1,4 +1,4 @@
-import {Controller, HttpCode, HttpStatus, Post, UseGuards} from '@nestjs/common';
+import {Controller, Get, HttpCode, HttpStatus, Post, UseGuards} from '@nestjs/common';
 import {CredentialsDto} from "../dtos/credentials.dto";
 import {AuthenticationDto} from "../dtos/authentication.dto";
 import {LocalAuthGuard} from "../guards/local-auth.guard";
@@ -26,5 +26,10 @@ export class AuthController {
             token,
             user: principal
         }
+    }
+
+    @Get('user')
+    currentUser(@Principal() principal: UserDto): UserDto {
+        return principal
     }
 }

@@ -2,11 +2,15 @@
   "name": "@mailer/api",
   "type": "module",
   "scripts": {
-    "build": "vite build"
+    "build": "openapi-ts"
   },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "module": "./dist/index.ts",
+  "main": "./dist/index.ts",
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.99.0",
-    "@hey-api/vite-plugin": "0.3.2",
-    "vite": "^8.1.0"
+    "@hey-api/openapi-ts": "0.99.0"
   }
 }

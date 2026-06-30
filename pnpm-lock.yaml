@@ -498,12 +498,6 @@ importers:
       '@hey-api/openapi-ts':
         specifier: 0.99.0
         version: 0.99.0(magicast@0.5.3)(typescript@6.0.3)
-      '@hey-api/vite-plugin':
-        specifier: 0.3.2
-        version: 0.3.2(@hey-api/openapi-ts@0.99.0(magicast@0.5.3)(typescript@6.0.3))(vite@8.1.0(@types/node@24.13.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
-      vite:
-        specifier: ^8.1.0
-        version: 8.1.0(@types/node@24.13.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
 
 packages:
 
@@ -877,12 +871,6 @@ packages:
 
   '@hey-api/types@0.1.4':
     resolution: {integrity: sha512-thWfawrDIP7wSI9ioT13I5soaaqB5vAPIiZmgD8PbeEVKNrkonc0N/Sjj97ezl7oQgusZmaNphGdMKipPO6IBg==}
-
-  '@hey-api/vite-plugin@0.3.2':
-    resolution: {integrity: sha512-r9xfyfqvWQ3LoVE0U9TYkA54J3HSXJdFbeQrnWdOcbkhI4rfUTaanj4EPpk5ygZTxoex4EJrlyzn+nPSU82cjw==}
-    peerDependencies:
-      '@hey-api/openapi-ts': <2
-      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -5304,11 +5292,6 @@ snapshots:
       '@hey-api/types': 0.1.4
 
   '@hey-api/types@0.1.4': {}
-
-  '@hey-api/vite-plugin@0.3.2(@hey-api/openapi-ts@0.99.0(magicast@0.5.3)(typescript@6.0.3))(vite@8.1.0(@types/node@24.13.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
-    dependencies:
-      '@hey-api/openapi-ts': 0.99.0(magicast@0.5.3)(typescript@6.0.3)
-      vite: 8.1.0(@types/node@24.13.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
 
   '@hono/node-server@1.19.14(hono@4.12.27)':
     dependencies:
