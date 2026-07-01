@@ -30,27 +30,34 @@ export class DomainDkimService {
 
         const transaction = setActive ? await this.sequelize.transaction() : null
 
-        const dkimModel = await this.domainDkimModel.create({
-            domainId: domain.domainId,
-            privateKey: encryptedPrivateKey,
-            publicKey: publicKey,
-            algorithm: DomainDkimAlgorithm.RSA,
-            keyBits: 2048,
-            selector: DomainDkimService.DEFAULT_SELECTOR
-        }, {returning: true, transaction});
+        try {
+            const dkimModel = await this.domainDkimModel.create({
+                domainId: domain.domainId,
+                privateKey: encryptedPrivateKey,
+                publicKey: publicKey,
+                algorithm: DomainDkimAlgorithm.RSA,
+                keyBits: 2048,
+                selector: DomainDkimService.DEFAULT_SELECTOR
+            }, {returning: true, transaction});
 
-        if(setActive) {
-            await this.domainModel.update({
-                activeDkimId: dkimModel.dkimId
-            }, {
-                where: {
-                    domainId: domain.domainId
-                },
-                transaction
-            })
+            if(setActive) {
+                await this.domainModel.update({
+                    activeDkimId: dkimModel.dkimId
+                }, {
+                    where: {
+                        domainId: domain.domainId
+                    },
+                    transaction
+                })
+            }
+
+            await transaction?.commit();
+
+            return dkimModel.get({plain: true});
+        } catch (error) {
+            await transaction?.rollback();
+            throw error;
         }
-
-        return dkimModel.get({plain: true});
     }
 
     private generateDkimKeyPair(): Promise<KeyPair> {

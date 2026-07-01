@@ -13,6 +13,8 @@ describe('DomainDkimService', () => {
     let service: DomainDkimService;
     let encrypt: ReturnType<typeof vi.fn>;
     let transaction: ReturnType<typeof vi.fn>;
+    let commit: ReturnType<typeof vi.fn>;
+    let rollback: ReturnType<typeof vi.fn>;
     let dkimCreate: ReturnType<typeof vi.fn>;
     let domainUpdate: ReturnType<typeof vi.fn>;
 
@@ -21,13 +23,17 @@ describe('DomainDkimService', () => {
     let createdOptions: { returning?: boolean; transaction?: unknown } | undefined;
 
     const domain: DomainDto = { domainId: 12, fqdn: 'example.com' };
-    // An opaque handle standing in for the Sequelize managed transaction.
-    const txHandle = { id: 'tx-1' };
+    // A stand-in for the Sequelize transaction that records commit/rollback calls.
+    let txHandle: { commit: ReturnType<typeof vi.fn>; rollback: ReturnType<typeof vi.fn> };
     const newDkimId = 55;
 
     beforeEach(async () => {
         createdAttrs = undefined;
         createdOptions = undefined;
+
+        commit = vi.fn().mockResolvedValue(undefined);
+        rollback = vi.fn().mockResolvedValue(undefined);
+        txHandle = { commit, rollback };
 
         // Marks its input so tests can prove the stored key is the encrypted output.
         encrypt = vi.fn((pem: string) => Promise.resolve(`encrypted:${pem.length}`));
@@ -89,6 +95,8 @@ describe('DomainDkimService', () => {
 
         expect(transaction).not.toHaveBeenCalled();
         expect(domainUpdate).not.toHaveBeenCalled();
+        expect(commit).not.toHaveBeenCalled();
+        expect(rollback).not.toHaveBeenCalled();
         expect(createdOptions).toMatchObject({ returning: true, transaction: null });
     });
 
@@ -102,6 +110,23 @@ describe('DomainDkimService', () => {
             { activeDkimId: newDkimId },
             { where: { domainId: 12 }, transaction: txHandle },
         );
+    });
+
+    it('commits the transaction once the new key has been activated', async () => {
+        await service.createDkimForDomain(domain, true);
+
+        expect(commit).toHaveBeenCalledTimes(1);
+        expect(rollback).not.toHaveBeenCalled();
+    });
+
+    it('rolls back and rethrows when activating the domain fails', async () => {
+        const failure = new Error('domain update failed');
+        domainUpdate.mockRejectedValue(failure);
+
+        await expect(service.createDkimForDomain(domain, true)).rejects.toBe(failure);
+
+        expect(rollback).toHaveBeenCalledTimes(1);
+        expect(commit).not.toHaveBeenCalled();
     });
 
     it('returns the persisted DKIM record as a plain object', async () => {
