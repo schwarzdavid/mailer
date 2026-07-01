@@ -1,10 +1,12 @@
 packages:
-    - 'apps/*'
-    - 'packages/*'
+  - 'apps/*'
+  - 'packages/*'
 allowBuilds:
-    '@scarf/scarf': false
-    '@swc/core': true
-    esbuild: true
-    unrs-resolver: true
-    vue-demi: true
+  '@scarf/scarf': false
+  '@swc/core': true
+  esbuild: true
+  unrs-resolver: true
+  vue-demi: true
 includeWorkspaceRoot: true
+minimumReleaseAgeExclude:
+  - '@types/node@26.1.0'

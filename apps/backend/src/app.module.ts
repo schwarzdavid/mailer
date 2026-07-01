@@ -8,6 +8,7 @@ import { BootstrapService } from './services/bootstrap.service';
 import { CacheModule } from '@nestjs/cache-manager';
 import KeyvRedis from '@keyv/redis';
 import { JwtModule } from '@nestjs/jwt';
+import { DomainModule } from './modules/domain/domain.module';
 
 @Module({
     imports: [
@@ -51,7 +52,7 @@ import { JwtModule } from '@nestjs/jwt';
             inject: [ConfigService],
             useFactory(configService: ConfigService) {
                 return {
-                    secret: configService.get<string>('JWT_SECRET', 'no-secret'),
+                    secret: configService.get<string>('BACKEND_JWT_SECRET', 'no-secret'),
                     signOptions: {
                         expiresIn: '31d',
                     },
@@ -60,6 +61,7 @@ import { JwtModule } from '@nestjs/jwt';
         }),
         AuthModule,
         UserModule,
+        DomainModule,
     ],
     providers: [BootstrapService],
 })
