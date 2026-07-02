@@ -16,6 +16,8 @@ export class DomainController {
 
     @Post()
     async createDomain(@Body() domainCreate: DomainCreateDto): Promise<DomainDto> {
-        return await this.domainService.createDomain(domainCreate)
+        const domain = await this.domainService.createDomain(domainCreate);
+
+        return DomainDto.fromDomain(domain);
     }
 }

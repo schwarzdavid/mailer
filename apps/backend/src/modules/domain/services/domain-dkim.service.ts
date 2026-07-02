@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DomainDto } from '../dtos/domain.dto';
+import { Domain } from '../interfaces/domain.interface';
 import { DomainDkim, DomainDkimAlgorithm, DomainDkimKeyBits } from '../interfaces/domain-dkim.interface';
 import { InjectModel } from '@nestjs/sequelize';
 import { DomainDkimModel } from '../models/domain-dkim.model';
@@ -24,7 +24,7 @@ export class DomainDkimService {
         @InjectModel(DomainModel) private readonly domainModel: typeof DomainModel
     ) {}
 
-    async createDkimForDomain(domain: DomainDto, setActive = false): Promise<DomainDkim> {
+    async createDkimForDomain(domain: Pick<Domain, 'domainId'>, setActive = false): Promise<DomainDkim> {
         const { privateKey, publicKey } = await this.generateDkimKeyPair();
         const encryptedPrivateKey = await this.dkimEncryptionService.encryptDkimPrivateKey(privateKey);
 

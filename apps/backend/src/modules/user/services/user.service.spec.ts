@@ -69,11 +69,12 @@ describe('UserService', () => {
         await expect(bcrypt.compare(newUser.password, storedPassword!)).resolves.toBe(true);
     });
 
-    it('returns a DTO without the password', async () => {
+    it('returns the created user without the password', async () => {
         const result = await service.createUser(newUser);
 
         expect(result.userId).toBe(7);
         expect(result.email).toBe('alan@example.com');
+        expect(result.firstName).toBe('Alan');
         expect('password' in result).toBe(false);
     });
 });

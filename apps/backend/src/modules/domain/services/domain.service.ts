@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { DomainModel } from '../models/domain.model';
 import { DomainDkimService } from './domain-dkim.service';
-import { DomainCreate } from '../interfaces/domain.interface';
-import { DomainDto } from '../dtos/domain.dto';
+import { Domain, DomainCreate } from '../interfaces/domain.interface';
 
 @Injectable()
 export class DomainService {
@@ -13,7 +12,7 @@ export class DomainService {
     ) {
     }
 
-    async createDomain(domainCreate: DomainCreate): Promise<DomainDto> {
+    async createDomain(domainCreate: DomainCreate): Promise<Domain> {
         const domain = await this.domainModel.create(domainCreate, {returning: true});
         await this.domainDkimService.createDkimForDomain(domain, true)
 

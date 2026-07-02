@@ -2,21 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { JwtHelperService } from './jwt-helper.service';
-import { UserDto } from '../../user/dtos/user.dto';
+import { User } from '../../user/interfaces/user.interface';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 describe('JwtHelperService', () => {
     let service: JwtHelperService;
     let jwtService: JwtService;
 
-    const user: UserDto = Object.assign(new UserDto(), {
+    const user: User = {
         userId: 42,
         firstName: 'Grace',
         lastName: 'Hopper',
         email: 'grace@example.com',
         createdAt: new Date(),
         updatedAt: new Date(),
-    });
+    };
 
     beforeEach(async () => {
         // Use a real JwtService so the test exercises actual signing, not a stub.

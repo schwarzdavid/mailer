@@ -2,18 +2,20 @@ import { Logger, UnauthorizedException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalStrategy } from './local.strategy';
 import { CredentialsService } from '../services/credentials.service';
-import { UserDto } from '../../user/dtos/user.dto';
+import { User } from '../../user/interfaces/user.interface';
 
 describe('LocalStrategy', () => {
     let strategy: LocalStrategy;
     let validateCredentials: ReturnType<typeof vi.fn>;
 
-    const user: UserDto = Object.assign(new UserDto(), {
+    const user: User = {
         userId: 1,
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'ada@example.com',
-    });
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    };
 
     beforeEach(() => {
         // Keep the failure path's logger.error out of the test output.

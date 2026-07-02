@@ -1,13 +1,19 @@
-import { Domain } from '../interfaces/domain.interface';
-import { IsFQDN, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Domain } from '../interfaces/domain.interface';
 
-export class DomainDto implements Omit<Domain, 'activeDkimId'> {
-    @ApiProperty({type: Number})
+export class DomainDto {
+    @ApiProperty({ type: Number })
     domainId!: number;
 
-    @IsString()
-    @IsNotEmpty()
-    @IsFQDN()
+    @ApiProperty({ type: String })
     fqdn!: string;
+
+    static fromDomain(domain: Domain): DomainDto {
+        const dto = new DomainDto();
+
+        dto.domainId = domain.domainId;
+        dto.fqdn = domain.fqdn;
+
+        return dto;
+    }
 }

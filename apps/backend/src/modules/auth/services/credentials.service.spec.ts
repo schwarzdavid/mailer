@@ -37,7 +37,7 @@ describe('CredentialsService', () => {
         service = module.get(CredentialsService);
     });
 
-    it('returns a password-free DTO when the credentials are valid', async () => {
+    it('returns a password-free user when the credentials are valid', async () => {
         findOne.mockResolvedValue(buildUser());
 
         const result = await service.validateCredentials({

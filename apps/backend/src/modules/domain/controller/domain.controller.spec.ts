@@ -2,12 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DomainController } from './domain.controller';
 import { DomainService } from '../services/domain.service';
+import { DomainDto } from '../dtos/domain.dto';
 
 describe('DomainController', () => {
     let controller: DomainController;
     let createDomain: ReturnType<typeof vi.fn>;
 
-    const created = { domainId: 1, fqdn: 'example.com' };
+    // The service speaks the internal domain shape, which carries fields the HTTP
+    // response must not expose (e.g. activeDkimId).
+    const created = { domainId: 1, fqdn: 'example.com', activeDkimId: 7 };
 
     beforeEach(async () => {
         createDomain = vi.fn().mockResolvedValue(created);
@@ -24,12 +27,19 @@ describe('DomainController', () => {
         expect(controller).toBeDefined();
     });
 
-    it('delegates domain creation to the service and returns the result', async () => {
+    it('delegates domain creation to the service', async () => {
         const dto = { fqdn: 'example.com' };
 
-        const result = await controller.createDomain(dto);
+        await controller.createDomain(dto);
 
         expect(createDomain).toHaveBeenCalledWith(dto);
-        expect(result).toBe(created);
+    });
+
+    it('maps the created domain onto a response DTO without internal fields', async () => {
+        const result = await controller.createDomain({ fqdn: 'example.com' });
+
+        expect(result).toBeInstanceOf(DomainDto);
+        expect(result).toEqual({ domainId: 1, fqdn: 'example.com' });
+        expect('activeDkimId' in result).toBe(false);
     });
 });

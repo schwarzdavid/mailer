@@ -2,8 +2,10 @@ import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/
 import { CredentialsDto } from '../dtos/credentials.dto';
 import { AuthenticationDto } from '../dtos/authentication.dto';
 import { LocalAuthGuard } from '../guards/local-auth.guard';
+import { JwtAuth } from '../decorators/JwtAuth';
 import { JwtHelperService } from '../services/jwt-helper.service';
 import { Principal } from '../decorators/Principal';
+import type { User } from '../../user/interfaces/user.interface';
 import { UserDto } from '../../user/dtos/user.dto';
 import { ApiBody, ApiTags } from '@nestjs/swagger';
 
@@ -16,17 +18,18 @@ export class AuthController {
     @HttpCode(HttpStatus.OK)
     @UseGuards(LocalAuthGuard)
     @Post('login')
-    async login(@Principal() principal: UserDto): Promise<AuthenticationDto> {
+    async login(@Principal() principal: User): Promise<AuthenticationDto> {
         const token = await this.jwtHelperService.createToken(principal);
 
         return {
             token,
-            user: principal,
+            user: UserDto.toDto(principal),
         };
     }
 
+    @JwtAuth()
     @Get('user')
-    currentUser(@Principal() principal: UserDto): UserDto {
-        return principal;
+    currentUser(@Principal() principal: User): UserDto {
+        return UserDto.toDto(principal);
     }
 }

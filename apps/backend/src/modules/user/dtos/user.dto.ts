@@ -1,7 +1,7 @@
 import { User } from '../interfaces/user.interface';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UserDto implements User {
+export class UserDto {
     @ApiProperty({ type: Number })
     userId!: number;
     firstName!: string;

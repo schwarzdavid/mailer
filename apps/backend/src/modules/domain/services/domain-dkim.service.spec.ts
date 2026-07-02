@@ -7,7 +7,7 @@ import { DkimEncryptionService } from './dkim-encryption.service';
 import { DomainDkimModel } from '../models/domain-dkim.model';
 import { DomainModel } from '../models/domain.model';
 import { DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface';
-import { DomainDto } from '../dtos/domain.dto';
+import { Domain } from '../interfaces/domain.interface';
 
 describe('DomainDkimService', () => {
     let service: DomainDkimService;
@@ -22,7 +22,8 @@ describe('DomainDkimService', () => {
     let createdAttrs: Record<string, unknown> | undefined;
     let createdOptions: { returning?: boolean; transaction?: unknown } | undefined;
 
-    const domain: DomainDto = { domainId: 12, fqdn: 'example.com' };
+    // The service only needs the domain's identity to attach the DKIM record.
+    const domain: Pick<Domain, 'domainId'> = { domainId: 12 };
     // A stand-in for the Sequelize transaction that records commit/rollback calls.
     let txHandle: { commit: ReturnType<typeof vi.fn>; rollback: ReturnType<typeof vi.fn> };
     const newDkimId = 55;

@@ -1,5 +1,11 @@
+import { IsFQDN, IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { DomainCreate } from '../interfaces/domain.interface';
-import { PickType } from '@nestjs/swagger';
-import { DomainDto } from './domain.dto';
 
-export class DomainCreateDto extends PickType(DomainDto, ['fqdn'] as const) implements DomainCreate {}
+export class DomainCreateDto implements DomainCreate {
+    @ApiProperty({ type: String })
+    @IsString()
+    @IsNotEmpty()
+    @IsFQDN()
+    fqdn!: string;
+}

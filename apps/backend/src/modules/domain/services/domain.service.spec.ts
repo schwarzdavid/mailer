@@ -45,7 +45,7 @@ describe('DomainService', () => {
         expect(createDkimForDomain).toHaveBeenCalledWith(createdDomain, true);
     });
 
-    it('returns the persisted domain as a plain DTO', async () => {
+    it('returns the persisted domain as a plain object', async () => {
         const result = await service.createDomain({ fqdn: 'example.com' });
 
         expect(result).toBe(plainDomain);
