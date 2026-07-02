@@ -1,5 +1,5 @@
 <template>
-    <VDialog max-width="600" v-model="model">
+    <VDialog max-width="600" v-model="model" @after-leave="resetForm">
         <template #activator="props">
             <slot v-bind="props" />
         </template>
@@ -8,7 +8,7 @@
                 <VIconBtn icon="mdi-close" @click="model = false" />
             </template>
             <form @submit.prevent="onSubmit">
-                <VCardText>
+                <VCardItem>
                     <p>{{ t('intro') }}</p>
                     <VExpandTransition>
                         <div v-if="!isSubdomain">
@@ -18,7 +18,7 @@
                         </div>
                     </VExpandTransition>
                     <VTextField name="fqdn" :label="gt('field.domain')" placeholder="mail.example.com" v-model="fqdn" :error-messages="errors.fqdn" />
-                </VCardText>
+                </VCardItem>
                 <VCardActions>
                     <VSpacer />
                     <VBtn color="error" :text="gt('cta.abort')"/>
@@ -42,7 +42,7 @@
     const { t: gt } = useI18n({ useScope: 'global' })
     const { t } = useI18n()
 
-    const { defineField, handleSubmit, errors } = useForm({
+    const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 fqdn: z.string().and(
