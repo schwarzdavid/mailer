@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthController } from './auth.controller'
 import { JwtHelperService } from '../services/jwt-helper.service'
 import { User } from '../../user/interfaces/user.interface'
-import { UserDto } from '../../user/dtos/user.dto'
 
 describe('AuthController', () => {
     let controller: AuthController
     let createToken: ReturnType<typeof vi.fn>
 
-    // The principal a passing LocalAuthGuard would attach to the request: the
-    // internal domain user, not a transport DTO.
+    // The principal a passing LocalAuthGuard attaches to the request. Stripping it to a
+    // response DTO happens in the ClassSerializerInterceptor (@ResponseDto), so that is
+    // covered by DTO serialization / e2e, not these delegation-focused tests.
     const principal: User = {
         userId: 42,
         firstName: 'Grace',
@@ -35,19 +35,15 @@ describe('AuthController', () => {
         expect(controller).toBeDefined()
     })
 
-    it('signs a token for the authenticated principal and returns it with a user DTO', async () => {
+    it('signs a token for the authenticated principal and returns it with the user', async () => {
         const result = await controller.login(principal)
 
         expect(createToken).toHaveBeenCalledWith(principal)
         expect(result.token).toBe('signed-jwt-token')
-        expect(result.user).toBeInstanceOf(UserDto)
-        expect(result.user).toEqual(principal)
+        expect(result.user).toBe(principal)
     })
 
-    it('maps the authenticated principal to a response DTO from the current-user endpoint', () => {
-        const result = controller.currentUser(principal)
-
-        expect(result).toBeInstanceOf(UserDto)
-        expect(result).toEqual(principal)
+    it('returns the authenticated principal from the current-user endpoint', () => {
+        expect(controller.currentUser(principal)).toBe(principal)
     })
 })

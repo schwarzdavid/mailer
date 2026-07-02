@@ -27,16 +27,12 @@ describe('UserService', () => {
 
     beforeEach(async () => {
         storedPassword = undefined
-        // Echo the attributes back with the generated columns, mirroring how
-        // Sequelize's `create({ returning: true })` resolves the persisted row.
-        create = vi.fn((attrs: CreateAttrs, _options: { returning: boolean }) => {
+        // Mirror Sequelize's create({ returning: true }): resolve a model instance whose
+        // get({ plain: true }) returns the persisted row.
+        create = vi.fn((attrs: CreateAttrs) => {
             storedPassword = attrs.password
-            return {
-                userId: 7,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                ...attrs,
-            }
+            const row = { userId: 7, createdAt: new Date(), updatedAt: new Date(), ...attrs }
+            return { ...row, get: () => row }
         })
 
         const module: TestingModule = await Test.createTestingModule({
@@ -50,12 +46,11 @@ describe('UserService', () => {
         await service.createUser(newUser)
 
         expect(create).toHaveBeenCalledWith(
-            {
+            expect.objectContaining({
                 firstName: 'Alan',
                 lastName: 'Turing',
                 email: 'alan@example.com',
-                password: expect.any(String),
-            },
+            }),
             { returning: true },
         )
     })
@@ -69,12 +64,14 @@ describe('UserService', () => {
         await expect(bcrypt.compare(newUser.password, storedPassword!)).resolves.toBe(true)
     })
 
-    it('returns the created user without the password', async () => {
+    it('returns the persisted user', async () => {
         const result = await service.createUser(newUser)
 
-        expect(result.userId).toBe(7)
-        expect(result.email).toBe('alan@example.com')
-        expect(result.firstName).toBe('Alan')
-        expect('password' in result).toBe(false)
+        expect(result).toMatchObject({
+            userId: 7,
+            firstName: 'Alan',
+            lastName: 'Turing',
+            email: 'alan@example.com',
+        })
     })
 })

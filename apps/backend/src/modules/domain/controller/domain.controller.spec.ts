@@ -1,26 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Logger } from '@nestjs/common'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DomainController } from './domain.controller'
 import { DomainService } from '../services/domain.service'
-import { DomainDto } from '../dtos/domain.dto'
+import { DomainDnsService } from '../services/domain-dns.service'
 
 describe('DomainController', () => {
     let controller: DomainController
     let createDomain: ReturnType<typeof vi.fn>
+    let createDefaultDnsRecords: ReturnType<typeof vi.fn>
 
-    // The service speaks the internal domain shape, which carries fields the HTTP
-    // response must not expose (e.g. activeDkimId).
-    const created = { domainId: 1, fqdn: 'example.com', activeDkimId: 7 }
+    const activeDkim = { dkimId: 7, domainId: 1, selector: 's1' }
+    // The service returns the enriched internal domain. Stripping it to the HTTP
+    // response shape is handled by the ClassSerializerInterceptor via @ResponseDto, so
+    // that is covered by the DTO serialization tests / e2e, not these delegation tests.
+    const created = { domainId: 1, fqdn: 'example.com', activeDkimId: 7, activeDkim, dkims: [activeDkim] }
+    const dnsRecords = { spf: {}, dkim: {}, dmarc: {} }
 
     beforeEach(async () => {
+        vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+
         createDomain = vi.fn().mockResolvedValue(created)
+        createDefaultDnsRecords = vi.fn().mockReturnValue(dnsRecords)
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [DomainController],
-            providers: [{ provide: DomainService, useValue: { createDomain } }],
+            providers: [
+                { provide: DomainService, useValue: { createDomain } },
+                { provide: DomainDnsService, useValue: { createDefaultDnsRecords } },
+            ],
         }).compile()
 
         controller = module.get(DomainController)
+    })
+
+    afterEach(() => {
+        vi.restoreAllMocks()
     })
 
     it('is defined', () => {
@@ -35,11 +50,10 @@ describe('DomainController', () => {
         expect(createDomain).toHaveBeenCalledWith(dto)
     })
 
-    it('maps the created domain onto a response DTO without internal fields', async () => {
+    it('composes the created domain with its default DNS records', async () => {
         const result = await controller.createDomain({ fqdn: 'example.com' })
 
-        expect(result).toBeInstanceOf(DomainDto)
-        expect(result).toEqual({ domainId: 1, fqdn: 'example.com' })
-        expect('activeDkimId' in result).toBe(false)
+        expect(createDefaultDnsRecords).toHaveBeenCalledWith(created, activeDkim)
+        expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com', dns: dnsRecords })
     })
 })

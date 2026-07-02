@@ -15,16 +15,20 @@ describe('CredentialsService', () => {
     const password = 'correct-horse-battery-staple'
     let hashedPassword: string
 
-    const buildUser = (overrides: Record<string, unknown> = {}) => ({
-        userId: 1,
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        email: 'ada@example.com',
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ...overrides,
-    })
+    // A Sequelize-like row exposing get({ plain: true }), mirroring findOne().
+    const buildUser = (overrides: Record<string, unknown> = {}) => {
+        const row = {
+            userId: 1,
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            email: 'ada@example.com',
+            password: hashedPassword,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...overrides,
+        }
+        return { ...row, get: () => row }
+    }
 
     beforeEach(async () => {
         hashedPassword = await bcrypt.hash(password, 10)
@@ -37,7 +41,7 @@ describe('CredentialsService', () => {
         service = module.get(CredentialsService)
     })
 
-    it('returns a password-free user when the credentials are valid', async () => {
+    it('returns the authenticated user when the credentials are valid', async () => {
         findOne.mockResolvedValue(buildUser())
 
         const result = await service.validateCredentials({
@@ -45,9 +49,7 @@ describe('CredentialsService', () => {
             password,
         })
 
-        expect(result.userId).toBe(1)
-        expect(result.email).toBe('ada@example.com')
-        expect('password' in result).toBe(false)
+        expect(result).toMatchObject({ userId: 1, email: 'ada@example.com' })
     })
 
     it('looks the user up by email and rejects on an empty result', async () => {

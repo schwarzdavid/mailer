@@ -7,6 +7,7 @@ import { JwtHelperService } from '../services/jwt-helper.service'
 import { Principal } from '../decorators/Principal'
 import type { User } from '../../user/interfaces/user.interface'
 import { UserDto } from '../../user/dtos/user.dto'
+import { ResponseDto } from '../../../decorators/ResponseDto'
 import { ApiBody, ApiTags } from '@nestjs/swagger'
 
 @ApiTags('auth')
@@ -17,6 +18,7 @@ export class AuthController {
     @ApiBody({ type: CredentialsDto })
     @HttpCode(HttpStatus.OK)
     @UseGuards(LocalAuthGuard)
+    @ResponseDto(AuthenticationDto)
     @Post('login')
     async login(@Principal() principal: User): Promise<AuthenticationDto> {
         const token = await this.jwtHelperService.createToken(principal)
@@ -28,6 +30,7 @@ export class AuthController {
     }
 
     @JwtAuth()
+    @ResponseDto(UserDto)
     @Get('user')
     currentUser(@Principal() principal: User): UserDto {
         return principal

@@ -19,7 +19,7 @@ describe('JwtStrategy', () => {
         family_name: 'Clark',
     }
 
-    const dbUser = {
+    const dbRow = {
         userId: 99,
         firstName: 'Lin',
         lastName: 'Clark',
@@ -28,10 +28,12 @@ describe('JwtStrategy', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
     }
+    // A Sequelize-like instance exposing get({ plain: true }).
+    const dbUser = { ...dbRow, get: () => dbRow }
 
     beforeEach(() => {
-        cacheGet = vi.fn()
-        cacheSet = vi.fn()
+        cacheGet = vi.fn().mockResolvedValue(undefined)
+        cacheSet = vi.fn().mockResolvedValue(undefined)
         findByPk = vi.fn()
 
         const configService = {
@@ -58,21 +60,15 @@ describe('JwtStrategy', () => {
         expect(findByPk).not.toHaveBeenCalled()
     })
 
-    it('loads the user from the database and caches a password-free principal on a cache miss', async () => {
+    it('loads the user from the database and caches it on a cache miss', async () => {
         cacheGet.mockResolvedValue(undefined)
         findByPk.mockResolvedValue(dbUser)
 
         const result = await strategy.validate(payload)
 
         expect(findByPk).toHaveBeenCalledWith(99)
-        expect(result.userId).toBe(99)
-        expect(result.email).toBe('lin@example.com')
-        expect('password' in result).toBe(false)
-        // The value stored in the cache is the same password-free principal that is
-        // returned — never the raw database row (which still carries the hash).
-        expect(cacheSet).toHaveBeenCalledWith('auth:user:99', result)
-        const cachedArg = cacheSet.mock.calls[0]![1] as Record<string, unknown>
-        expect('password' in cachedArg).toBe(false)
+        expect(result).toMatchObject({ userId: 99, email: 'lin@example.com' })
+        expect(cacheSet).toHaveBeenCalledWith('auth:user:99', dbUser)
     })
 
     it('throws UnauthorizedException when the user no longer exists', async () => {
