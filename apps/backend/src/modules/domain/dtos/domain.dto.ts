@@ -1,19 +1,19 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Domain } from '../interfaces/domain.interface';
+import { ApiProperty } from '@nestjs/swagger'
+import { Domain } from '../interfaces/domain.interface'
 
 export class DomainDto {
     @ApiProperty({ type: Number })
-    domainId!: number;
+    domainId!: number
 
     @ApiProperty({ type: String })
-    fqdn!: string;
+    fqdn!: string
 
     static fromDomain(domain: Domain): DomainDto {
-        const dto = new DomainDto();
+        const dto = new DomainDto()
 
-        dto.domainId = domain.domainId;
-        dto.fqdn = domain.fqdn;
+        dto.domainId = domain.domainId
+        dto.fqdn = domain.fqdn
 
-        return dto;
+        return dto
     }
 }

@@ -23,30 +23,30 @@
 </template>
 
 <script lang="ts" setup>
-import { useForm } from 'vee-validate'
-import { toTypedSchema } from '@vee-validate/zod'
-import { zCredentialsDto } from 'api'
-import { useI18n } from 'vue-i18n'
-import { useLoginMutation } from '@/modules/auth/mutations/useLoginMutation.ts'
-import { useRouter } from 'vue-router'
-import { RouteNames } from '@/router/RouteNames.ts'
+    import { useForm } from 'vee-validate'
+    import { toTypedSchema } from '@vee-validate/zod'
+    import { zCredentialsDto } from 'api'
+    import { useI18n } from 'vue-i18n'
+    import { useLoginMutation } from '@/modules/auth/mutations/useLoginMutation.ts'
+    import { useRouter } from 'vue-router'
+    import { RouteNames } from '@/router/RouteNames.ts'
 
-const { t } = useI18n()
-const { t: gt } = useI18n({ useScope: 'global' })
-const { mutateAsync, isPending } = useLoginMutation()
-const router = useRouter()
+    const { t } = useI18n()
+    const { t: gt } = useI18n({ useScope: 'global' })
+    const { mutateAsync, isPending } = useLoginMutation()
+    const router = useRouter()
 
-const { handleSubmit, defineField, errors } = useForm({
-    validationSchema: toTypedSchema(zCredentialsDto),
-})
+    const { handleSubmit, defineField, errors } = useForm({
+        validationSchema: toTypedSchema(zCredentialsDto),
+    })
 
-const [email] = defineField('email')
-const [password] = defineField('password')
+    const [email] = defineField('email')
+    const [password] = defineField('password')
 
-const onSubmit = handleSubmit(async (values) => {
-    await mutateAsync(values)
-    void router.push({ name: RouteNames.DASHBOARD })
-})
+    const onSubmit = handleSubmit(async (values) => {
+        await mutateAsync(values)
+        void router.push({ name: RouteNames.DASHBOARD })
+    })
 </script>
 
 <i18n>

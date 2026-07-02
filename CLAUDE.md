@@ -10,7 +10,7 @@ These rules are set by the repository owner and take precedence over defaults:
 - **Keep the build green.** Every change must pass ESLint and TypeScript, or at minimum introduce no new errors. Verify with `pnpm typecheck` and `pnpm lint` (or the per-package equivalents) before considering work done.
 - **Keep tests in step with logic.** When you change business logic, update the corresponding tests and run them. If a change could plausibly break something elsewhere, or is large in scope, run the full test suite (`pnpm test`) to confirm nothing regressed.
 - **Never touch git.** Do not `git add`, stage, commit, push, or otherwise alter version-control state. Leave all git operations to the user.
-- **No comments.** Write self-explanatory code — clear names over explanatory comments. Existing comments in the tree explain non-obvious *why* (workarounds, framework quirks); match that bar if a comment is truly unavoidable, but do not narrate *what* the code does.
+- **No comments.** Write self-explanatory code — clear names over explanatory comments. Existing comments in the tree explain non-obvious _why_ (workarounds, framework quirks); match that bar if a comment is truly unavoidable, but do not narrate _what_ the code does.
 
 ## Repository layout
 

@@ -1,5 +1,5 @@
-import type { MigrationParams } from 'umzug';
-import { DataTypes, type QueryInterface } from 'sequelize';
+import type { MigrationParams } from 'umzug'
+import { DataTypes, type QueryInterface } from 'sequelize'
 
 export const up = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
     await queryInterface.createTable('users', {
@@ -33,14 +33,14 @@ export const up = async ({ context: queryInterface }: MigrationParams<QueryInter
             type: DataTypes.DATE,
             allowNull: false,
         },
-    });
+    })
 
     await queryInterface.addIndex('users', ['email'], {
         name: 'users_email_unique',
         unique: true,
-    });
-};
+    })
+}
 
 export const down = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
-    await queryInterface.dropTable('users');
-};
+    await queryInterface.dropTable('users')
+}

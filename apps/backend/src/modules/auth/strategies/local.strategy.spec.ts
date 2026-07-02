@@ -1,12 +1,12 @@
-import { Logger, UnauthorizedException } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LocalStrategy } from './local.strategy';
-import { CredentialsService } from '../services/credentials.service';
-import { User } from '../../user/interfaces/user.interface';
+import { Logger, UnauthorizedException } from '@nestjs/common'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LocalStrategy } from './local.strategy'
+import { CredentialsService } from '../services/credentials.service'
+import { User } from '../../user/interfaces/user.interface'
 
 describe('LocalStrategy', () => {
-    let strategy: LocalStrategy;
-    let validateCredentials: ReturnType<typeof vi.fn>;
+    let strategy: LocalStrategy
+    let validateCredentials: ReturnType<typeof vi.fn>
 
     const user: User = {
         userId: 1,
@@ -15,39 +15,39 @@ describe('LocalStrategy', () => {
         email: 'ada@example.com',
         createdAt: new Date(),
         updatedAt: new Date(),
-    };
+    }
 
     beforeEach(() => {
         // Keep the failure path's logger.error out of the test output.
-        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
-        validateCredentials = vi.fn();
+        validateCredentials = vi.fn()
         const credentialsService = {
             validateCredentials,
-        } as unknown as CredentialsService;
+        } as unknown as CredentialsService
 
-        strategy = new LocalStrategy(credentialsService);
-    });
+        strategy = new LocalStrategy(credentialsService)
+    })
 
     afterEach(() => {
-        vi.restoreAllMocks();
-    });
+        vi.restoreAllMocks()
+    })
 
     it('returns the user the credentials service validates', async () => {
-        validateCredentials.mockResolvedValue(user);
+        validateCredentials.mockResolvedValue(user)
 
-        const result = await strategy.validate('ada@example.com', 'secret');
+        const result = await strategy.validate('ada@example.com', 'secret')
 
-        expect(result).toBe(user);
+        expect(result).toBe(user)
         expect(validateCredentials).toHaveBeenCalledWith({
             email: 'ada@example.com',
             password: 'secret',
-        });
-    });
+        })
+    })
 
     it('translates any validation failure into an UnauthorizedException', async () => {
-        validateCredentials.mockRejectedValue(new Error('boom'));
+        validateCredentials.mockRejectedValue(new Error('boom'))
 
-        await expect(strategy.validate('ada@example.com', 'wrong')).rejects.toBeInstanceOf(UnauthorizedException);
-    });
-});
+        await expect(strategy.validate('ada@example.com', 'wrong')).rejects.toBeInstanceOf(UnauthorizedException)
+    })
+})

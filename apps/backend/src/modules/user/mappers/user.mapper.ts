@@ -1,4 +1,4 @@
-import { FullUser, User } from '../interfaces/user.interface';
+import { FullUser, User } from '../interfaces/user.interface'
 
 /**
  * Projects the persisted user (which carries the password hash) onto the public
@@ -13,5 +13,5 @@ export function toUser(user: FullUser): User {
         email: user.email,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-    };
+    }
 }

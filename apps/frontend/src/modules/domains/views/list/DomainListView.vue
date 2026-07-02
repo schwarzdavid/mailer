@@ -11,5 +11,5 @@
 </template>
 
 <script setup lang="ts">
-import AddDomainDialog from '@/modules/domains/views/list/partials/AddDomainDialog.vue'
+    import AddDomainDialog from '@/modules/domains/views/list/partials/AddDomainDialog.vue'
 </script>

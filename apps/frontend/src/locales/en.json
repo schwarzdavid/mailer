@@ -1,13 +1,13 @@
 {
-  "validation": {
-    "required": "This field is required",
-    "minLength": "Min {min} characters",
-    "maxLength": "Max {max} characters",
-    "email": "Invalid email",
-    "invalid": "Invalid value"
-  },
-  "field": {
-    "email": "Email Address",
-    "password": "Password"
-  }
+    "validation": {
+        "required": "This field is required",
+        "minLength": "Min {min} characters",
+        "maxLength": "Max {max} characters",
+        "email": "Invalid email",
+        "invalid": "Invalid value"
+    },
+    "field": {
+        "email": "Email Address",
+        "password": "Password"
+    }
 }

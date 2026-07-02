@@ -39,12 +39,7 @@ export function mountView(component: MountArgs[0], options: MountArgs[1] = {}) {
         ...options,
         global: {
             ...options?.global,
-            plugins: [
-                vuetify,
-                i18n,
-                [VueQueryPlugin, { queryClient }],
-                ...(options?.global?.plugins ?? []),
-            ],
+            plugins: [vuetify, i18n, [VueQueryPlugin, { queryClient }], ...(options?.global?.plugins ?? [])],
         },
     })
 }

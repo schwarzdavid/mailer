@@ -1,21 +1,20 @@
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
-import { DomainModel } from '../models/domain.model';
-import { DomainDkimService } from './domain-dkim.service';
-import { Domain, DomainCreate } from '../interfaces/domain.interface';
+import { Injectable } from '@nestjs/common'
+import { InjectModel } from '@nestjs/sequelize'
+import { DomainModel } from '../models/domain.model'
+import { DomainDkimService } from './domain-dkim.service'
+import { Domain, DomainCreate } from '../interfaces/domain.interface'
 
 @Injectable()
 export class DomainService {
     constructor(
         private readonly domainDkimService: DomainDkimService,
         @InjectModel(DomainModel) private readonly domainModel: typeof DomainModel,
-    ) {
-    }
+    ) {}
 
     async createDomain(domainCreate: DomainCreate): Promise<Domain> {
-        const domain = await this.domainModel.create(domainCreate, {returning: true});
+        const domain = await this.domainModel.create(domainCreate, { returning: true })
         await this.domainDkimService.createDkimForDomain(domain, true)
 
-        return domain.get({plain: true});
+        return domain.get({ plain: true })
     }
 }

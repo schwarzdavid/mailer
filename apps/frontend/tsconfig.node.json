@@ -1,31 +1,25 @@
 // TSConfig for modules that run in Node.js environment via either transpilation or type-stripping.
 {
-  "extends": ["@tsconfig/node24/tsconfig.json", "../../tsconfig.json"],
-  "include": [
-    "vite.config.*",
-    "vitest.config.*",
-    "cypress.config.*",
-    "playwright.config.*",
-    "eslint.config.*"
-  ],
-  "compilerOptions": {
-    // Most tools use transpilation instead of Node.js's native type-stripping.
-    // Bundler mode provides a smoother developer experience.
-    "module": "preserve",
-    "moduleResolution": "bundler",
+    "extends": ["@tsconfig/node24/tsconfig.json", "../../tsconfig.json"],
+    "include": ["vite.config.*", "vitest.config.*", "cypress.config.*", "playwright.config.*", "eslint.config.*"],
+    "compilerOptions": {
+        // Most tools use transpilation instead of Node.js's native type-stripping.
+        // Bundler mode provides a smoother developer experience.
+        "module": "preserve",
+        "moduleResolution": "bundler",
 
-    // Include Node.js types and avoid accidentally including other `@types/*` packages.
-    "types": ["node"],
+        // Include Node.js types and avoid accidentally including other `@types/*` packages.
+        "types": ["node"],
 
-    // Disable emitting output during `vue-tsc --build`, which is used for type-checking only.
-    "noEmit": true,
+        // Disable emitting output during `vue-tsc --build`, which is used for type-checking only.
+        "noEmit": true,
 
-    // The shared ESLint base is imported with an explicit `.ts` extension
-    // (`../../eslint.config.ts`). Allowed here because this project never emits.
-    "allowImportingTsExtensions": true,
+        // The shared ESLint base is imported with an explicit `.ts` extension
+        // (`../../eslint.config.ts`). Allowed here because this project never emits.
+        "allowImportingTsExtensions": true,
 
-    // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
-    // Specified here to keep it out of the root directory.
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
-  }
+        // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
+        // Specified here to keep it out of the root directory.
+        "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
+    }
 }

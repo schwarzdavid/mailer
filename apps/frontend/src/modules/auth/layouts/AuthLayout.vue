@@ -5,8 +5,6 @@
                 <RouterView />
             </VCardText>
         </VCard>
-        <VFooter app color="transparent" border="t">
-            Copyright &copy; 2026 David Schwarz IT Services GmbH
-        </VFooter>
+        <VFooter app color="transparent" border="t"> Copyright &copy; 2026 David Schwarz IT Services GmbH </VFooter>
     </VMain>
 </template>

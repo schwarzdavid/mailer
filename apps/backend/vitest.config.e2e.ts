@@ -1,5 +1,5 @@
-import swc from 'unplugin-swc';
-import { defineConfig } from 'vitest/config';
+import swc from 'unplugin-swc'
+import { defineConfig } from 'vitest/config'
 
 // End-to-end config. Mirrors the unit config (SWC transform for decorator
 // metadata) but targets the `test/` suite that boots the full Nest app.
@@ -21,4 +21,4 @@ export default defineConfig({
         hookTimeout: 300_000,
         testTimeout: 60_000,
     },
-});
+})

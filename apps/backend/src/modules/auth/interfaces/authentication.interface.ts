@@ -1,6 +1,6 @@
-import { User } from '../../user/interfaces/user.interface';
+import { User } from '../../user/interfaces/user.interface'
 
 export interface Authentication {
-    token: string;
-    user: User;
+    token: string
+    user: User
 }

@@ -1,16 +1,16 @@
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { Sequelize, type QueryInterface } from 'sequelize';
-import type { E2eEnv } from './infrastructure';
+import { readdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { Sequelize, type QueryInterface } from 'sequelize'
+import type { E2eEnv } from './infrastructure'
 
 interface Migration {
-    up: (params: { name: string; context: QueryInterface }) => Promise<unknown>;
+    up: (params: { name: string; context: QueryInterface }) => Promise<unknown>
 }
 
 // The source migrations directory. Vitest runs with the backend as its cwd, so
 // this discovers every migration (current and future) without a hand-kept list.
-const migrationsDir = join(process.cwd(), 'src', 'migrations');
+const migrationsDir = join(process.cwd(), 'src', 'migrations')
 
 /**
  * Applies every migration in order against the freshly started Postgres, using a
@@ -27,18 +27,18 @@ export async function runMigrations(env: E2eEnv): Promise<void> {
         password: env.DB_PASSWORD,
         database: env.DB_DATABASE,
         logging: false,
-    });
+    })
 
     try {
-        const queryInterface = sequelize.getQueryInterface();
+        const queryInterface = sequelize.getQueryInterface()
         // Zero-padded numeric prefixes make lexical order the execution order.
-        const files = (await readdir(migrationsDir)).filter((file) => file.endsWith('.ts')).sort();
+        const files = (await readdir(migrationsDir)).filter((file) => file.endsWith('.ts')).sort()
 
         for (const file of files) {
-            const migration = (await import(pathToFileURL(join(migrationsDir, file)).href)) as Migration;
-            await migration.up({ name: file, context: queryInterface });
+            const migration = (await import(pathToFileURL(join(migrationsDir, file)).href)) as Migration
+            await migration.up({ name: file, context: queryInterface })
         }
     } finally {
-        await sequelize.close();
+        await sequelize.close()
     }
 }

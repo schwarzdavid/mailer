@@ -1,5 +1,5 @@
-import swc from 'unplugin-swc';
-import { defineConfig } from 'vitest/config';
+import swc from 'unplugin-swc'
+import { defineConfig } from 'vitest/config'
 
 // Unit-test config. SWC handles the TypeScript transform so that NestJS's
 // `emitDecoratorMetadata` (required for type-based dependency injection) is
@@ -20,4 +20,4 @@ export default defineConfig({
             include: ['src/**/*.ts'],
         },
     },
-});
+})

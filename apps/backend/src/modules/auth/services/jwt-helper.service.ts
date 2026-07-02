@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { User } from '../../user/interfaces/user.interface';
-import { JwtPayload } from '../interfaces/jwt-payload.interface';
+import { Injectable } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import { User } from '../../user/interfaces/user.interface'
+import { JwtPayload } from '../interfaces/jwt-payload.interface'
 
 @Injectable()
 export class JwtHelperService {
@@ -13,6 +13,6 @@ export class JwtHelperService {
             email: user.email,
             given_name: user.firstName,
             family_name: user.lastName,
-        } satisfies JwtPayload);
+        } satisfies JwtPayload)
     }
 }

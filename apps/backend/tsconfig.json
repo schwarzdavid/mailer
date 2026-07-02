@@ -1,27 +1,27 @@
 {
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "target": "ES2023",
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "types": ["node", "vitest/globals"],
-    "outDir": "./dist",
-    "sourceMap": true,
-    "declaration": true,
-    "removeComments": true,
-    "incremental": true
-  },
-  "exclude": ["node_modules", "dist", "**/*.config.ts", "**/*.config.mts", "**/*.config.*.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }],
-  "ts-node": {
-    "transpileOnly": true,
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
-      "module": "CommonJS",
-      "moduleResolution": "node"
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "target": "ES2023",
+        "esModuleInterop": true,
+        "isolatedModules": true,
+        "types": ["node", "vitest/globals"],
+        "outDir": "./dist",
+        "sourceMap": true,
+        "declaration": true,
+        "removeComments": true,
+        "incremental": true
+    },
+    "exclude": ["node_modules", "dist", "**/*.config.ts", "**/*.config.mts", "**/*.config.*.ts"],
+    "references": [{ "path": "./tsconfig.node.json" }],
+    "ts-node": {
+        "transpileOnly": true,
+        "compilerOptions": {
+            "module": "CommonJS",
+            "moduleResolution": "node"
+        }
     }
-  }
 }

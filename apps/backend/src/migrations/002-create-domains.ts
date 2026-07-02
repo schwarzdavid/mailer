@@ -1,5 +1,5 @@
-import type { MigrationParams } from 'umzug';
-import { DataTypes, type QueryInterface } from 'sequelize';
+import type { MigrationParams } from 'umzug'
+import { DataTypes, type QueryInterface } from 'sequelize'
 
 export const up = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
     await queryInterface.createTable('domains', {
@@ -25,7 +25,7 @@ export const up = async ({ context: queryInterface }: MigrationParams<QueryInter
             type: DataTypes.DATE,
             allowNull: false,
         },
-    });
+    })
 
     await queryInterface.createTable('domain_dkim', {
         dkimId: {
@@ -72,7 +72,7 @@ export const up = async ({ context: queryInterface }: MigrationParams<QueryInter
             type: DataTypes.DATE,
             allowNull: true,
         },
-    });
+    })
 
     // Added after both tables exist to resolve the circular foreign key between
     // domains.activeDkimId and domain_dkim.domainId.
@@ -86,11 +86,11 @@ export const up = async ({ context: queryInterface }: MigrationParams<QueryInter
         },
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
-    });
-};
+    })
+}
 
 export const down = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
-    await queryInterface.removeConstraint('domains', 'domains_activeDkimId_fkey');
-    await queryInterface.dropTable('domain_dkim');
-    await queryInterface.dropTable('domains');
-};
+    await queryInterface.removeConstraint('domains', 'domains_activeDkimId_fkey')
+    await queryInterface.dropTable('domain_dkim')
+    await queryInterface.dropTable('domains')
+}

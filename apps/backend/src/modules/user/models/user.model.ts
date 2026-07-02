@@ -9,8 +9,8 @@ import {
     Table,
     Unique,
     UpdatedAt,
-} from 'sequelize-typescript';
-import { FullUser, UserCreate } from '../interfaces/user.interface';
+} from 'sequelize-typescript'
+import { FullUser, UserCreate } from '../interfaces/user.interface'
 
 @Table({
     timestamps: true,
@@ -21,28 +21,28 @@ export class UserModel extends Model<FullUser, UserCreate> implements FullUser {
     @AutoIncrement
     @AllowNull(false)
     @Column(DataType.BIGINT)
-    declare userId: number;
+    declare userId: number
 
     @AllowNull(false)
     @Column(DataType.STRING(255))
-    declare firstName: string;
+    declare firstName: string
 
     @AllowNull(false)
     @Column(DataType.STRING(255))
-    declare lastName: string;
+    declare lastName: string
 
     @AllowNull(false)
     @Unique
     @Column(DataType.STRING(255))
-    declare email: string;
+    declare email: string
 
     @AllowNull(false)
     @Column(DataType.STRING(255))
-    declare password: string;
+    declare password: string
 
     @CreatedAt
-    declare createdAt: Date;
+    declare createdAt: Date
 
     @UpdatedAt
-    declare updatedAt: Date;
+    declare updatedAt: Date
 }
