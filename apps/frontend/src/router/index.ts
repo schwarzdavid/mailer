@@ -5,6 +5,8 @@ import { RouteNames } from '@/router/RouteNames.ts'
 import AppLayout from '@/modules/dashboard/layouts/AppLayout.vue'
 import DashboardView from '@/modules/dashboard/views/DashboardView.vue'
 import DomainListView from '@/modules/domains/views/list/DomainListView.vue'
+import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
+import { queryClient } from '@/plugins/tanstack.ts'
 
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +37,23 @@ export const router = createRouter({
                     component: DomainListView,
                 },
             ],
+            meta: {
+                requiresAuth: true,
+            },
         },
     ],
+})
+
+router.beforeEach(async (to) => {
+    if (!to.meta.requiresAuth) {
+        return true
+    }
+
+    try {
+        await queryClient.fetchQuery(useAuthQuery())
+        return true
+    } catch (err) {
+        console.error(err)
+        return { name: RouteNames.LOGIN }
+    }
 })

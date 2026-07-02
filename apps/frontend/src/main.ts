@@ -10,6 +10,7 @@ import { queryClient } from '@/plugins/tanstack.ts'
 import { i18n } from '@/plugins/i18n.ts'
 import { z } from 'zod'
 import { client } from 'api/client'
+import { JWT_KEY } from '@/constants/jwtKey.ts'
 
 createApp(App)
     .use(router)
@@ -51,4 +52,10 @@ z.config({
 
 client.setConfig({
     baseUrl: location.origin,
+    auth(mode) {
+        if(mode.type === 'http') {
+            return localStorage.getItem(JWT_KEY) ?? undefined
+        }
+        return undefined
+    }
 })

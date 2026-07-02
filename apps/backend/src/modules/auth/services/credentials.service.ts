@@ -10,7 +10,11 @@ export class CredentialsService {
     constructor(@InjectModel(UserModel) private readonly userModel: typeof UserModel) {}
 
     async validateCredentials(credentials: Credentials): Promise<User> {
-        const user = await this.userModel.findOne({ where: { email: credentials.email }, rejectOnEmpty: true })
+        const user = await this.userModel.findOne({
+            where: { email: credentials.email },
+            attributes: { include: ['password'] },
+            rejectOnEmpty: true,
+        })
         const isValidPassword = await bcrypt.compare(credentials.password, user.password)
 
         if (!isValidPassword) {
