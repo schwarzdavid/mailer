@@ -30,5 +30,8 @@ export const vuetify = createVuetify({
             color: 'primary',
             size: 'large',
         },
+        VAlert: {
+            variant: 'tonal'
+        }
     },
 })

@@ -4,10 +4,16 @@
         "minLength": "Min {min} characters",
         "maxLength": "Max {max} characters",
         "email": "Invalid email",
-        "invalid": "Invalid value"
+        "invalid": "Invalid value",
+        "hostname": "Invalid domain name"
     },
     "field": {
         "email": "Email Address",
-        "password": "Password"
+        "password": "Password",
+        "domain": "Domain name"
+    },
+    "cta": {
+        "abort": "Abort",
+        "save": "Save"
     }
 }
