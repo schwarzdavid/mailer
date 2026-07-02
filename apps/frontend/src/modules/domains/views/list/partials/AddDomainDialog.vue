@@ -1,11 +1,11 @@
 <template>
-    <VDialog max-width="600" v-model="model" @after-leave="resetForm">
+    <VDialog max-width="600" v-model="model" @after-leave="resetForm" :persistent="isPending">
         <template #activator="props">
             <slot v-bind="props" />
         </template>
         <VCard :title="t('title')">
             <template #append>
-                <VIconBtn icon="mdi-close" @click="model = false" />
+                <VIconBtn icon="mdi-close" @click="model = false" :disabled="isPending" />
             </template>
             <form @submit.prevent="onSubmit">
                 <VCardItem>
@@ -17,12 +17,18 @@
                             </VAlert>
                         </div>
                     </VExpandTransition>
-                    <VTextField name="fqdn" :label="gt('field.domain')" placeholder="mail.example.com" v-model="fqdn" :error-messages="errors.fqdn" />
+                    <VTextField
+                        name="fqdn"
+                        :label="gt('field.domain')"
+                        placeholder="mail.example.com"
+                        v-model="fqdn"
+                        :error-messages="errors.fqdn"
+                    />
                 </VCardItem>
                 <VCardActions>
                     <VSpacer />
-                    <VBtn color="error" :text="gt('cta.abort')"/>
-                    <VBtn color="primary" variant="elevated" :text="gt('cta.save')"/>
+                    <VBtn color="error" :text="gt('cta.abort')" :disabled="isPending" @click="model = false" />
+                    <VBtn color="primary" variant="elevated" :text="gt('cta.save')" :loading="isPending" type="submit" />
                 </VCardActions>
             </form>
         </VCard>
@@ -36,11 +42,16 @@
     import { z } from 'zod'
     import { parse } from 'tldts'
     import { useI18n } from 'vue-i18n'
+    import { useDomainCreateMutation } from '@/modules/domains/mutations/useDomainCreateMutation.ts'
+    import { useRouter } from 'vue-router'
+    import { RouteNames } from '@/router/RouteNames.ts'
 
     const model = ref<undefined | boolean>()
     const isSubdomain = ref(false)
     const { t: gt } = useI18n({ useScope: 'global' })
     const { t } = useI18n()
+    const { mutateAsync, isPending } = useDomainCreateMutation()
+    const router = useRouter()
 
     const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
@@ -64,7 +75,8 @@
     const [fqdn] = defineField('fqdn')
 
     const onSubmit = handleSubmit(async (values) => {
-        console.log(values)
+        const { domainId } = await mutateAsync(values)
+        void router.push({ name: RouteNames.DOMAIN_DETAILS, params: { domainId } })
     })
 </script>
 
