@@ -23,13 +23,13 @@ export class AuthController {
 
         return {
             token,
-            user: UserDto.toDto(principal),
+            user: principal,
         }
     }
 
     @JwtAuth()
     @Get('user')
     currentUser(@Principal() principal: User): UserDto {
-        return UserDto.toDto(principal)
+        return principal
     }
 }

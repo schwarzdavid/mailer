@@ -1,30 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { Domain } from '../interfaces/domain.interface'
 import { DomainDkim } from '../interfaces/domain-dkim.interface'
-
-export enum DomainDnsRecordType {
-    TXT = 'txt'
-}
-
-export enum DomainDnsRecordUse {
-    SPF = 'spf',
-    DKIM = 'dkim',
-    DMARC = 'dmarc'
-}
-
-export enum DomainDnsRecordStatus {
-    VALID,
-    INVALID
-}
-
-export interface DomainDnsRecord {
-    type: DomainDnsRecordType,
-    use: DomainDnsRecordUse,
-    status: DomainDnsRecordStatus,
-    host: string,
-    value: string,
-    current: string | null
-}
+import {
+    DomainDnsRecord,
+    DomainDnsRecordStatus,
+    DomainDnsRecordType,
+    DomainDnsRecordUse,
+} from '../interfaces/domain-dns.interface'
 
 @Injectable()
 export class DomainDnsService {

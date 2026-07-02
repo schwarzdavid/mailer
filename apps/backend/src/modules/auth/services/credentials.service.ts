@@ -4,7 +4,6 @@ import { User } from '../../user/interfaces/user.interface'
 import bcrypt from 'bcryptjs'
 import { InjectModel } from '@nestjs/sequelize'
 import { UserModel } from '../../user/models/user.model'
-import { toUser } from '../../user/mappers/user.mapper'
 
 @Injectable()
 export class CredentialsService {
@@ -18,6 +17,6 @@ export class CredentialsService {
             throw new UnauthorizedException('Invalid credentials.')
         }
 
-        return toUser(user)
+        return user.get({ plain: true })
     }
 }

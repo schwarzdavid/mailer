@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Cache } from '@nestjs/cache-manager'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JwtStrategy } from './jwt.strategy'
 import { UserModel } from '../../user/models/user.model'
 import { JwtPayload } from '../interfaces/jwt-payload.interface'
@@ -41,6 +41,10 @@ describe('JwtStrategy', () => {
         const userModel = { findByPk } as unknown as typeof UserModel
 
         strategy = new JwtStrategy(configService, cacheManager, userModel)
+    })
+
+    afterEach(() => {
+        vi.restoreAllMocks()
     })
 
     it('returns the cached user without touching the database', async () => {

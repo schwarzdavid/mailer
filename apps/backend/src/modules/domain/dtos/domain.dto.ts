@@ -1,19 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger'
 import { Domain } from '../interfaces/domain.interface'
+import { DomainDnsDto } from './domain-dns.dto'
+import { Expose } from 'class-transformer'
 
-export class DomainDto {
-    @ApiProperty({ type: Number })
+export class DomainDto implements Omit<Domain, 'activeDkimId'> {
+    @Expose()
     domainId!: number
 
-    @ApiProperty({ type: String })
+    @Expose()
     fqdn!: string
 
-    static fromDomain(domain: Domain): DomainDto {
-        const dto = new DomainDto()
-
-        dto.domainId = domain.domainId
-        dto.fqdn = domain.fqdn
-
-        return dto
-    }
+    @Expose()
+    dns!: DomainDnsDto
 }

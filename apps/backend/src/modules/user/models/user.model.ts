@@ -4,6 +4,7 @@ import {
     Column,
     CreatedAt,
     DataType,
+    DefaultScope,
     Model,
     PrimaryKey,
     Table,
@@ -12,6 +13,11 @@ import {
 } from 'sequelize-typescript'
 import { FullUser, UserCreate } from '../interfaces/user.interface'
 
+@DefaultScope(() => ({
+    attributes: {
+        exclude: ['password'],
+    }
+}))
 @Table({
     timestamps: true,
     tableName: 'users',
@@ -20,7 +26,7 @@ export class UserModel extends Model<FullUser, UserCreate> implements FullUser {
     @PrimaryKey
     @AutoIncrement
     @AllowNull(false)
-    @Column(DataType.BIGINT)
+    @Column(DataType.INTEGER)
     declare userId: number
 
     @AllowNull(false)

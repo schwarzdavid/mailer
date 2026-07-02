@@ -1,9 +1,9 @@
 import { IsFQDN, IsNotEmpty, IsString } from 'class-validator'
-import { ApiProperty } from '@nestjs/swagger'
 import { DomainCreate } from '../interfaces/domain.interface'
+import { Expose } from 'class-transformer'
 
 export class DomainCreateDto implements DomainCreate {
-    @ApiProperty({ type: String })
+    @Expose()
     @IsString()
     @IsNotEmpty()
     @IsFQDN()

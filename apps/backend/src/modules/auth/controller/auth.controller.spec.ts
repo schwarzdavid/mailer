@@ -41,13 +41,13 @@ describe('AuthController', () => {
         expect(createToken).toHaveBeenCalledWith(principal)
         expect(result.token).toBe('signed-jwt-token')
         expect(result.user).toBeInstanceOf(UserDto)
-        expect(result.user).toEqual(UserDto.toDto(principal))
+        expect(result.user).toEqual(principal)
     })
 
     it('maps the authenticated principal to a response DTO from the current-user endpoint', () => {
         const result = controller.currentUser(principal)
 
         expect(result).toBeInstanceOf(UserDto)
-        expect(result).toEqual(UserDto.toDto(principal))
+        expect(result).toEqual(principal)
     })
 })

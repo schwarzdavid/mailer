@@ -1,6 +1,6 @@
-import { NestFactory } from '@nestjs/core'
+import { NestFactory, Reflector } from '@nestjs/core'
 import { AppModule } from './app.module'
-import { INestApplication, Logger, ValidationPipe } from '@nestjs/common'
+import { ClassSerializerInterceptor, INestApplication, Logger, ValidationPipe } from '@nestjs/common'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
 import { dirname, join } from 'node:path'
@@ -15,6 +15,10 @@ async function bootstrap() {
             transform: true,
         }),
     )
+    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector), {
+        exposeDefaultValues: true,
+        excludeExtraneousValues: true
+    }))
 
     const specOnly = process.argv.some((arg) => arg === '--spec-only')
     const document = setupOpenAPI(app)

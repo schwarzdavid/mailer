@@ -4,7 +4,7 @@ import { DataTypes, type QueryInterface } from 'sequelize'
 export const up = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
     await queryInterface.createTable('users', {
         userId: {
-            type: DataTypes.BIGINT,
+            type: DataTypes.INTEGER,
             allowNull: false,
             primaryKey: true,
             autoIncrement: true,

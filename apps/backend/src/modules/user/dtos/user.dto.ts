@@ -1,23 +1,22 @@
 import { User } from '../interfaces/user.interface'
-import { ApiProperty } from '@nestjs/swagger'
+import { Expose } from 'class-transformer'
 
-export class UserDto {
-    @ApiProperty({ type: Number })
+export class UserDto implements User {
+    @Expose()
     userId!: number
+
+    @Expose()
     firstName!: string
+
+    @Expose()
     lastName!: string
+
+    @Expose()
     email!: string
+
+    @Expose()
     createdAt!: Date
+
+    @Expose()
     updatedAt!: Date
-
-    static toDto(user: User): UserDto {
-        const dto = new UserDto()
-
-        dto.userId = user.userId
-        dto.firstName = user.firstName
-        dto.lastName = user.lastName
-        dto.email = user.email
-
-        return dto
-    }
 }

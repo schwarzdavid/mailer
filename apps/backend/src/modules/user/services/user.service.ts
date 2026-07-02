@@ -3,7 +3,6 @@ import { InjectModel } from '@nestjs/sequelize'
 import { UserModel } from '../models/user.model'
 import { User, UserCreate } from '../interfaces/user.interface'
 import bcrypt from 'bcryptjs'
-import { toUser } from '../mappers/user.mapper'
 
 @Injectable()
 export class UserService {
@@ -22,6 +21,6 @@ export class UserService {
             { returning: true },
         )
 
-        return toUser(userModel)
+        return userModel.get({ plain: true })
     }
 }
