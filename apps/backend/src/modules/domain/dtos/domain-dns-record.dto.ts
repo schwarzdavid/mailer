@@ -6,7 +6,7 @@ import {
 } from '../interfaces/domain-dns.interface'
 import { Expose } from 'class-transformer'
 
-export class DomainDnsRecordDto implements DomainDnsRecord {
+export class DomainDnsRecordDto implements Omit<DomainDnsRecord, 'dnsId' | 'domainId' | 'createdAt' | 'updatedAt'> {
     @Expose()
     current!: string | null
 

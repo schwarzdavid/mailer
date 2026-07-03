@@ -60,6 +60,9 @@ describe('CredentialsService', () => {
         expect(findOne).toHaveBeenCalledWith({
             where: { email: 'ada@example.com' },
             rejectOnEmpty: true,
+            attributes: {
+                include: ['password']
+            }
         })
     })
 

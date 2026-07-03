@@ -7,9 +7,10 @@ import { DomainService } from './services/domain.service'
 import { DomainDkimService } from './services/domain-dkim.service'
 import { DkimEncryptionService } from './services/dkim-encryption.service'
 import { DomainDnsService } from './services/domain-dns.service'
+import { DomainDnsModel } from './models/domain-dns.model'
 
 @Module({
-    imports: [SequelizeModule.forFeature([DomainModel, DomainDkimModel])],
+    imports: [SequelizeModule.forFeature([DomainModel, DomainDkimModel, DomainDnsModel])],
     controllers: [DomainController],
     providers: [DomainService, DomainDkimService, DkimEncryptionService, DomainDnsService],
 })

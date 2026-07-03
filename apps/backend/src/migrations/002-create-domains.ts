@@ -1,7 +1,7 @@
-import type { MigrationParams } from 'umzug'
+import type { MigrationFn } from 'umzug'
 import { DataTypes, type QueryInterface } from 'sequelize'
 
-export const up = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
     await queryInterface.createTable('domains', {
         domainId: {
             type: DataTypes.INTEGER,
@@ -89,7 +89,7 @@ export const up = async ({ context: queryInterface }: MigrationParams<QueryInter
     })
 }
 
-export const down = async ({ context: queryInterface }: MigrationParams<QueryInterface>) => {
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
     await queryInterface.removeConstraint('domains', 'domains_activeDkimId_fkey')
     await queryInterface.dropTable('domain_dkim')
     await queryInterface.dropTable('domains')

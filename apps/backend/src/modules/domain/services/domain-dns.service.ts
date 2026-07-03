@@ -7,6 +7,8 @@ import {
     DomainDnsRecordType,
     DomainDnsRecordUse,
 } from '../interfaces/domain-dns.interface'
+import { InjectModel } from '@nestjs/sequelize'
+import { DomainDnsModel } from '../models/domain-dns.model'
 
 @Injectable()
 export class DomainDnsService {
@@ -15,60 +17,80 @@ export class DomainDnsService {
     private static readonly DKIM_PUBLIC_KEY_PREFIX = '-----BEGIN PUBLIC KEY-----'
     private static readonly DKIM_PUBLIC_KEY_SUFFIX = '-----END PUBLIC KEY-----'
 
-    createDefaultDnsRecords(domain: Domain, dkim: DomainDkim): Record<DomainDnsRecordUse, DomainDnsRecord> {
+    constructor(@InjectModel(DomainDnsModel) private readonly domainDnsModel: typeof DomainDnsModel) {}
+
+    createDefaultDnsRecords(
+        domain: Domain,
+        dkim: DomainDkim,
+    ): Promise<DomainDnsRecord[]> {
         if (domain.domainId !== dkim.domainId) {
             throw new Error('Domain and DKIM do not match')
         }
 
-        return {
-            [DomainDnsRecordUse.SPF]: this.createDefaultSpfRecord(domain),
-            [DomainDnsRecordUse.DKIM]: this.createDefaultDkimRecord(domain, dkim),
-            [DomainDnsRecordUse.DMARC]: this.createDefaultDmarcRecord(domain),
-        }
+        return Promise.all([
+            this.createDefaultSpfRecord(domain),
+            this.createDefaultDkimRecord(domain, dkim),
+            this.createDefaultDmarcRecord(domain),
+        ])
     }
 
-    private createDefaultSpfRecord(domain: Domain): DomainDnsRecord {
+    private async createDefaultSpfRecord(domain: Domain): Promise<DomainDnsRecord> {
         const host = domain.fqdn
         const value = `v=spf1 include:${DomainDnsService.SPF_MAILER} ~all`
 
-        return {
-            host,
-            value,
-            use: DomainDnsRecordUse.SPF,
-            current: null,
-            status: DomainDnsRecordStatus.INVALID,
-            type: DomainDnsRecordType.TXT,
-        }
+        const record = await this.domainDnsModel.create(
+            {
+                domainId: domain.domainId,
+                host,
+                value,
+                use: DomainDnsRecordUse.SPF,
+                current: null,
+                status: DomainDnsRecordStatus.INVALID,
+                type: DomainDnsRecordType.TXT,
+            },
+            { returning: true },
+        )
+
+        return record.get({ plain: true })
     }
 
-    private createDefaultDkimRecord(domain: Domain, dkim: DomainDkim): DomainDnsRecord {
+    private async createDefaultDkimRecord(domain: Domain, dkim: DomainDkim): Promise<DomainDnsRecord> {
         const dkimKey = this.stripDkimPublicKey(dkim.publicKey)
 
         const host = `${dkim.selector}._domainkey.${domain.fqdn}`
         const value = `v=DKIM1; k=${dkim.algorithm}; p=${dkimKey}`
 
-        return {
-            host,
-            value,
-            use: DomainDnsRecordUse.DKIM,
-            current: null,
-            status: DomainDnsRecordStatus.INVALID,
-            type: DomainDnsRecordType.TXT,
-        }
+        const record = await this.domainDnsModel.create(
+            {
+                domainId: domain.domainId,
+                host,
+                value,
+                use: DomainDnsRecordUse.DKIM,
+                current: null,
+                status: DomainDnsRecordStatus.INVALID,
+                type: DomainDnsRecordType.TXT,
+            },
+            { returning: true },
+        )
+
+        return record.get({ plain: true })
     }
 
-    private createDefaultDmarcRecord(domain: Domain): DomainDnsRecord {
+    private async createDefaultDmarcRecord(domain: Domain): Promise<DomainDnsRecord> {
         const host = `_dmarc.${domain.fqdn}`
         const value = 'v=DMARC1; p=none;'
 
-        return {
+        const record = await this.domainDnsModel.create({
+            domainId: domain.domainId,
             host,
             value,
             use: DomainDnsRecordUse.DMARC,
             current: null,
             status: DomainDnsRecordStatus.INVALID,
             type: DomainDnsRecordType.TXT,
-        }
+        }, {returning: true})
+
+        return record.get({ plain: true })
     }
 
     private stripDkimPublicKey(dkimPublicKey: string): string {

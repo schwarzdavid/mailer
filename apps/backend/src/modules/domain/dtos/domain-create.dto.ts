@@ -1,11 +1,12 @@
 import { IsFQDN, IsNotEmpty, IsString } from 'class-validator'
-import { DomainCreate } from '../interfaces/domain.interface'
 import { Expose } from 'class-transformer'
+import { IsIcann } from '../validators/IsIcann'
 
-export class DomainCreateDto implements DomainCreate {
+export class DomainCreateDto {
     @Expose()
     @IsString()
     @IsNotEmpty()
     @IsFQDN()
+    @IsIcann()
     fqdn!: string
 }

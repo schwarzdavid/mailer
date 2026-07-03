@@ -9,15 +9,21 @@ export enum DomainDnsRecordUse {
 }
 
 export enum DomainDnsRecordStatus {
-    VALID,
-    INVALID,
+    VALID = 'valid',
+    INVALID = 'invalid',
 }
 
 export interface DomainDnsRecord {
+    dnsId: number,
+    domainId: number,
     type: DomainDnsRecordType
     use: DomainDnsRecordUse
     status: DomainDnsRecordStatus
     host: string
     value: string
     current: string | null
+    updatedAt: Date
+    createdAt: Date
 }
+
+export type DomainDnsRecordCreate = Omit<DomainDnsRecord, 'dnsId' | 'updatedAt' | 'createdAt'>

@@ -85,7 +85,7 @@
     "en": {
         "title": "New Domain",
         "intro": "Enter your domain name",
-        "invalid-subdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn})."
+        "invalid-subdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example@{fqdn}."
     }
 }
 </i18n>

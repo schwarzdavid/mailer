@@ -1,34 +1,48 @@
-import { Body, Controller, Logger, Post } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth'
 import { DomainCreateDto } from '../dtos/domain-create.dto'
 import { DomainDto } from '../dtos/domain.dto'
 import { DomainService } from '../services/domain.service'
-import { DomainDnsService } from '../services/domain-dns.service'
 import { ResponseDto } from '../../../decorators/ResponseDto'
+import { DomainDnsDto } from '../dtos/domain-dns.dto'
 
 @JwtAuth()
 @ApiTags('domain')
 @Controller('domain')
 export class DomainController {
-    private readonly logger = new Logger(DomainController.name)
-
-    constructor(
-        private readonly domainService: DomainService,
-        private readonly domainDnsService: DomainDnsService
-    ) {}
+    constructor(private readonly domainService: DomainService) {}
 
     @ResponseDto(DomainDto)
     @Post()
-    async createDomain(@Body() domainCreate: DomainCreateDto): Promise<DomainDto> {
-        this.logger.log(`Creating domain ${domainCreate.fqdn}`)
-
-        const domain = await this.domainService.createDomain(domainCreate)
-        const domainDns = this.domainDnsService.createDefaultDnsRecords(domain, domain.activeDkim)
+    async createDomain(@Body() { fqdn }: DomainCreateDto): Promise<DomainDto> {
+        const domain = await this.domainService.createDomain(fqdn)
 
         return {
             ...domain,
-            dns: domainDns
+            dns: DomainDnsDto.fromArray(domain.dnsRecords),
+        }
+    }
+
+    @SerializeOptions({ type: DomainDto })
+    @Get()
+    async getDomains(): Promise<DomainDto[]> {
+        const domains = await this.domainService.getDomains()
+
+        return domains.map((domain) => ({
+            ...domain,
+            dns: DomainDnsDto.fromArray(domain.dnsRecords),
+        }))
+    }
+
+    @ResponseDto(DomainDto)
+    @Get(':domainId')
+    async getDomain(@Param('domainId') domainId: string): Promise<DomainDto> {
+        const domain = await this.domainService.getDomainById(domainId)
+
+        return {
+            ...domain,
+            dns: DomainDnsDto.fromArray(domain.dnsRecords),
         }
     }
 }

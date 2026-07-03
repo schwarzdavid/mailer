@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuthApi, type UserDto } from 'api'
 import { useAuthQuery } from '../useAuthQuery.ts'
 import { withVueQuery } from '@/__tests__/support.ts'
+import { useQuery } from '@tanstack/vue-query'
 
 const user: UserDto = {
     userId: 1,
@@ -19,7 +20,7 @@ afterEach(() => {
 describe('useAuthQuery', () => {
     it('loads the current user from AuthApi.currentUser', async () => {
         const currentUserSpy = vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(user)
-        const { result, unmount } = withVueQuery(() => useAuthQuery())
+        const { result, unmount } = withVueQuery(() => useQuery(useAuthQuery()))
 
         await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
 
@@ -30,7 +31,7 @@ describe('useAuthQuery', () => {
 
     it('exposes the user under the auth.user query key', async () => {
         vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(user)
-        const { result, queryClient, unmount } = withVueQuery(() => useAuthQuery())
+        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useAuthQuery()))
 
         await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
 
@@ -40,7 +41,7 @@ describe('useAuthQuery', () => {
 
     it('reports an error state when the request fails', async () => {
         vi.spyOn(AuthApi, 'currentUser').mockRejectedValue(new Error('Unauthorized'))
-        const { result, unmount } = withVueQuery(() => useAuthQuery())
+        const { result, unmount } = withVueQuery(() => useQuery(useAuthQuery()))
 
         await vi.waitFor(() => expect(result.isError.value).toBe(true))
 
