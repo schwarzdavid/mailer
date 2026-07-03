@@ -7,7 +7,7 @@
                 <VTab :to="{ name: RouteNames.DOMAIN_LIST }">Domains</VTab>
             </VTabs>
             <VSpacer />
-            <VBtn variant="flat" :text="t('cta.logout')" @click="logout"/>
+            <VBtn variant="flat" :text="t('cta.logout')" @click="logout" />
         </VAppBar>
         <VMain>
             <RouterView />
@@ -23,7 +23,7 @@
     import { JWT_KEY } from '@/constants/jwtKey.ts'
     import { useRouter } from 'vue-router'
 
-    const {t} = useI18n()
+    const { t } = useI18n()
     const client = useQueryClient()
     const jwt = useLocalStorage<string | null>(JWT_KEY, null)
     const router = useRouter()
@@ -34,13 +34,3 @@
         void router.push({ name: RouteNames.LOGIN })
     }
 </script>
-
-<i18n>
-{
-    "en": {
-        "cta": {
-            "logout": "Logout"
-        }
-    }
-}
-</i18n>

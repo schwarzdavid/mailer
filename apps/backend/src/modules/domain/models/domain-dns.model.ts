@@ -52,11 +52,11 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
     declare host: string
 
     @AllowNull(false)
-    @Column(DataType.STRING(255))
+    @Column(DataType.TEXT)
     declare value: string
 
     @AllowNull
-    @Column(DataType.STRING(255))
+    @Column(DataType.TEXT)
     current: string | null = null
 
     @BelongsTo(() => DomainModel, {

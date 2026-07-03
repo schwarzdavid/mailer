@@ -1,18 +1,18 @@
 <template>
     <div>
-        <h1 class="text-center mb-0">{{ t('title') }}</h1>
-        <p class="text-center mb-8 mt-2 text-medium-emphasis">{{ t('intro') }}</p>
+        <h1 class="text-center mb-0">{{ t('module.auth.login.title') }}</h1>
+        <p class="text-center mb-8 mt-2 text-medium-emphasis">{{ t('module.auth.login.intro') }}</p>
         <form novalidate @submit.prevent="onSubmit">
             <VTextField
                 v-model="email"
-                :label="gt('field.email')"
+                :label="t('field.email')"
                 type="email"
                 :error-messages="errors.email"
                 autocomplete="email"
             />
             <VTextField
                 v-model="password"
-                :label="gt('field.password')"
+                :label="t('field.password')"
                 type="password"
                 :error-messages="errors.password"
                 autocomplete="current-password"
@@ -32,7 +32,6 @@
     import { RouteNames } from '@/router/RouteNames.ts'
 
     const { t } = useI18n()
-    const { t: gt } = useI18n({ useScope: 'global' })
     const { mutateAsync, isPending } = useLoginMutation()
     const router = useRouter()
 
@@ -48,15 +47,3 @@
         void router.push({ name: RouteNames.DASHBOARD })
     })
 </script>
-
-<i18n>
-{
-    "en": {
-        "title": "Welcome Back",
-        "intro": "Enter your credentials to access the admin panel",
-        "cta": {
-            "login": "Login"
-        }
-    }
-}
-</i18n>

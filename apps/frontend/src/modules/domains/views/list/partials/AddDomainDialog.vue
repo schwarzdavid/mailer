@@ -3,23 +3,23 @@
         <template #activator="props">
             <slot v-bind="props" />
         </template>
-        <VCard :title="t('title')">
+        <VCard :title="t('module.domains.add.title')">
             <template #append>
                 <VIconBtn icon="mdi-close" @click="model = false" :disabled="isPending" />
             </template>
             <form @submit.prevent="onSubmit">
                 <VCardItem>
-                    <p>{{ t('intro') }}</p>
+                    <p>{{ t('module.domains.add.intro') }}</p>
                     <VExpandTransition>
                         <div v-if="!isSubdomain">
-                            <VAlert class="mb-4" color="warning">
-                                <p class="text-black">{{ t('invalid-subdomain', { fqdn }) }}</p>
+                            <VAlert class="mb-4" color="warning" icon="mdi-alert">
+                                <p class="text-black">{{ t('module.domains.add.invalidSubdomain', { fqdn }) }}</p>
                             </VAlert>
                         </div>
                     </VExpandTransition>
                     <VTextField
                         name="fqdn"
-                        :label="gt('field.domain')"
+                        :label="t('field.domain')"
                         placeholder="mail.example.com"
                         v-model="fqdn"
                         :error-messages="errors.fqdn"
@@ -27,8 +27,8 @@
                 </VCardItem>
                 <VCardActions>
                     <VSpacer />
-                    <VBtn color="error" :text="gt('cta.abort')" :disabled="isPending" @click="model = false" />
-                    <VBtn color="primary" variant="elevated" :text="gt('cta.save')" :loading="isPending" type="submit" />
+                    <VBtn color="error" :text="t('cta.abort')" :disabled="isPending" @click="model = false" />
+                    <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="isPending" type="submit" />
                 </VCardActions>
             </form>
         </VCard>
@@ -48,7 +48,6 @@
 
     const model = ref<undefined | boolean>()
     const isSubdomain = ref(false)
-    const { t: gt } = useI18n({ useScope: 'global' })
     const { t } = useI18n()
     const { mutateAsync, isPending } = useDomainCreateMutation()
     const router = useRouter()
@@ -64,7 +63,7 @@
                             return !!isIcann
                         },
                         {
-                            error: gt('validation.hostname'),
+                            error: t('validation.hostname'),
                         },
                     ),
                 ),
@@ -79,13 +78,3 @@
         void router.push({ name: RouteNames.DOMAIN_DETAILS, params: { domainId } })
     })
 </script>
-
-<i18n>
-{
-    "en": {
-        "title": "New Domain",
-        "intro": "Enter your domain name",
-        "invalid-subdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example@{fqdn}."
-    }
-}
-</i18n>

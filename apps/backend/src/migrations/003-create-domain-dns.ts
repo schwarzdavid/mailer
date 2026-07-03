@@ -37,11 +37,11 @@ export const up: MigrationFn<QueryInterface> = async ({context: queryInterface})
             allowNull: false
         },
         value: {
-            type: DataType.STRING(255),
+            type: DataType.TEXT,
             allowNull: false
         },
         current: {
-            type: DataType.BOOLEAN,
+            type: DataType.TEXT,
             allowNull: true
         },
         createdAt: {

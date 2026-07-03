@@ -7,6 +7,7 @@ import DashboardView from '@/modules/dashboard/views/DashboardView.vue'
 import DomainListView from '@/modules/domains/views/list/DomainListView.vue'
 import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
 import { queryClient } from '@/plugins/tanstack.ts'
+import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.vue'
 
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +36,11 @@ export const router = createRouter({
                     path: '/domains',
                     name: RouteNames.DOMAIN_LIST,
                     component: DomainListView,
+                },
+                {
+                    path: '/domains/:domainId',
+                    name: RouteNames.DOMAIN_DETAILS,
+                    component: DomainDetailView,
                 },
             ],
             meta: {

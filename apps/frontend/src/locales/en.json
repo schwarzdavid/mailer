@@ -14,6 +14,23 @@
     },
     "cta": {
         "abort": "Abort",
-        "save": "Save"
+        "save": "Save",
+        "login": "Login",
+        "logout": "Logout"
+    },
+    "module": {
+        "auth": {
+            "login": {
+                "title": "Welcome Back",
+                "intro": "Enter your credentials to access the admin panel"
+            }
+        },
+        "domains": {
+            "add": {
+                "title": "New Domain",
+                "intro": "Enter your domain name",
+                "invalidSubdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example{'@'}{fqdn}."
+            }
+        }
     }
 }

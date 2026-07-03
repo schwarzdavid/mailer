@@ -98,6 +98,7 @@ Feature-based structure under `src/modules/<feature>/` split into `views/`, `lay
 
 ## Testing
 
+- **Type-safe test doubles:** type every `vi.fn` with its call signature and hold it as `Mock<…>` — prefer binding to the real collaborator's method (`vi.fn<DomainService['createDomain']>()`) so a signature change breaks the test instead of silently passing. Declare mock inputs/return values with their domain interface or DTO type (`const dkim: DomainDkim = {…}`), never loose literals or `as` casts. For a Sequelize row, model the instance as `Interface & { get(options): Interface }`.
 - **Backend unit** (`*.spec.ts` beside source): Vitest with the SWC transform (`vitest.config.ts`). SWC is required — Nest's `emitDecoratorMetadata` (needed for DI) is dropped by the default esbuild/Oxc transform, so `oxc: false` is set.
 - **Backend e2e** (`test/**/*.e2e-spec.ts`, `vitest.config.e2e.ts`): a global setup starts throwaway Postgres + Redis via Testcontainers, runs migrations, and publishes connection env through Vitest `provide`/`inject`. `test/support/app.ts` boots the real `AppModule` mirroring `main.ts`. Requires Docker; first run pulls images (long timeouts are set intentionally).
 - **Frontend** (`src/**/__tests__/*`, `vitest.config.ts`): jsdom environment. `src/__tests__/setup.ts` stubs browser APIs Vuetify needs; `src/__tests__/support.ts` provides `mountView` (mounts with Vuetify/i18n/Vue Query) and `withVueQuery` (runs a composable in a throwaway app). Vuetify is inlined so Vite strips its per-component CSS imports. E2E is Playwright under `e2e/`.

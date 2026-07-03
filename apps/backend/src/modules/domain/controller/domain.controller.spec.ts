@@ -1,15 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { DomainController } from './domain.controller'
 import { DomainService } from '../services/domain.service'
-import { DomainWithDkim } from '../interfaces/domain.interface'
+import { Domain, DomainWithDkim } from '../interfaces/domain.interface'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
-import { DomainDnsRecord, DomainDnsRecordUse } from '../interfaces/domain-dns.interface'
+import {
+    DomainDnsRecord,
+    DomainDnsRecordStatus,
+    DomainDnsRecordType,
+    DomainDnsRecordUse,
+} from '../interfaces/domain-dns.interface'
+
+const dnsRecord = (use: DomainDnsRecordUse, host: string, value: string): DomainDnsRecord => ({
+    dnsId: 1,
+    domainId: 1,
+    type: DomainDnsRecordType.TXT,
+    use,
+    status: DomainDnsRecordStatus.INVALID,
+    host,
+    value,
+    current: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+})
+
+const dnsRecords: DomainDnsRecord[] = [
+    dnsRecord(DomainDnsRecordUse.SPF, 'example.com', 'v=spf1 include:spf.schwarzdavid.email ~all'),
+    dnsRecord(DomainDnsRecordUse.DKIM, 's1._domainkey.example.com', 'v=DKIM1; k=rsa; p=key'),
+    dnsRecord(DomainDnsRecordUse.DMARC, '_dmarc.example.com', 'v=DMARC1; p=none;'),
+]
 
 describe('DomainController', () => {
     let controller: DomainController
-    let createDomain: ReturnType<typeof vi.fn>
+    let createDomain: Mock<DomainService['createDomain']>
+    let getDomains: Mock<DomainService['getDomains']>
+    let getDomainById: Mock<DomainService['getDomainById']>
 
     const activeDkim: DomainDkim = {
         dkimId: 7,
@@ -21,30 +47,32 @@ describe('DomainController', () => {
         algorithm: DomainDkimAlgorithm.RSA,
         createdAt: new Date(),
     }
-    const createdDomain: DomainWithDkim = {
+
+    const domain: Domain = {
         domainId: 1,
         fqdn: 'example.com',
-        activeDkimId: 7,
-        activeDkim,
-        dkims: [activeDkim],
-        dnsRecords: [
-            { use: DomainDnsRecordUse.SPF } as DomainDnsRecord,
-            { use: DomainDnsRecordUse.DKIM } as DomainDnsRecord,
-            { use: DomainDnsRecordUse.DMARC } as DomainDnsRecord,
-        ],
         rootDomain: 'example.com',
+        activeDkimId: 7,
+        dnsRecords,
         lastCheckedAt: null,
     }
-    const dnsRecords = { spf: {}, dkim: {}, dmarc: {} }
+
+    const createdDomain: DomainWithDkim = {
+        ...domain,
+        activeDkim,
+        dkims: [activeDkim],
+    }
 
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
 
-        createDomain = vi.fn().mockResolvedValue(createdDomain)
+        createDomain = vi.fn<typeof createDomain>().mockResolvedValue(createdDomain)
+        getDomains = vi.fn<typeof getDomains>().mockResolvedValue([domain])
+        getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [DomainController],
-            providers: [{ provide: DomainService, useValue: { createDomain } }],
+            providers: [{ provide: DomainService, useValue: { createDomain, getDomains, getDomainById } }],
         }).compile()
 
         controller = module.get(DomainController)
@@ -58,17 +86,47 @@ describe('DomainController', () => {
         expect(controller).toBeDefined()
     })
 
-    it('delegates domain creation to the service', async () => {
-        const dto = { fqdn: 'example.com' }
+    describe('createDomain', () => {
+        it('delegates domain creation to the service', async () => {
+            await controller.createDomain({ fqdn: 'example.com' })
 
-        await controller.createDomain(dto)
+            expect(createDomain).toHaveBeenCalledWith('example.com')
+        })
 
-        expect(createDomain).toHaveBeenCalledWith(dto.fqdn)
+        it('composes the created domain with its DNS records grouped by use', async () => {
+            const result = await controller.createDomain({ fqdn: 'example.com' })
+
+            expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com', rootDomain: 'example.com' })
+            expect(result.dns[DomainDnsRecordUse.SPF]).toMatchObject({ host: 'example.com', use: DomainDnsRecordUse.SPF })
+            expect(result.dns[DomainDnsRecordUse.DKIM]).toMatchObject({
+                host: 's1._domainkey.example.com',
+                use: DomainDnsRecordUse.DKIM,
+            })
+            expect(result.dns[DomainDnsRecordUse.DMARC]).toMatchObject({
+                host: '_dmarc.example.com',
+                use: DomainDnsRecordUse.DMARC,
+            })
+        })
     })
 
-    it('composes the created domain with its default DNS records', async () => {
-        const result = await controller.createDomain({ fqdn: 'example.com' })
+    describe('getDomains', () => {
+        it('returns every domain with its DNS records grouped by use', async () => {
+            const result = await controller.getDomains()
 
-        expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com', dns: dnsRecords })
+            expect(getDomains).toHaveBeenCalledOnce()
+            expect(result).toHaveLength(1)
+            expect(result[0]).toMatchObject({ domainId: 1, fqdn: 'example.com' })
+            expect(result[0]?.dns[DomainDnsRecordUse.SPF]).toMatchObject({ use: DomainDnsRecordUse.SPF })
+        })
+    })
+
+    describe('getDomain', () => {
+        it('looks up the requested domain by id and groups its DNS records by use', async () => {
+            const result = await controller.getDomain('1')
+
+            expect(getDomainById).toHaveBeenCalledWith('1')
+            expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com' })
+            expect(result.dns[DomainDnsRecordUse.DMARC]).toMatchObject({ use: DomainDnsRecordUse.DMARC })
+        })
     })
 })
