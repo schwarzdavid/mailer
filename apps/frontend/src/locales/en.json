@@ -16,7 +16,12 @@
         "abort": "Abort",
         "save": "Save",
         "login": "Login",
-        "logout": "Logout"
+        "logout": "Logout",
+        "back": "Back",
+        "copy": {
+            "default": "Copy",
+            "success": "Copied"
+        }
     },
     "module": {
         "auth": {
@@ -25,11 +30,44 @@
                 "intro": "Enter your credentials to access the admin panel"
             }
         },
+        "dashboard": {
+            "nav": "Dashboard"
+        },
         "domains": {
+            "nav": "Domains",
+            "list": {
+                "title": "Domains"
+            },
             "add": {
                 "title": "New Domain",
                 "intro": "Enter your domain name",
                 "invalidSubdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example{'@'}{fqdn}."
+            },
+            "status": {
+                "valid": "Valid",
+                "invalid": "Invalid"
+            },
+            "dns": {
+                "title": "DNS Records",
+                "intro": "Before you can use this domain to send emails, configure your domain's DNS records to verify your domain ownership and to allow us to send emails in your name.",
+                "fields": {
+                    "status": "Status",
+                    "type": "Type",
+                    "host": "Host",
+                    "value": "Value"
+                },
+                "spf": {
+                    "title": "SPF",
+                    "description": "SPF is used to verify that an email is actually sent by our server."
+                },
+                "dkim": {
+                    "title": "DKIM",
+                    "description": "DKIM is used to verify that this server is allowed to send emails in your name."
+                },
+                "dmarc": {
+                    "title": "DMARC",
+                    "description": "DMARC defines how the receiver should react to spoofed emails."
+                }
             }
         }
     }

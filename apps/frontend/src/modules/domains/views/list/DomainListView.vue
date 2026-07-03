@@ -1,7 +1,7 @@
 <template>
     <VContainer>
         <div class="d-flex justify-space-between align-center">
-            <h1>Domains</h1>
+            <h1>{{ t('module.domains.list.title') }}</h1>
             <AddDomainDialog v-slot="{ props }">
                 <VBtn v-bind="props">Add</VBtn>
             </AddDomainDialog>
@@ -23,6 +23,8 @@
     import { useQuery } from '@tanstack/vue-query'
     import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
     import DomainListEntry from '@/modules/domains/views/list/partials/DomainListEntry.vue'
+    import { useI18n } from 'vue-i18n'
 
     const { data: domains, isPending } = useQuery(useDomainsQuery())
+    const { t } = useI18n()
 </script>
