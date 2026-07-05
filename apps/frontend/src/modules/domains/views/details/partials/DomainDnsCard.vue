@@ -4,7 +4,8 @@
             <span class="text-body-large">{{ t('module.domains.dns.title') }}</span>
         </template>
         <template #append>
-            <VBtn prepend-icon="mdi-refresh" size="default" text="Refresh" />
+            <span class="d-block pe-4 text-medium-emphasis" v-if="domain.lastCheckedAt">{{ t('module.domains.dns.lastChecked', { date: lastCheckedDate }) }}</span>
+            <VBtn prepend-icon="mdi-refresh" size="default" :text="t('cta.refresh')" @click="mutateAsync(domain.domainId)" :loading="isPending" />
         </template>
         <VCardText>
             <p class="text-body-large">{{ t('module.domains.dns.intro') }}</p>
@@ -27,10 +28,15 @@
     import type { DomainDto } from 'api'
     import { useI18n } from 'vue-i18n'
     import DomainDnsRecord from '@/modules/domains/views/details/partials/DomainDnsRecord.vue'
+    import { useDomainRefreshMutation } from '@/modules/domains/mutations/useDomainRefreshMutation.ts'
+    import { useDateFormat } from '@vueuse/core'
 
-    defineProps<{
+    const props = defineProps<{
         domain: DomainDto
     }>()
 
     const { t } = useI18n()
+    const { mutateAsync, isPending } = useDomainRefreshMutation()
+
+    const lastCheckedDate = useDateFormat(() => props.domain.lastCheckedAt!, 'DD.MM.YYYY HH:mm:ss')
 </script>

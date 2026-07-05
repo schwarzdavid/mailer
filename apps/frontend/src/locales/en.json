@@ -21,7 +21,8 @@
         "copy": {
             "default": "Copy",
             "success": "Copied"
-        }
+        },
+        "refresh": "Refresh",
     },
     "module": {
         "auth": {
@@ -49,7 +50,8 @@
             },
             "dns": {
                 "title": "DNS Records",
-                "intro": "Before you can use this domain to send emails, configure your domain's DNS records to verify your domain ownership and to allow us to send emails in your name.",
+                "intro": "Before you can use this domain to send emails, configure your domain's DNS records to verify your domain ownership and to allow us to send emails in your name. After setting your DNS records, it may take up to 24 hours for the changes to take effect.",
+                "lastChecked": "Last checked at {date}",
                 "fields": {
                     "status": "Status",
                     "type": "Type",

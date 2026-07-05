@@ -51,7 +51,7 @@ export class DomainModel
 
     @AllowNull
     @Column(DataType.DATE)
-    lastCheckedAt: Date | null = null
+    declare lastCheckedAt: Date | null
 
     @BelongsTo(() => DomainDkimModel, {
         onDelete: 'SET NULL',

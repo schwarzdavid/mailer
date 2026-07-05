@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { Domain } from '../interfaces/domain.interface'
 import { DomainDkim } from '../interfaces/domain-dkim.interface'
 import {
@@ -9,20 +9,24 @@ import {
 } from '../interfaces/domain-dns.interface'
 import { InjectModel } from '@nestjs/sequelize'
 import { DomainDnsModel } from '../models/domain-dns.model'
+import { resolve } from 'node:dns/promises'
+import { DomainModel } from '../models/domain.model'
+import ErrnoException = NodeJS.ErrnoException
 
 @Injectable()
 export class DomainDnsService {
     private static readonly SPF_MAILER = 'spf.schwarzdavid.email'
-
     private static readonly DKIM_PUBLIC_KEY_PREFIX = '-----BEGIN PUBLIC KEY-----'
     private static readonly DKIM_PUBLIC_KEY_SUFFIX = '-----END PUBLIC KEY-----'
 
-    constructor(@InjectModel(DomainDnsModel) private readonly domainDnsModel: typeof DomainDnsModel) {}
+    private readonly logger = new Logger(DomainDnsService.name)
 
-    createDefaultDnsRecords(
-        domain: Domain,
-        dkim: DomainDkim,
-    ): Promise<DomainDnsRecord[]> {
+    constructor(
+        @InjectModel(DomainModel) private readonly domainModel: typeof DomainModel,
+        @InjectModel(DomainDnsModel) private readonly domainDnsModel: typeof DomainDnsModel,
+    ) {}
+
+    createDefaultDnsRecords(domain: Domain, dkim: DomainDkim): Promise<DomainDnsRecord[]> {
         if (domain.domainId !== dkim.domainId) {
             throw new Error('Domain and DKIM do not match')
         }
@@ -32,6 +36,36 @@ export class DomainDnsService {
             this.createDefaultDkimRecord(domain, dkim),
             this.createDefaultDmarcRecord(domain),
         ])
+    }
+
+    async reloadDnsRecords(domainId: number): Promise<Domain> {
+        const domain = await this.domainModel.findByPk(domainId, { rejectOnEmpty: true })
+        const dnsRecords = await this.domainDnsModel.findAll({ where: { domainId } })
+
+        this.logger.log(`Reloading DNS records for domain ${domain.fqdn}`)
+
+        for(const record of dnsRecords) {
+            const currentValues = await resolve(record.host, 'TXT').catch((err: ErrnoException) => {
+                if(err?.code === 'ENOTFOUND') {
+                    return null
+                }
+                throw err
+            })
+            const targetValue = currentValues?.[0]?.[0] ?? null
+
+            this.logger.log(`Got TXT value for ${record.host}: ${targetValue ?? '---'}`)
+
+            record.current = targetValue
+            record.status = targetValue === record.value ? DomainDnsRecordStatus.VALID : DomainDnsRecordStatus.INVALID
+            await record.save()
+        }
+
+        domain.lastCheckedAt = new Date()
+        await domain.save()
+
+        domain.dnsRecords = dnsRecords
+
+        return domain.get({plain: true})
     }
 
     private async createDefaultSpfRecord(domain: Domain): Promise<DomainDnsRecord> {
@@ -80,15 +114,18 @@ export class DomainDnsService {
         const host = `_dmarc.${domain.fqdn}`
         const value = 'v=DMARC1; p=none;'
 
-        const record = await this.domainDnsModel.create({
-            domainId: domain.domainId,
-            host,
-            value,
-            use: DomainDnsRecordUse.DMARC,
-            current: null,
-            status: DomainDnsRecordStatus.INVALID,
-            type: DomainDnsRecordType.TXT,
-        }, {returning: true})
+        const record = await this.domainDnsModel.create(
+            {
+                domainId: domain.domainId,
+                host,
+                value,
+                use: DomainDnsRecordUse.DMARC,
+                current: null,
+                status: DomainDnsRecordStatus.INVALID,
+                type: DomainDnsRecordType.TXT,
+            },
+            { returning: true },
+        )
 
         return record.get({ plain: true })
     }

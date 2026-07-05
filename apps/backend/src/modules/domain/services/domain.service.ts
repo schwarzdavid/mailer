@@ -49,7 +49,7 @@ export class DomainService {
         return domains.map((domain) => domain.get({ plain: true }))
     }
 
-    async getDomainById(domainId: string): Promise<Domain> {
+    async getDomainById(domainId: number): Promise<Domain> {
         const domain = await this.domainModel.findByPk(domainId, { rejectOnEmpty: true })
 
         return domain.get({ plain: true })

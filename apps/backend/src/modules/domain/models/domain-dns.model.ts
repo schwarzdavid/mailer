@@ -9,6 +9,7 @@ import {
     Model,
     PrimaryKey,
     Table,
+    Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
 import {
@@ -47,6 +48,7 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
     @Column(DataType.ENUM(...Object.values(DomainDnsRecordStatus)))
     declare status: DomainDnsRecordStatus
 
+    @Unique
     @AllowNull(false)
     @Column(DataType.STRING(255))
     declare host: string
@@ -57,7 +59,7 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
 
     @AllowNull
     @Column(DataType.TEXT)
-    current: string | null = null
+    declare current: string | null
 
     @BelongsTo(() => DomainModel, {
         onUpdate: 'CASCADE',

@@ -6,12 +6,16 @@ import { DomainDto } from '../dtos/domain.dto'
 import { DomainService } from '../services/domain.service'
 import { ResponseDto } from '../../../decorators/ResponseDto'
 import { DomainDnsDto } from '../dtos/domain-dns.dto'
+import { DomainDnsService } from '../services/domain-dns.service'
 
 @JwtAuth()
 @ApiTags('domain')
 @Controller('domain')
 export class DomainController {
-    constructor(private readonly domainService: DomainService) {}
+    constructor(
+        private readonly domainService: DomainService,
+        private readonly domainDnsService: DomainDnsService,
+    ) {}
 
     @ResponseDto(DomainDto)
     @Post()
@@ -37,8 +41,19 @@ export class DomainController {
 
     @ResponseDto(DomainDto)
     @Get(':domainId')
-    async getDomain(@Param('domainId') domainId: string): Promise<DomainDto> {
+    async getDomain(@Param('domainId') domainId: number): Promise<DomainDto> {
         const domain = await this.domainService.getDomainById(domainId)
+
+        return {
+            ...domain,
+            dns: DomainDnsDto.fromArray(domain.dnsRecords),
+        }
+    }
+
+    @ResponseDto(DomainDto)
+    @Post(':domainId/refresh')
+    async refreshDomainRecords(@Param('domainId') domainId: number): Promise<DomainDto> {
+        const domain = await this.domainDnsService.reloadDnsRecords(domainId)
 
         return {
             ...domain,
