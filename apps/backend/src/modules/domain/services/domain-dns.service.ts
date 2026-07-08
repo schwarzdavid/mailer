@@ -51,12 +51,17 @@ export class DomainDnsService {
                 }
                 throw err
             })
-            const targetValue = currentValues?.[0]?.[0] ?? null
+            if(currentValues && currentValues?.length > 1) {
+                throw new Error(`Multiple TXT records found for ${record.host}`)
+            }
+
+            const targetValue = currentValues?.[0]?.join('') ?? null
 
             this.logger.log(`Got TXT value for ${record.host}: ${targetValue ?? '---'}`)
 
             record.current = targetValue
             record.status = targetValue === record.value ? DomainDnsRecordStatus.VALID : DomainDnsRecordStatus.INVALID
+
             await record.save()
         }
 
