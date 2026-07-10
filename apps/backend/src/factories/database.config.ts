@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { ConfigService } from '@nestjs/config'
 import { SequelizeModuleOptions } from '@nestjs/sequelize'
 
-export const envFilePath = [join(__dirname, '..', '..', '..', '.env')]
+export const envFilePath = [join(__dirname, '..', '..', '..', '..', '.env')]
 
 export function createSequelizeOptions(configService: ConfigService): SequelizeModuleOptions {
     return {
