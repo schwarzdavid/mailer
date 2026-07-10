@@ -13,6 +13,7 @@
 # Generated code
 **/src/generated/
 openapi/
+packages/api/assets/
 
 # Turbo cache & TS build info
 **/.turbo/

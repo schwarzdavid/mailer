@@ -8,6 +8,9 @@ import DomainListView from '@/modules/domains/views/list/DomainListView.vue'
 import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
 import { queryClient } from '@/plugins/tanstack.ts'
 import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.vue'
+import InboundFormListView from '@/modules/inbound-forms/views/list/InboundFormListView.vue'
+import InboundFormDetailView from '@/modules/inbound-forms/views/details/InboundFormDetailView.vue'
+import InboundFormTemplateView from '@/modules/inbound-forms/views/template/InboundFormTemplateView.vue'
 
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -41,6 +44,21 @@ export const router = createRouter({
                     path: '/domains/:domainId',
                     name: RouteNames.DOMAIN_DETAILS,
                     component: DomainDetailView,
+                },
+                {
+                    path: '/forms',
+                    name: RouteNames.INBOUND_FORM_LIST,
+                    component: InboundFormListView,
+                },
+                {
+                    path: '/forms/:inboundFormId',
+                    name: RouteNames.INBOUND_FORM_DETAILS,
+                    component: InboundFormDetailView,
+                },
+                {
+                    path: '/forms/:inboundFormId/receivers/:inboundFormReceiverId/template',
+                    name: RouteNames.INBOUND_FORM_TEMPLATE,
+                    component: InboundFormTemplateView,
                 },
             ],
             meta: {

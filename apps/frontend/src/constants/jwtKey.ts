@@ -1,1 +1,1 @@
-export const JWT_KEY = 'mailer::jwt';
+export const JWT_KEY = 'mailer::jwt'

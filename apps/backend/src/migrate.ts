@@ -1,12 +1,31 @@
 import 'reflect-metadata'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { Module } from '@nestjs/common'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
-import { getConnectionToken } from '@nestjs/sequelize'
+import { getConnectionToken, SequelizeModule } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { SequelizeStorage, Umzug } from 'umzug'
 import type { QueryInterface } from 'sequelize'
-import { AppModule } from './app.module'
+import { createSequelizeOptions, envFilePath } from './database.config'
+
+// Migrations must not boot AppModule: its BootstrapService queries tables that
+// don't exist yet on a fresh database, and the cache module needs Redis.
+@Module({
+    imports: [
+        ConfigModule.forRoot({
+            isGlobal: true,
+            envFilePath,
+        }),
+        SequelizeModule.forRootAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: createSequelizeOptions,
+        }),
+    ],
+})
+class MigrationModule {}
 
 const requireMigration = createRequire(__filename)
 
@@ -49,13 +68,13 @@ function buildUmzug(sequelize: Sequelize): Umzug<QueryInterface> {
 }
 
 async function main(): Promise<void> {
-    const app = await NestFactory.createApplicationContext(AppModule, {
+    const app = await NestFactory.createApplicationContext(MigrationModule, {
         logger: ['error', 'warn'],
     })
 
     try {
         const sequelize = app.get<Sequelize>(getConnectionToken())
-        await buildUmzug(sequelize).runAsCLI()
+        await buildUmzug(sequelize).up()
     } finally {
         await app.close()
     }

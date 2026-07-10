@@ -8,6 +8,7 @@
         },
         "build": {
             "dependsOn": ["^build"],
+            "inputs": ["$TURBO_DEFAULT$", "assets/openapi.json"],
             "outputs": ["dist/**", ".output/**"]
         },
         "lint": {

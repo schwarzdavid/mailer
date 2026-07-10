@@ -44,14 +44,14 @@ export class DomainDnsService {
 
         this.logger.log(`Reloading DNS records for domain ${domain.fqdn}`)
 
-        for(const record of dnsRecords) {
+        for (const record of dnsRecords) {
             const currentValues = await resolve(record.host, 'TXT').catch((err: ErrnoException) => {
-                if(err?.code === 'ENOTFOUND') {
+                if (err?.code === 'ENOTFOUND') {
                     return null
                 }
                 throw err
             })
-            if(currentValues && currentValues?.length > 1) {
+            if (currentValues && currentValues?.length > 1) {
                 throw new Error(`Multiple TXT records found for ${record.host}`)
             }
 
@@ -70,7 +70,7 @@ export class DomainDnsService {
 
         domain.dnsRecords = dnsRecords
 
-        return domain.get({plain: true})
+        return domain.get({ plain: true })
     }
 
     private async createDefaultSpfRecord(domain: Domain): Promise<DomainDnsRecord> {

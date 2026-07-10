@@ -14,8 +14,8 @@ export enum DomainDnsRecordStatus {
 }
 
 export interface DomainDnsRecord {
-    dnsId: number,
-    domainId: number,
+    dnsId: number
+    domainId: number
     type: DomainDnsRecordType
     use: DomainDnsRecordUse
     status: DomainDnsRecordStatus

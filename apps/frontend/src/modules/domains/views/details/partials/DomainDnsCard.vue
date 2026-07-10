@@ -4,8 +4,16 @@
             <span class="text-body-large">{{ t('module.domains.dns.title') }}</span>
         </template>
         <template #append>
-            <span class="d-block pe-4 text-medium-emphasis" v-if="domain.lastCheckedAt">{{ t('module.domains.dns.lastChecked', { date: lastCheckedDate }) }}</span>
-            <VBtn prepend-icon="mdi-refresh" size="default" :text="t('cta.refresh')" @click="mutateAsync(domain.domainId)" :loading="isPending" />
+            <span class="d-block pe-4 text-medium-emphasis" v-if="domain.lastCheckedAt">{{
+                t('module.domains.dns.lastChecked', { date: lastCheckedDate })
+            }}</span>
+            <VBtn
+                prepend-icon="mdi-refresh"
+                size="default"
+                :text="t('cta.refresh')"
+                @click="mutateAsync(domain.domainId)"
+                :loading="isPending"
+            />
         </template>
         <VCardText>
             <p class="text-body-large">{{ t('module.domains.dns.intro') }}</p>

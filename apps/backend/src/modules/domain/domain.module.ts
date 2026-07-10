@@ -13,5 +13,6 @@ import { DomainDnsModel } from './models/domain-dns.model'
     imports: [SequelizeModule.forFeature([DomainModel, DomainDkimModel, DomainDnsModel])],
     controllers: [DomainController],
     providers: [DomainService, DomainDkimService, DkimEncryptionService, DomainDnsService],
+    exports: [DomainService, DkimEncryptionService],
 })
 export class DomainModule {}

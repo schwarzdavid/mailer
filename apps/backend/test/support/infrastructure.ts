@@ -12,6 +12,10 @@ export interface E2eEnv {
     REDIS_PASSWORD: string
     BACKEND_JWT_SECRET: string
     BACKEND_DKIM_SECRET: string
+    SMTP_HOST: string
+    SMTP_PORT: string
+    SMTP_SECURE: string
+    MAILHOG_URL: string
 }
 
 export interface Infrastructure {
@@ -42,6 +46,11 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         .withWaitStrategy(Wait.forLogMessage('Ready to accept connections'))
         .start()
 
+    const mailhog = await new GenericContainer('mailhog/mailhog')
+        .withExposedPorts(1025, 8025)
+        .withWaitStrategy(Wait.forListeningPorts())
+        .start()
+
     const env: E2eEnv = {
         DB_HOST: postgres.getHost(),
         DB_PORT: String(postgres.getPort()),
@@ -53,11 +62,16 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         REDIS_PASSWORD: '',
         BACKEND_JWT_SECRET: 'e2e-jwt-secret',
         BACKEND_DKIM_SECRET: 'e2e-dkim-secret',
+        SMTP_HOST: mailhog.getHost(),
+        SMTP_PORT: String(mailhog.getMappedPort(1025)),
+        SMTP_SECURE: 'false',
+        MAILHOG_URL: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
     }
 
     return {
         env,
         async stop() {
+            await mailhog.stop()
             await redis.stop()
             await postgres.stop()
         },

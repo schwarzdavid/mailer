@@ -72,9 +72,13 @@ describe('DomainDnsService', () => {
     beforeEach(async () => {
         nextDnsId = 0
 
-        create = vi.fn<typeof create>().mockImplementation((values) =>
-            Promise.resolve(dnsRow({ ...values, dnsId: ++nextDnsId, createdAt: new Date(), updatedAt: new Date() })),
-        )
+        create = vi
+            .fn<typeof create>()
+            .mockImplementation((values) =>
+                Promise.resolve(
+                    dnsRow({ ...values, dnsId: ++nextDnsId, createdAt: new Date(), updatedAt: new Date() }),
+                ),
+            )
         findAll = vi.fn<typeof findAll>()
         findByPk = vi.fn<typeof findByPk>()
 

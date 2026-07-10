@@ -9,16 +9,22 @@ import * as fs from 'node:fs/promises'
 async function bootstrap() {
     const app = await NestFactory.create(AppModule)
 
+    app.enableCors()
     app.setGlobalPrefix('api')
     app.useGlobalPipes(
         new ValidationPipe({
             transform: true,
+            transformOptions: {
+                exposeDefaultValues: true,
+            },
         }),
     )
-    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector), {
-        exposeDefaultValues: true,
-        excludeExtraneousValues: true
-    }))
+    app.useGlobalInterceptors(
+        new ClassSerializerInterceptor(app.get(Reflector), {
+            exposeDefaultValues: true,
+            excludeExtraneousValues: true,
+        }),
+    )
 
     const specOnly = process.argv.some((arg) => arg === '--spec-only')
     const document = setupOpenAPI(app)

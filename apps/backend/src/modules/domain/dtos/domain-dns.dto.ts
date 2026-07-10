@@ -19,7 +19,10 @@ export class DomainDnsDto implements Record<DomainDnsRecordUse, DomainDnsRecordD
     static fromArray(records: DomainDnsRecord[]): DomainDnsDto {
         const dnsDto = new DomainDnsDto()
         records.forEach((record) => {
-            dnsDto[record.use] = plainToInstance(DomainDnsRecordDto, record, { excludeExtraneousValues: true, exposeDefaultValues: true })
+            dnsDto[record.use] = plainToInstance(DomainDnsRecordDto, record, {
+                excludeExtraneousValues: true,
+                exposeDefaultValues: true,
+            })
         })
         return dnsDto
     }

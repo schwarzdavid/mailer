@@ -13,8 +13,17 @@ export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface 
             type: DataTypes.STRING(255),
             allowNull: false,
         },
+        rootDomain: {
+            type: DataTypes.STRING(255),
+            allowNull: false,
+            unique: true,
+        },
         activeDkimId: {
             type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        lastCheckedAt: {
+            type: DataTypes.DATE,
             allowNull: true,
         },
         createdAt: {

@@ -11,6 +11,10 @@ export interface Domain {
 }
 
 export interface DomainWithDkim extends Domain {
-    activeDkim: DomainDkim,
+    activeDkim: DomainDkim
     dkims: DomainDkim[]
+}
+
+export interface DomainWithActiveDkim extends Domain {
+    activeDkim: DomainDkim
 }

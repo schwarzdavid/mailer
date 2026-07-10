@@ -3,8 +3,9 @@
         <VAppBar class="px-2">
             Logo
             <VTabs>
-                <VTab :to="{ name: RouteNames.DASHBOARD }" exact :text="t('module.dashboard.nav')"/>
-                <VTab :to="{ name: RouteNames.DOMAIN_LIST }" :text="t('module.domains.nav')"/>
+                <VTab :to="{ name: RouteNames.DASHBOARD }" exact :text="t('module.dashboard.nav')" />
+                <VTab :to="{ name: RouteNames.DOMAIN_LIST }" :text="t('module.domains.nav')" />
+                <VTab :to="{ name: RouteNames.INBOUND_FORM_LIST }" :text="t('module.inboundForms.nav')" />
             </VTabs>
             <VSpacer />
             <VBtn variant="flat" :text="t('cta.logout')" @click="logout" />

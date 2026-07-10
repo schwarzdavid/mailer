@@ -10,6 +10,7 @@ import {
     PrimaryKey,
     Table,
     Unique,
+    UpdatedAt,
 } from 'sequelize-typescript'
 import {
     InboundFormTemplate,
@@ -20,7 +21,6 @@ import { InboundFormReceiverModel } from './inbound-form-receiver.model'
 
 @Table({
     tableName: 'inbound_form_template',
-    updatedAt: false,
 })
 export class InboundFormTemplateModel
     extends Model<InboundFormTemplate, InboundFormTemplateCreate>
@@ -39,6 +39,10 @@ export class InboundFormTemplateModel
     declare inboundFormReceiverId: number
 
     @AllowNull(false)
+    @Column(DataType.STRING(255))
+    declare subject: string
+
+    @AllowNull(false)
     @Column(DataType.TEXT)
     declare template: string
 
@@ -53,6 +57,9 @@ export class InboundFormTemplateModel
 
     @CreatedAt
     declare createdAt: Date
+
+    @UpdatedAt
+    declare updatedAt: Date
 
     @BelongsTo(() => InboundFormReceiverModel, {
         onDelete: 'CASCADE',
