@@ -1,7 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ConfigService } from '@nestjs/config'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DkimEncryptionService } from './dkim-encryption.service'
+
+const scryptControl = vi.hoisted(() => ({ fail: false }))
+
+vi.mock('node:crypto', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:crypto')>()
+    return {
+        ...actual,
+        scrypt: (
+            password: string,
+            salt: Buffer,
+            keylen: number,
+            callback: (err: Error | null, derivedKey: Buffer) => void,
+        ) =>
+            scryptControl.fail
+                ? callback(new Error('scrypt failed'), Buffer.alloc(0))
+                : actual.scrypt(password, salt, keylen, callback),
+    }
+})
 
 describe('DkimEncryptionService', () => {
     let service: DkimEncryptionService
@@ -20,6 +38,10 @@ describe('DkimEncryptionService', () => {
         }).compile()
 
         service = module.get(DkimEncryptionService)
+    })
+
+    afterEach(() => {
+        scryptControl.fail = false
     })
 
     it('round-trips the private key back to the original plaintext', async () => {
@@ -75,5 +97,11 @@ describe('DkimEncryptionService', () => {
         parts[4] = (ciphertext[0] === 'A' ? 'B' : 'A') + ciphertext.slice(1)
 
         await expect(service.decryptDkimPrivateKey(parts.join('.'))).rejects.toThrow()
+    })
+
+    it('rejects when deriving the encryption key fails', async () => {
+        scryptControl.fail = true
+
+        await expect(service.encryptDkimPrivateKey(privateKeyPem)).rejects.toThrow('scrypt failed')
     })
 })
