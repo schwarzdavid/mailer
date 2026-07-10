@@ -9,6 +9,7 @@
     "lint:fix": "turbo lint:fix",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "test:cov": "turbo test:cov",
     "format": "prettier -c .",
     "format:fix": "prettier --write .",
     "check": "turbo run lint typecheck test && pnpm run format"

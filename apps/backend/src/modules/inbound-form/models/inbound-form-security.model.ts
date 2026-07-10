@@ -29,12 +29,12 @@ export class InboundFormSecurityModel
     @AutoIncrement
     @AllowNull(false)
     @Column(DataType.INTEGER)
-    declare inboundFormId: number
+    declare inboundFormSecurityId: number
 
     @ForeignKey(() => InboundFormModel)
     @AllowNull(false)
     @Column(DataType.INTEGER)
-    declare inboundFormSecurityId: number
+    declare inboundFormId: number
 
     @AllowNull(false)
     @Column(DataType.STRING(255))

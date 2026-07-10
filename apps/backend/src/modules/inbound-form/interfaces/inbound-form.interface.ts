@@ -4,7 +4,7 @@ import { InboundFormSecurity } from './inbound-form-security.interface'
 
 export interface InboundForm {
     inboundFormId: number
-    domainId: number
+    domainId: number | null
     name: string
     slug: string
     isActive: boolean

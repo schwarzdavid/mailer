@@ -1,6 +1,6 @@
 export interface InboundFormReceiver {
-    inboundFormReceiverId: string
-    inboundFormId: string
+    inboundFormReceiverId: number
+    inboundFormId: number
     emailReceiver: string
     emailFrom: string
     isActive: boolean

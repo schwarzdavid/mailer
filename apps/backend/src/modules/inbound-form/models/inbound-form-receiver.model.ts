@@ -25,12 +25,12 @@ export class InboundFormReceiverModel
     @AutoIncrement
     @AllowNull(false)
     @Column(DataType.INTEGER)
-    declare inboundFormReceiverId: string
+    declare inboundFormReceiverId: number
 
     @ForeignKey(() => InboundFormModel)
     @AllowNull(false)
     @Column(DataType.INTEGER)
-    declare inboundFormId: string
+    declare inboundFormId: number
 
     @AllowNull(false)
     @Column(DataType.STRING)

@@ -17,6 +17,11 @@ export default mergeConfig(
                     inline: ['vuetify'],
                 },
             },
+            coverage: {
+                provider: 'v8',
+                reportsDirectory: './coverage',
+                include: ['src/**/*.{ts,vue}'],
+            },
         },
     }),
 )

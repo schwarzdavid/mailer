@@ -23,6 +23,9 @@
         "test": {
             "outputs": []
         },
+        "test:cov": {
+            "outputs": ["coverage/**"]
+        },
         "generate": {
             "dependsOn": ["^build"],
             "outputs": ["src/generated/**", "../../openapi/**"]

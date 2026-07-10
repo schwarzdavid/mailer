@@ -34,7 +34,7 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
     @ForeignKey(() => DomainModel)
     @AllowNull
     @Column(DataType.INTEGER)
-    declare domainId: number
+    declare domainId: number | null
 
     @AllowNull(false)
     @Column(DataType.STRING(255))
@@ -51,7 +51,7 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
     declare isActive: boolean
 
     @BelongsTo(() => DomainModel, {
-        onDelete: 'CASCADE',
+        onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
     domain: DomainModel | null = null
