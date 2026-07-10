@@ -9,6 +9,7 @@ import { CacheModule } from '@nestjs/cache-manager'
 import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
 import { DomainModule } from './modules/domain/domain.module'
+import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
 
 @Module({
     imports: [
@@ -78,6 +79,7 @@ import { DomainModule } from './modules/domain/domain.module'
         AuthModule,
         UserModule,
         DomainModule,
+        InboundFormModule,
     ],
     providers: [BootstrapService],
 })
