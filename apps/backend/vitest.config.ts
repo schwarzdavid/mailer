@@ -1,5 +1,5 @@
 import swc from 'unplugin-swc'
-import { defineConfig } from 'vitest/config'
+import { coverageConfigDefaults, defineConfig } from 'vitest/config'
 
 // Unit-test config. SWC handles the TypeScript transform so that NestJS's
 // `emitDecoratorMetadata` (required for type-based dependency injection) is
@@ -18,6 +18,16 @@ export default defineConfig({
             provider: 'v8',
             reportsDirectory: './coverage',
             include: ['src/**/*.ts'],
+            exclude: [
+                ...coverageConfigDefaults.exclude,
+                'src/main.ts',
+                'src/migrate.ts',
+                'src/migrations/**',
+                'src/**/*.module.ts',
+                'src/**/*.interface.ts',
+                'src/**/*.model.ts',
+                'src/**/*.dto.ts',
+            ],
         },
     },
 })

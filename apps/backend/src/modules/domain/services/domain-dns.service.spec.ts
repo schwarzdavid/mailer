@@ -217,5 +217,28 @@ describe('DomainDnsService', () => {
             expect(record.current).toBeNull()
             expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
         })
+
+        it('rethrows a DNS lookup error that is not a missing record', async () => {
+            const record = reloadDnsRow(dnsRecord({ value: 'v=DKIM1; k=rsa; p=abc' }))
+            const serverFailure: NodeJS.ErrnoException = Object.assign(new Error('server failure'), {
+                code: 'ESERVFAIL',
+            })
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockRejectedValue(serverFailure)
+
+            await expect(service.reloadDnsRecords(3)).rejects.toBe(serverFailure)
+        })
+
+        it('throws when a host resolves to more than one TXT record', async () => {
+            const record = reloadDnsRow(dnsRecord({ host: 'example.com', value: 'v=spf1 ~all' }))
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockResolvedValue([['first-record'], ['second-record']])
+
+            await expect(service.reloadDnsRecords(3)).rejects.toThrow('Multiple TXT records found for example.com')
+        })
     })
 })

@@ -1,8 +1,32 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DomainDkimService } from './domain-dkim.service'
+
+type GenerateRsaKeyPair = (
+    type: 'rsa',
+    options: {
+        modulusLength: number
+        publicKeyEncoding: { type: string; format: string }
+        privateKeyEncoding: { type: string; format: string }
+    },
+    callback: (err: Error | null, publicKey: string, privateKey: string) => void,
+) => void
+
+const keygenControl = vi.hoisted(() => ({ fail: false }))
+
+vi.mock('node:crypto', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:crypto')>()
+    const realGenerateKeyPair = actual.generateKeyPair as unknown as GenerateRsaKeyPair
+    return {
+        ...actual,
+        generateKeyPair: ((type, options, callback) =>
+            keygenControl.fail
+                ? callback(new Error('key generation failed'), '', '')
+                : realGenerateKeyPair(type, options, callback)) satisfies GenerateRsaKeyPair,
+    }
+})
 import { DkimEncryptionService } from './dkim-encryption.service'
 import { DomainDkimModel } from '../models/domain-dkim.model'
 import { DomainModel } from '../models/domain.model'
@@ -62,6 +86,10 @@ describe('DomainDkimService', () => {
         }).compile()
 
         service = module.get(DomainDkimService)
+    })
+
+    afterEach(() => {
+        keygenControl.fail = false
     })
 
     it('persists a DKIM record with the RSA/2048/s1 defaults for the domain', async () => {
@@ -142,5 +170,11 @@ describe('DomainDkimService', () => {
             algorithm: DomainDkimAlgorithm.RSA,
             keyBits: 2048,
         })
+    })
+
+    it('rejects when RSA key generation fails', async () => {
+        keygenControl.fail = true
+
+        await expect(service.createDkimForDomain(domain)).rejects.toThrow('key generation failed')
     })
 })
