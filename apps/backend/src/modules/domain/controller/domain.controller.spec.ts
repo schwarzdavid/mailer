@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { DomainController } from './domain.controller'
 import { DomainService } from '../services/domain.service'
+import { DomainDnsService } from '../services/domain-dns.service'
 import { Domain, DomainWithDkim } from '../interfaces/domain.interface'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
 import {
@@ -36,6 +37,7 @@ describe('DomainController', () => {
     let createDomain: Mock<DomainService['createDomain']>
     let getDomains: Mock<DomainService['getDomains']>
     let getDomainById: Mock<DomainService['getDomainById']>
+    let reloadDnsRecords: Mock<DomainDnsService['reloadDnsRecords']>
 
     const activeDkim: DomainDkim = {
         dkimId: 7,
@@ -69,10 +71,14 @@ describe('DomainController', () => {
         createDomain = vi.fn<typeof createDomain>().mockResolvedValue(createdDomain)
         getDomains = vi.fn<typeof getDomains>().mockResolvedValue([domain])
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
+        reloadDnsRecords = vi.fn<typeof reloadDnsRecords>().mockResolvedValue(domain)
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [DomainController],
-            providers: [{ provide: DomainService, useValue: { createDomain, getDomains, getDomainById } }],
+            providers: [
+                { provide: DomainService, useValue: { createDomain, getDomains, getDomainById } },
+                { provide: DomainDnsService, useValue: { reloadDnsRecords } },
+            ],
         }).compile()
 
         controller = module.get(DomainController)
@@ -122,11 +128,21 @@ describe('DomainController', () => {
 
     describe('getDomain', () => {
         it('looks up the requested domain by id and groups its DNS records by use', async () => {
-            const result = await controller.getDomain('1')
+            const result = await controller.getDomain(1)
 
-            expect(getDomainById).toHaveBeenCalledWith('1')
+            expect(getDomainById).toHaveBeenCalledWith(1)
             expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com' })
             expect(result.dns[DomainDnsRecordUse.DMARC]).toMatchObject({ use: DomainDnsRecordUse.DMARC })
+        })
+    })
+
+    describe('refreshDomainRecords', () => {
+        it('reloads the DNS records for the requested domain and groups them by use', async () => {
+            const result = await controller.refreshDomainRecords(1)
+
+            expect(reloadDnsRecords).toHaveBeenCalledWith(1)
+            expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com' })
+            expect(result.dns[DomainDnsRecordUse.SPF]).toMatchObject({ use: DomainDnsRecordUse.SPF })
         })
     })
 })

@@ -145,13 +145,13 @@ describe('DomainService', () => {
 
     describe('getDomainById', () => {
         it('looks up the domain by primary key and rejects when it is missing', async () => {
-            await service.getDomainById('3')
+            await service.getDomainById(3)
 
-            expect(findByPk).toHaveBeenCalledWith('3', { rejectOnEmpty: true })
+            expect(findByPk).toHaveBeenCalledWith(3, { rejectOnEmpty: true })
         })
 
         it('returns the requested domain as a plain object', async () => {
-            const result = await service.getDomainById('3')
+            const result = await service.getDomainById(3)
 
             expect(result).toEqual(persistedDomain)
         })
