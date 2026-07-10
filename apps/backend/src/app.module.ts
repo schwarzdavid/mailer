@@ -1,7 +1,7 @@
 import { Logger, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { SequelizeModule } from '@nestjs/sequelize'
-import { createSequelizeOptions, envFilePath } from './database.config'
+import { createSequelizeOptions, envFilePath } from './factories/database.config'
 import { AuthModule } from './modules/auth/auth.module'
 import { UserModule } from './modules/user/user.module'
 import { BootstrapService } from './services/bootstrap.service'

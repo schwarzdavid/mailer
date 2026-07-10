@@ -8,7 +8,7 @@ import { getConnectionToken, SequelizeModule } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { SequelizeStorage, Umzug } from 'umzug'
 import type { QueryInterface } from 'sequelize'
-import { createSequelizeOptions, envFilePath } from './database.config'
+import { createSequelizeOptions, envFilePath } from './factories/database.config'
 
 // Migrations must not boot AppModule: its BootstrapService queries tables that
 // don't exist yet on a fresh database, and the cache module needs Redis.
