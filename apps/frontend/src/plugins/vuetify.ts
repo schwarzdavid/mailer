@@ -31,7 +31,7 @@ export const vuetify = createVuetify({
             size: 'large',
         },
         VAlert: {
-            variant: 'tonal'
-        }
+            variant: 'tonal',
+        },
     },
 })

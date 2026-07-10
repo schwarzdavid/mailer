@@ -1,16 +1,16 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+    - 'apps/*'
+    - 'packages/*'
 allowBuilds:
-  '@parcel/watcher': true
-  '@scarf/scarf': false
-  '@swc/core': true
-  cpu-features: false
-  esbuild: true
-  protobufjs: false
-  ssh2: false
-  unrs-resolver: true
-  vue-demi: true
+    '@parcel/watcher': true
+    '@scarf/scarf': false
+    '@swc/core': true
+    cpu-features: false
+    esbuild: true
+    protobufjs: false
+    ssh2: false
+    unrs-resolver: true
+    vue-demi: true
 includeWorkspaceRoot: true
 minimumReleaseAgeExclude:
-  - '@types/node@26.1.0'
+    - '@types/node@26.1.0'

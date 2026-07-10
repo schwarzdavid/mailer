@@ -3,7 +3,7 @@ export function waitAtleast<T>(fn: Promise<T>, ms = 1000): Promise<T> {
 }
 
 function timeout(ms: number) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         setTimeout(resolve, ms)
     })
 }

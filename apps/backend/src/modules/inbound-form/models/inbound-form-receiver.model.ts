@@ -36,6 +36,10 @@ export class InboundFormReceiverModel
     @Column(DataType.STRING)
     declare emailReceiver: string
 
+    @AllowNull
+    @Column(DataType.STRING(255))
+    declare emailReplyTo: string | null
+
     @AllowNull(false)
     @Column(DataType.STRING)
     declare emailFrom: string

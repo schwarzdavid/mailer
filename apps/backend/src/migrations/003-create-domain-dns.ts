@@ -2,59 +2,59 @@ import { MigrationFn } from 'umzug'
 import { QueryInterface } from 'sequelize'
 import { DataType } from 'sequelize-typescript'
 
-export const up: MigrationFn<QueryInterface> = async ({context: queryInterface}) => {
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
     await queryInterface.createTable('domain_dns', {
         dnsId: {
             autoIncrement: true,
             primaryKey: true,
             allowNull: false,
-            type: DataType.INTEGER
+            type: DataType.INTEGER,
         },
         domainId: {
             type: DataType.INTEGER,
             allowNull: false,
             references: {
-                model: 'domain',
-                key: 'domainId'
+                model: 'domains',
+                key: 'domainId',
             },
             onDelete: 'CASCADE',
-            onUpdate: 'CASCADE'
+            onUpdate: 'CASCADE',
         },
         type: {
             type: DataType.STRING(255),
-            allowNull: false
+            allowNull: false,
         },
         use: {
             type: DataType.STRING(255),
-            allowNull: false
+            allowNull: false,
         },
         status: {
             type: DataType.ENUM('valid', 'invalid'),
-            allowNull: false
+            allowNull: false,
         },
         host: {
             type: DataType.STRING(255),
-            allowNull: false
+            allowNull: false,
         },
         value: {
             type: DataType.TEXT,
-            allowNull: false
+            allowNull: false,
         },
         current: {
             type: DataType.TEXT,
-            allowNull: true
+            allowNull: true,
         },
         createdAt: {
             type: DataType.DATE,
-            allowNull: false
+            allowNull: false,
         },
         updatedAt: {
             type: DataType.DATE,
-            allowNull: false
-        }
+            allowNull: false,
+        },
     })
 }
 
-export const down: MigrationFn<QueryInterface> = async ({context: queryInterface}) => {
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
     await queryInterface.dropTable('domain_dns')
 }

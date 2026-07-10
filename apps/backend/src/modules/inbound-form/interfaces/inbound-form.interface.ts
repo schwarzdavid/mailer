@@ -18,4 +18,4 @@ export interface InboundFormFull extends InboundForm {
     inboundFormSecurity: InboundFormSecurity[]
 }
 
-export type InboundFormCreate = Omit<InboundForm, 'inboundFormId'>
+export type InboundFormCreate = Omit<InboundForm, 'inboundFormId' | 'createdAt' | 'updatedAt'>

@@ -53,9 +53,9 @@ z.config({
 client.setConfig({
     baseUrl: location.origin,
     auth(mode) {
-        if(mode.type === 'http') {
+        if (mode.type === 'http') {
             return localStorage.getItem(JWT_KEY) ?? undefined
         }
         return undefined
-    }
+    },
 })

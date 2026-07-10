@@ -1,36 +1,28 @@
 import { Logger, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-import { join } from 'node:path'
 import { SequelizeModule } from '@nestjs/sequelize'
+import { createSequelizeOptions, envFilePath } from './database.config'
 import { AuthModule } from './modules/auth/auth.module'
 import { UserModule } from './modules/user/user.module'
 import { BootstrapService } from './services/bootstrap.service'
 import { CacheModule } from '@nestjs/cache-manager'
 import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
+import { ThrottlerModule } from '@nestjs/throttler'
 import { DomainModule } from './modules/domain/domain.module'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
+import { MailModule } from './modules/mail/mail.module'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
-            envFilePath: [join(__dirname, '..', '..', '..', '.env')],
+            envFilePath,
         }),
         SequelizeModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory(configService: ConfigService) {
-                return {
-                    dialect: 'postgres',
-                    host: configService.get<string>('DB_HOST', 'localhost'),
-                    port: configService.get<number>('DB_PORT'),
-                    username: configService.get<string>('DB_USERNAME'),
-                    password: configService.get<string>('DB_PASSWORD'),
-                    database: configService.get<string>('DB_DATABASE'),
-                    autoLoadModels: true,
-                }
-            },
+            useFactory: createSequelizeOptions,
         }),
         CacheModule.registerAsync({
             isGlobal: true,
@@ -76,10 +68,17 @@ import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
                 }
             },
         }),
+        ThrottlerModule.forRoot([
+            {
+                ttl: 60_000,
+                limit: 10,
+            },
+        ]),
         AuthModule,
         UserModule,
         DomainModule,
         InboundFormModule,
+        MailModule,
     ],
     providers: [BootstrapService],
 })

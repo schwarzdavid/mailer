@@ -2,8 +2,9 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { DomainModel } from '../models/domain.model'
 import { DomainDkimService } from './domain-dkim.service'
-import { Domain, DomainWithDkim } from '../interfaces/domain.interface'
+import { Domain, DomainWithActiveDkim, DomainWithDkim } from '../interfaces/domain.interface'
 import { DomainDnsService } from './domain-dns.service'
+import { DomainDkimModel } from '../models/domain-dkim.model'
 import { parse } from 'tldts'
 
 @Injectable()
@@ -18,13 +19,16 @@ export class DomainService {
 
     async createDomain(fqdn: string): Promise<DomainWithDkim> {
         const { domain: rootDomain } = parse(fqdn)
-        if(!rootDomain) {
+        if (!rootDomain) {
             throw new BadRequestException('Invalid domain.')
         }
-        const domainModel = await this.domainModel.create({
-            fqdn,
-            rootDomain
-        }, { returning: true })
+        const domainModel = await this.domainModel.create(
+            {
+                fqdn,
+                rootDomain,
+            },
+            { returning: true },
+        )
         this.logger.log(`Created domain ${domainModel.fqdn}`)
 
         const dkim = await this.domainDkimService.createDkimForDomain(domainModel, true)
@@ -53,5 +57,26 @@ export class DomainService {
         const domain = await this.domainModel.findByPk(domainId, { rejectOnEmpty: true })
 
         return domain.get({ plain: true })
+    }
+
+    async getSendingDomainByFqdn(fqdn: string): Promise<DomainWithActiveDkim | null> {
+        const domain = await this.domainModel.findOne({
+            where: { fqdn },
+            include: [{ model: DomainDkimModel, as: 'activeDkim' }],
+        })
+
+        if (!domain) {
+            return null
+        }
+
+        // The class-field initializer on DomainModel.activeDkim shadows the
+        // association accessor, so the eager-loaded value is only reliably
+        // present on the plain representation.
+        const sendingDomain = domain.get({ plain: true }) as DomainWithActiveDkim
+        if (!sendingDomain.activeDkim) {
+            return null
+        }
+
+        return sendingDomain
     }
 }

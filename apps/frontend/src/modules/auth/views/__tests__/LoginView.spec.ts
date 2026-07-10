@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { AuthApi, type AuthenticationDto } from 'api'
+import type { Router } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { mountView } from '@/__tests__/support.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }))
+const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
 
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()

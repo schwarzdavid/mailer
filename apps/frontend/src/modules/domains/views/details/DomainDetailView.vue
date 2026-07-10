@@ -17,7 +17,7 @@
                     <DomainVerificationChip :domain="domain" />
                 </div>
                 <VDivider class="mb-6" />
-                <DomainDnsCard :domain="domain"/>
+                <DomainDnsCard :domain="domain" />
             </div>
         </VFadeTransition>
     </VContainer>

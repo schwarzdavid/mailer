@@ -1,4 +1,5 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common'
+import { ClassSerializerInterceptor, INestApplication, ValidationPipe } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import type { App } from 'supertest/types'
 import { inject } from 'vitest'
@@ -22,6 +23,15 @@ export async function createTestApp(): Promise<INestApplication<App>> {
     app.useGlobalPipes(
         new ValidationPipe({
             transform: true,
+            transformOptions: {
+                exposeDefaultValues: true,
+            },
+        }),
+    )
+    app.useGlobalInterceptors(
+        new ClassSerializerInterceptor(app.get(Reflector), {
+            exposeDefaultValues: true,
+            excludeExtraneousValues: true,
         }),
     )
 

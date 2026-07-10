@@ -103,7 +103,10 @@ describe('DomainController', () => {
             const result = await controller.createDomain({ fqdn: 'example.com' })
 
             expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com', rootDomain: 'example.com' })
-            expect(result.dns[DomainDnsRecordUse.SPF]).toMatchObject({ host: 'example.com', use: DomainDnsRecordUse.SPF })
+            expect(result.dns[DomainDnsRecordUse.SPF]).toMatchObject({
+                host: 'example.com',
+                use: DomainDnsRecordUse.SPF,
+            })
             expect(result.dns[DomainDnsRecordUse.DKIM]).toMatchObject({
                 host: 's1._domainkey.example.com',
                 use: DomainDnsRecordUse.DKIM,

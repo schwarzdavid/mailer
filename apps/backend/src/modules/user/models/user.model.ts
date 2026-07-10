@@ -16,7 +16,7 @@ import { FullUser, UserCreate } from '../interfaces/user.interface'
 @DefaultScope(() => ({
     attributes: {
         exclude: ['password'],
-    }
+    },
 }))
 @Table({
     timestamps: true,

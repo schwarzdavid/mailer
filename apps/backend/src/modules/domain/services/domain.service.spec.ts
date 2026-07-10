@@ -6,7 +6,8 @@ import { DomainService } from './domain.service'
 import { DomainDkimService } from './domain-dkim.service'
 import { DomainDnsService } from './domain-dns.service'
 import { DomainModel } from '../models/domain.model'
-import { Domain } from '../interfaces/domain.interface'
+import { DomainDkimModel } from '../models/domain-dkim.model'
+import { Domain, DomainWithActiveDkim } from '../interfaces/domain.interface'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
 import {
     DomainDnsRecord,
@@ -24,6 +25,7 @@ describe('DomainService', () => {
     let create: Mock<(values: Pick<Domain, 'fqdn' | 'rootDomain'>, options: { returning: true }) => Promise<DomainRow>>
     let findAll: Mock<() => Promise<DomainRow[]>>
     let findByPk: Mock<(id: string, options: { rejectOnEmpty: true }) => Promise<DomainRow>>
+    let findOne: Mock<(typeof DomainModel)['findOne']>
     let createDkimForDomain: Mock<DomainDkimService['createDkimForDomain']>
     let createDefaultDnsRecords: Mock<DomainDnsService['createDefaultDnsRecords']>
 
@@ -68,6 +70,7 @@ describe('DomainService', () => {
         create = vi.fn<typeof create>().mockResolvedValue(domainRow(persistedDomain))
         findAll = vi.fn<typeof findAll>().mockResolvedValue([domainRow(persistedDomain)])
         findByPk = vi.fn<typeof findByPk>().mockResolvedValue(domainRow(persistedDomain))
+        findOne = vi.fn<typeof findOne>()
         createDkimForDomain = vi.fn<typeof createDkimForDomain>().mockResolvedValue(dkim)
         createDefaultDnsRecords = vi.fn<typeof createDefaultDnsRecords>().mockResolvedValue(dnsRecords)
 
@@ -76,7 +79,7 @@ describe('DomainService', () => {
                 DomainService,
                 { provide: DomainDkimService, useValue: { createDkimForDomain } },
                 { provide: DomainDnsService, useValue: { createDefaultDnsRecords } },
-                { provide: getModelToken(DomainModel), useValue: { create, findAll, findByPk } },
+                { provide: getModelToken(DomainModel), useValue: { create, findAll, findByPk, findOne } },
             ],
         }).compile()
 
@@ -125,7 +128,12 @@ describe('DomainService', () => {
         it('returns the persisted domain enriched with its DKIM key and DNS records', async () => {
             const result = await service.createDomain('example.com')
 
-            expect(result).toMatchObject({ domainId: 3, fqdn: 'example.com', rootDomain: 'example.com', activeDkimId: 55 })
+            expect(result).toMatchObject({
+                domainId: 3,
+                fqdn: 'example.com',
+                rootDomain: 'example.com',
+                activeDkimId: 55,
+            })
             expect(result.activeDkim).toBe(dkim)
             expect(result.dkims).toEqual([dkim])
             expect(result.dnsRecords).toBe(dnsRecords)
@@ -154,6 +162,54 @@ describe('DomainService', () => {
             const result = await service.getDomainById(3)
 
             expect(result).toEqual(persistedDomain)
+        })
+    })
+
+    describe('getSendingDomainByFqdn', () => {
+        it('returns the domain with its active dkim as a plain object', async () => {
+            const activeDkim: DomainDkim = {
+                dkimId: 7,
+                domainId: 1,
+                selector: 's1',
+                publicKey: 'pub',
+                privateKey: 'v1.encrypted',
+                algorithm: DomainDkimAlgorithm.RSA,
+                keyBits: 2048,
+                createdAt: new Date(),
+            }
+            const sendingDomain: DomainWithActiveDkim = {
+                domainId: 1,
+                fqdn: 'mail.example.com',
+                rootDomain: 'example.com',
+                activeDkimId: 7,
+                dnsRecords: [],
+                lastCheckedAt: null,
+                activeDkim,
+            }
+            findOne.mockResolvedValue({
+                activeDkim,
+                get: () => sendingDomain,
+            } as unknown as DomainModel)
+
+            const result = await service.getSendingDomainByFqdn('mail.example.com')
+
+            expect(findOne).toHaveBeenCalledWith({
+                where: { fqdn: 'mail.example.com' },
+                include: [{ model: DomainDkimModel, as: 'activeDkim' }],
+            })
+            expect(result).toEqual(sendingDomain)
+        })
+
+        it('returns null when the domain does not exist', async () => {
+            findOne.mockResolvedValue(null)
+
+            await expect(service.getSendingDomainByFqdn('unknown.example.com')).resolves.toBeNull()
+        })
+
+        it('returns null when the domain has no active dkim key', async () => {
+            findOne.mockResolvedValue({ activeDkim: null, get: () => ({}) } as unknown as DomainModel)
+
+            await expect(service.getSendingDomainByFqdn('mail.example.com')).resolves.toBeNull()
         })
     })
 })

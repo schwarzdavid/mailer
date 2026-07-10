@@ -8,7 +8,7 @@ export function useDomainQuery(domainId: MaybeRefOrGetter<number>) {
         queryFn: () =>
             DomainApi.getDomain({
                 path: {
-                    domainId: toValue(domainId).toString(),
+                    domainId: toValue(domainId),
                 },
             }),
     })

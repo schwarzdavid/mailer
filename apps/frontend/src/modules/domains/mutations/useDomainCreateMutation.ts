@@ -6,17 +6,20 @@ export function useDomainCreateMutation() {
     const client = useQueryClient()
 
     return useMutation({
-        mutationFn: (domainCreate: DomainCreateDto) => waitAtleast(DomainApi.createDomain({
-            body: domainCreate
-        })),
+        mutationFn: (domainCreate: DomainCreateDto) =>
+            waitAtleast(
+                DomainApi.createDomain({
+                    body: domainCreate,
+                }),
+            ),
         onSuccess(domain) {
             client.setQueryData(['domain', domain.domainId], domain)
 
             const domains = client.getQueryData<DomainDto[]>(['domains'])
-            if(domains) {
+            if (domains) {
                 domains.push(domain)
                 client.setQueryData(['domains'], domains)
             }
-        }
+        },
     })
 }

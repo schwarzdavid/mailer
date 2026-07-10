@@ -10,7 +10,9 @@
     "field": {
         "email": "Email Address",
         "password": "Password",
-        "domain": "Domain name"
+        "domain": "Domain name",
+        "name": "Name",
+        "slug": "Slug"
     },
     "cta": {
         "abort": "Abort",
@@ -23,6 +25,11 @@
             "success": "Copied"
         },
         "refresh": "Refresh",
+        "add": "Add",
+        "edit": "Edit",
+        "delete": "Delete",
+        "publish": "Publish",
+        "saveDraft": "Save draft"
     },
     "module": {
         "auth": {
@@ -69,6 +76,95 @@
                 "dmarc": {
                     "title": "DMARC",
                     "description": "DMARC defines how the receiver should react to spoofed emails."
+                }
+            }
+        },
+        "inboundForms": {
+            "nav": "Forms",
+            "list": {
+                "title": "Inbound Forms"
+            },
+            "add": {
+                "title": "New Form",
+                "intro": "Give your form a name. The slug becomes part of the public endpoint URL."
+            },
+            "status": {
+                "active": "Active",
+                "inactive": "Inactive"
+            },
+            "details": {
+                "endpoint": "Endpoint URL",
+                "general": {
+                    "title": "General"
+                },
+                "fields": {
+                    "title": "Fields",
+                    "empty": "No fields defined yet. Add the fields your website form will submit.",
+                    "add": "Add field",
+                    "key": "Key",
+                    "label": "Label",
+                    "type": "Type",
+                    "required": "Required",
+                    "defaultValue": "Default value",
+                    "minLength": "Min length",
+                    "maxLength": "Max length",
+                    "pattern": "Pattern (regex)",
+                    "min": "Minimum",
+                    "max": "Maximum",
+                    "typeOptions": {
+                        "text": "Text",
+                        "email": "Email",
+                        "number": "Number",
+                        "boolean": "Boolean"
+                    }
+                },
+                "security": {
+                    "title": "Security",
+                    "empty": "No security schemes configured. Add a honeypot or reCAPTCHA to protect the endpoint.",
+                    "add": "Add scheme",
+                    "type": "Type",
+                    "location": "Location",
+                    "key": "Key",
+                    "secret": "Secret key",
+                    "minScore": "Minimum score (v3)",
+                    "typeOptions": {
+                        "google-recaptcha": "Google reCAPTCHA",
+                        "honeypot": "Honeypot"
+                    },
+                    "locationOptions": {
+                        "body": "Body",
+                        "header": "Header",
+                        "query": "Query parameter"
+                    }
+                },
+                "receivers": {
+                    "title": "Receivers",
+                    "empty": "No receivers configured. Add one to send an email for every submission.",
+                    "add": "Add receiver",
+                    "from": "Sender",
+                    "to": "Recipient",
+                    "replyTo": "Reply-To",
+                    "recipientHint": "A fixed address or a form field like {placeholder}",
+                    "template": {
+                        "none": "No template",
+                        "draft": "Draft v{version}",
+                        "published": "Published v{version}",
+                        "edit": "Edit template"
+                    }
+                }
+            },
+            "template": {
+                "title": "Email template",
+                "subject": "Subject",
+                "fieldsHint": "Click a field to insert it at the cursor",
+                "preview": "Preview",
+                "previewError": "Template error: {error}",
+                "saveFailed": "Saving failed: {error}",
+                "versions": "Versions",
+                "version": "v{version} ({status})",
+                "statusOptions": {
+                    "draft": "Draft",
+                    "published": "Published"
                 }
             }
         }
