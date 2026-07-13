@@ -28,7 +28,9 @@ describe('BootstrapService', () => {
 
         count = vi.fn<() => Promise<number>>()
         createUser = vi.fn<UserService['createUser']>().mockResolvedValue(createdUser)
-        get = vi.fn<(key: string, defaultValue: string) => string>().mockImplementation((_key, defaultValue) => defaultValue)
+        get = vi
+            .fn<(key: string, defaultValue: string) => string>()
+            .mockImplementation((_key, defaultValue) => defaultValue)
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [

@@ -167,6 +167,37 @@
                     "published": "Published"
                 }
             }
+        },
+        "bounces": {
+            "nav": "Bounces",
+            "title": "Bounces",
+            "tabs": {
+                "bounces": "Bounces",
+                "blocked": "Blocked addresses"
+            },
+            "list": {
+                "empty": "No bounces recorded yet.",
+                "fields": {
+                    "email": "Recipient",
+                    "type": "Type",
+                    "statusCode": "Status",
+                    "reason": "Reason",
+                    "receivedAt": "Received"
+                },
+                "typeOptions": {
+                    "permanent": "Permanent",
+                    "transient": "Transient"
+                }
+            },
+            "blocked": {
+                "empty": "No addresses are currently blocked.",
+                "unblock": "Unblock",
+                "fields": {
+                    "email": "Recipient",
+                    "blockedUntil": "Blocked until",
+                    "blockCount": "Times blocked"
+                }
+            }
         }
     }
 }

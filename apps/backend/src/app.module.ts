@@ -12,6 +12,7 @@ import { ThrottlerModule } from '@nestjs/throttler'
 import { DomainModule } from './modules/domain/domain.module'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
 import { MailModule } from './modules/mail/mail.module'
+import { BounceModule } from './modules/bounce/bounce.module'
 
 @Module({
     imports: [
@@ -79,6 +80,7 @@ import { MailModule } from './modules/mail/mail.module'
         DomainModule,
         InboundFormModule,
         MailModule,
+        BounceModule,
     ],
     providers: [BootstrapService],
 })

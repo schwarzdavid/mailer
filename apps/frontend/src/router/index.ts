@@ -11,6 +11,7 @@ import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.v
 import InboundFormListView from '@/modules/inbound-forms/views/list/InboundFormListView.vue'
 import InboundFormDetailView from '@/modules/inbound-forms/views/details/InboundFormDetailView.vue'
 import InboundFormTemplateView from '@/modules/inbound-forms/views/template/InboundFormTemplateView.vue'
+import BounceListView from '@/modules/bounces/views/list/BounceListView.vue'
 
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -59,6 +60,11 @@ export const router = createRouter({
                     path: '/forms/:inboundFormId/receivers/:inboundFormReceiverId/template',
                     name: RouteNames.INBOUND_FORM_TEMPLATE,
                     component: InboundFormTemplateView,
+                },
+                {
+                    path: '/bounces',
+                    name: RouteNames.BOUNCE_LIST,
+                    component: BounceListView,
                 },
             ],
             meta: {

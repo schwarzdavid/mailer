@@ -5,9 +5,10 @@ import { MAIL_TRANSPORTER } from './mail.constants'
 import { MailService } from './services/mail.service'
 import { TemplateRendererService } from './services/template-renderer.service'
 import { DomainModule } from '../domain/domain.module'
+import { BounceModule } from '../bounce/bounce.module'
 
 @Module({
-    imports: [DomainModule],
+    imports: [DomainModule, BounceModule],
     providers: [
         {
             provide: MAIL_TRANSPORTER,
