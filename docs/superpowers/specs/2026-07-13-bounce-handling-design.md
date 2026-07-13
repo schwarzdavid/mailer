@@ -113,11 +113,14 @@ Address matching is case-insensitive: addresses are lowercased before insert/loo
 **`BounceMailboxService`** (IMAP poller)
 
 - Uses `imapflow`. Config from env: `IMAP_HOST`, `IMAP_PORT`, `IMAP_SECURE`,
-  `IMAP_USER`, `IMAP_PASSWORD`, optional `IMAP_POLL_INTERVAL_SECONDS` (default 60).
-- If `IMAP_HOST` is not set, the poller does not start; one warning is logged
-  (dev/MailHog stays functional).
-- Lifecycle: `onApplicationBootstrap` starts a `setInterval`; `onApplicationShutdown`
-  clears it. Overlapping rounds are prevented with an in-process "round running" flag.
+  `IMAP_USER`, `IMAP_PASSWORD`.
+- If `IMAP_HOST` is not set, polling is disabled; one warning is logged at bootstrap
+  and interval ticks return without doing anything (dev/MailHog stays functional).
+- Scheduling: `@nestjs/schedule`'s `@Interval` decorator with a fixed 60s cadence
+  (`BOUNCE_POLL_INTERVAL_MS`); `ScheduleModule` owns the interval lifecycle including
+  shutdown cleanup. The tick handler catches poll errors so a failed round never
+  becomes an unhandled rejection. Overlapping rounds are prevented with an in-process
+  "round running" flag.
 - Poll round, wrapped in a `sequelize.transaction` whose only purpose is to pin a
   connection for the advisory lock (bounce writes below run on their own pooled
   connections; the unique `messageId` guards against any double-processing):
@@ -191,7 +194,6 @@ IMAP_PORT=993
 IMAP_SECURE=true
 IMAP_USER=
 IMAP_PASSWORD=
-IMAP_POLL_INTERVAL_SECONDS=60
 ```
 
 All optional; without `IMAP_HOST` the poller is off, without `BOUNCE_ADDRESS` the

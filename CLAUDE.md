@@ -20,7 +20,7 @@ pnpm + Turborepo monorepo. Three workspaces (`apps/*`, `packages/*`):
 - `apps/frontend` — Vue 3 SPA (Vuetify, Vue Router, TanStack Query, vue-i18n, vee-validate + Zod).
 - `packages/api` — Typed client + Zod schemas generated from the backend's OpenAPI spec by `@hey-api/openapi-ts`. Consumed by the frontend as `api` (`workspace:*`).
 
-`dev/docker-compose.yml` provides local Postgres, Redis, and MailHog. Runtime config comes from a root `.env` (gitignored) — see keys referenced in `apps/backend/src/app.module.ts` and `apps/backend/src/modules/mail/mail.module.ts` (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_DKIM_SECRET`, `ADMIN_EMAIL`, `SMTP_*`).
+`dev/docker-compose.yml` provides local Postgres, Redis, MailHog (outbound SMTP sink), and GreenMail (SMTP :3025 / IMAP :3143 — the bounce mailbox: inject DSN mails via its SMTP port and the backend's IMAP poller ingests them). Runtime config comes from a root `.env` (gitignored, template in `.env.example`) — see keys referenced in `apps/backend/src/app.module.ts`, `apps/backend/src/modules/mail/mail.module.ts`, and the bounce module (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_DKIM_SECRET`, `ADMIN_EMAIL`, `SMTP_*`, `BOUNCE_ADDRESS`, `IMAP_*`).
 
 ## Common commands
 

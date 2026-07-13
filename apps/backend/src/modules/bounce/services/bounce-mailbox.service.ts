@@ -1,16 +1,16 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common'
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { Interval } from '@nestjs/schedule'
 import { QueryTypes } from 'sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { ImapFlow } from 'imapflow'
 import { DsnParserService } from './dsn-parser.service'
 import { BounceService } from './bounce.service'
-import { BOUNCE_POLL_LOCK_KEY } from '../bounce.constants'
+import { BOUNCE_POLL_INTERVAL_MS, BOUNCE_POLL_LOCK_KEY } from '../bounce.constants'
 
 @Injectable()
-export class BounceMailboxService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class BounceMailboxService implements OnApplicationBootstrap {
     private readonly logger = new Logger(BounceMailboxService.name)
-    private interval: NodeJS.Timeout | null = null
     private roundRunning = false
 
     constructor(
@@ -26,20 +26,20 @@ export class BounceMailboxService implements OnApplicationBootstrap, OnApplicati
             return
         }
 
-        const intervalSeconds = Number(this.configService.get<string>('IMAP_POLL_INTERVAL_SECONDS', '60')) || 60
-        this.interval = setInterval(() => {
-            void this.pollRound().catch((error: unknown) => {
-                const message = error instanceof Error ? error.message : String(error)
-                this.logger.error(`Bounce mailbox poll failed: ${message}`)
-            })
-        }, intervalSeconds * 1000)
-        this.logger.log(`Polling bounce mailbox every ${intervalSeconds}s`)
+        this.logger.log(`Polling bounce mailbox every ${BOUNCE_POLL_INTERVAL_MS / 1000}s`)
     }
 
-    onApplicationShutdown(): void {
-        if (this.interval) {
-            clearInterval(this.interval)
-            this.interval = null
+    @Interval(BOUNCE_POLL_INTERVAL_MS)
+    async handlePollInterval(): Promise<void> {
+        if (!this.configService.get<string>('IMAP_HOST')) {
+            return
+        }
+
+        try {
+            await this.pollRound()
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            this.logger.error(`Bounce mailbox poll failed: ${message}`)
         }
     }
 

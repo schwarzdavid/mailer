@@ -9,6 +9,7 @@ import { CacheModule } from '@nestjs/cache-manager'
 import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
 import { ThrottlerModule } from '@nestjs/throttler'
+import { ScheduleModule } from '@nestjs/schedule'
 import { DomainModule } from './modules/domain/domain.module'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
 import { MailModule } from './modules/mail/mail.module'
@@ -75,6 +76,7 @@ import { BounceModule } from './modules/bounce/bounce.module'
                 limit: 10,
             },
         ]),
+        ScheduleModule.forRoot(),
         AuthModule,
         UserModule,
         DomainModule,

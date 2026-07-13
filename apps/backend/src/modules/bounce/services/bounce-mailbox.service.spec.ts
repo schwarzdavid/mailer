@@ -47,10 +47,11 @@ describe('BounceMailboxService', () => {
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
     let config: Record<string, string>
     let errorSpy: Mock<Logger['error']>
+    let warnSpy: Mock<Logger['warn']>
 
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
-        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
         errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
         config = {
@@ -99,10 +100,8 @@ describe('BounceMailboxService', () => {
     })
 
     afterEach(() => {
-        service.onApplicationShutdown()
         vi.clearAllMocks()
         vi.restoreAllMocks()
-        vi.useRealTimers()
     })
 
     it('records every recipient of a fetched DSN and marks the message seen', async () => {
@@ -153,39 +152,29 @@ describe('BounceMailboxService', () => {
         expect(recordBounce).not.toHaveBeenCalled()
     })
 
-    it('does not start polling when IMAP_HOST is missing', () => {
+    it('warns at bootstrap and skips interval ticks when IMAP_HOST is missing', async () => {
         delete config.IMAP_HOST
-        vi.useFakeTimers()
         const pollRound = vi.spyOn(service, 'pollRound')
 
         service.onApplicationBootstrap()
-        vi.advanceTimersByTime(120_000)
+        await service.handlePollInterval()
 
+        expect(warnSpy).toHaveBeenCalledWith('IMAP_HOST is not configured, bounce mailbox polling is disabled')
         expect(pollRound).not.toHaveBeenCalled()
     })
 
-    it('polls on the configured interval and stops on shutdown', () => {
-        config.IMAP_POLL_INTERVAL_SECONDS = '30'
-        vi.useFakeTimers()
+    it('polls the mailbox on an interval tick', async () => {
         const pollRound = vi.spyOn(service, 'pollRound').mockResolvedValue(undefined)
 
-        service.onApplicationBootstrap()
-        vi.advanceTimersByTime(60_000)
-        expect(pollRound).toHaveBeenCalledTimes(2)
+        await service.handlePollInterval()
 
-        service.onApplicationShutdown()
-        vi.advanceTimersByTime(60_000)
-        expect(pollRound).toHaveBeenCalledTimes(2)
+        expect(pollRound).toHaveBeenCalledOnce()
     })
 
-    it('falls back to the 60s default when the poll interval is an empty string', () => {
-        config.IMAP_POLL_INTERVAL_SECONDS = ''
-        vi.useFakeTimers()
-        const pollRound = vi.spyOn(service, 'pollRound').mockResolvedValue(undefined)
+    it('logs a failed poll round without rethrowing', async () => {
+        vi.spyOn(service, 'pollRound').mockRejectedValue(new Error('imap down'))
 
-        service.onApplicationBootstrap()
-        vi.advanceTimersByTime(120_000)
-
-        expect(pollRound).toHaveBeenCalledTimes(2)
+        await expect(service.handlePollInterval()).resolves.toBeUndefined()
+        expect(errorSpy).toHaveBeenCalledWith('Bounce mailbox poll failed: imap down')
     })
 })
