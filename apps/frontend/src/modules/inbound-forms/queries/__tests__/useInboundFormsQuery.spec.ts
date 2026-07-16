@@ -6,6 +6,7 @@ import { withVueQuery } from '@/__tests__/support.ts'
 
 const form: InboundFormDto = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',
@@ -18,15 +19,15 @@ afterEach(() => {
 })
 
 describe('useInboundFormsQuery', () => {
-    it('loads the forms and exposes them under the inboundForms key', async () => {
+    it('loads the project forms and exposes them under the project key', async () => {
         const listSpy = vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([form])
-        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useInboundFormsQuery()))
+        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useInboundFormsQuery(5)))
 
         await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
 
-        expect(listSpy).toHaveBeenCalledOnce()
+        expect(listSpy).toHaveBeenCalledWith({ query: { projectId: 5 } })
         expect(result.data.value).toEqual([form])
-        expect(queryClient.getQueryData(['inboundForms'])).toEqual([form])
+        expect(queryClient.getQueryData(['projects', 5, 'inboundForms'])).toEqual([form])
         unmount()
     })
 })

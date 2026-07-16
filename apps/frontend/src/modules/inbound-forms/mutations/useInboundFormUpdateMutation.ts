@@ -15,7 +15,7 @@ export function useInboundFormUpdateMutation() {
             ),
         onSuccess(detail, { inboundFormId }) {
             client.setQueryData(['inboundForms', inboundFormId], detail)
-            void client.invalidateQueries({ queryKey: ['inboundForms'], exact: true })
+            void client.invalidateQueries({ queryKey: ['projects'] })
         },
     })
 }

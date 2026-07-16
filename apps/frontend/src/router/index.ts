@@ -9,7 +9,8 @@ import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
 import { useSetupStatusQuery } from '@/modules/onboarding/queries/useSetupStatusQuery.ts'
 import { queryClient } from '@/plugins/tanstack.ts'
 import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.vue'
-import InboundFormListView from '@/modules/inbound-forms/views/list/InboundFormListView.vue'
+import ProjectListView from '@/modules/projects/views/list/ProjectListView.vue'
+import ProjectDetailView from '@/modules/projects/views/details/ProjectDetailView.vue'
 import InboundFormDetailView from '@/modules/inbound-forms/views/details/InboundFormDetailView.vue'
 import InboundFormTemplateView from '@/modules/inbound-forms/views/template/InboundFormTemplateView.vue'
 import BounceListView from '@/modules/bounces/views/list/BounceListView.vue'
@@ -55,9 +56,14 @@ export const router = createRouter({
                     component: DomainDetailView,
                 },
                 {
-                    path: '/forms',
-                    name: RouteNames.INBOUND_FORM_LIST,
-                    component: InboundFormListView,
+                    path: '/projects',
+                    name: RouteNames.PROJECT_LIST,
+                    component: ProjectListView,
+                },
+                {
+                    path: '/projects/:projectId',
+                    name: RouteNames.PROJECT_DETAILS,
+                    component: ProjectDetailView,
                 },
                 {
                     path: '/forms/:inboundFormId',

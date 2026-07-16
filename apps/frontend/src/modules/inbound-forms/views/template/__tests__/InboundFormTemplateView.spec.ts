@@ -33,6 +33,7 @@ vi.mock('@/modules/inbound-forms/views/template/partials/MonacoEditor.vue', () =
 
 const detail: InboundFormDetailDto = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',

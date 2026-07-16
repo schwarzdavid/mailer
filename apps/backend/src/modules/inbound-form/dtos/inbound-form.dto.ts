@@ -11,6 +11,9 @@ export class InboundFormDto {
     inboundFormId!: number
 
     @Expose()
+    projectId!: number
+
+    @Expose()
     @ApiProperty({ type: Number, nullable: true })
     domainId: number | null = null
 
@@ -30,6 +33,7 @@ export class InboundFormDto {
     static fromInboundForm(form: InboundForm): InboundFormDto {
         return {
             inboundFormId: form.inboundFormId,
+            projectId: form.projectId,
             domainId: form.domainId,
             name: form.name,
             slug: form.slug,

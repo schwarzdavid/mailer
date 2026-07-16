@@ -52,24 +52,24 @@ layering (controller / services / models / interfaces / dtos).
 
 Table `projects`:
 
-| Column                | Type        | Notes                          |
-| --------------------- | ----------- | ------------------------------ |
-| projectId             | INTEGER PK  | autoincrement                  |
-| name                  | STRING(255) | not null, unique               |
-| deletedAt             | DATE        | nullable; paranoid column      |
-| createdAt / updatedAt | DATE        | standard                       |
+| Column                | Type        | Notes                     |
+| --------------------- | ----------- | ------------------------- |
+| projectId             | INTEGER PK  | autoincrement             |
+| name                  | STRING(255) | not null, unique          |
+| deletedAt             | DATE        | nullable; paranoid column |
+| createdAt / updatedAt | DATE        | standard                  |
 
 Because soft-deleted rows keep their name until purged, a name sitting in the 30-day
 trash blocks reuse — restore or wait.
 
 Table `project_domains` (join):
 
-| Column                | Type       | Notes                                  |
-| --------------------- | ---------- | -------------------------------------- |
-| projectDomainId       | INTEGER PK | autoincrement                          |
-| projectId             | INTEGER    | FK → projects, CASCADE delete/update   |
-| domainId              | INTEGER    | FK → domains, CASCADE delete/update    |
-| createdAt / updatedAt | DATE       | standard                               |
+| Column                | Type       | Notes                                |
+| --------------------- | ---------- | ------------------------------------ |
+| projectDomainId       | INTEGER PK | autoincrement                        |
+| projectId             | INTEGER    | FK → projects, CASCADE delete/update |
+| domainId              | INTEGER    | FK → domains, CASCADE delete/update  |
+| createdAt / updatedAt | DATE       | standard                             |
 
 Unique index on `(projectId, domainId)`. Deleting a domain silently drops its
 assignments (consistent with today's SET NULL on forms).
@@ -100,17 +100,17 @@ Migration steps:
 
 All endpoints `@JwtAuth`, tag `project`:
 
-| Endpoint                                        | Behavior                                                            |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| `POST /project`                                 | Create `{ name }`; unique violation → 400 "Name is already in use"   |
-| `GET /project`                                  | Active projects with `inboundFormCount` and `domainCount`            |
-| `GET /project/deleted`                          | Trashed projects with `deletedAt` and computed `purgeAt` (+30 days)  |
-| `GET /project/:projectId`                       | `ProjectDetailDto`: project + assigned domains (`DomainDto[]`)       |
-| `PATCH /project/:projectId`                     | Rename                                                               |
-| `DELETE /project/:projectId`                    | Soft delete; forms stop accepting submissions immediately            |
-| `POST /project/:projectId/restore`              | Restore from trash (loads with `paranoid: false`); 404 if not trashed |
-| `POST /project/:projectId/domains`              | Assign domain `{ domainId }`, idempotent (`findOrCreate`)            |
-| `DELETE /project/:projectId/domains/:domainId`  | Unassign; 400 while forms in this project use the domain             |
+| Endpoint                                       | Behavior                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| `POST /project`                                | Create `{ name }`; unique violation → 400 "Name is already in use"    |
+| `GET /project`                                 | Active projects with `inboundFormCount` and `domainCount`             |
+| `GET /project/deleted`                         | Trashed projects with `deletedAt` and computed `purgeAt` (+30 days)   |
+| `GET /project/:projectId`                      | `ProjectDetailDto`: project + assigned domains (`DomainDto[]`)        |
+| `PATCH /project/:projectId`                    | Rename                                                                |
+| `DELETE /project/:projectId`                   | Soft delete; forms stop accepting submissions immediately             |
+| `POST /project/:projectId/restore`             | Restore from trash (loads with `paranoid: false`); 404 if not trashed |
+| `POST /project/:projectId/domains`             | Assign domain `{ domainId }`, idempotent (`findOrCreate`)             |
+| `DELETE /project/:projectId/domains/:domainId` | Unassign; 400 while forms in this project use the domain              |
 
 ### Purge job
 

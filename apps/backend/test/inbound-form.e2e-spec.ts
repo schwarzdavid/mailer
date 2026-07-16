@@ -61,10 +61,23 @@ describe('InboundForm (e2e)', () => {
             .expect(201)
         const domainId = (domainResponse.body as { domainId: number }).domainId
 
+        const projectResponse = await http()
+            .post('/api/project')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ name: 'E2E Inbound' })
+            .expect(201)
+        const projectId = (projectResponse.body as { projectId: number }).projectId
+
+        await http()
+            .post(`/api/project/${projectId}/domains`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({ domainId })
+            .expect(201)
+
         const formResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', `Bearer ${token}`)
-            .send({ name: 'E2E Contact', slug, domainId })
+            .send({ name: 'E2E Contact', slug, domainId, projectId })
             .expect(201)
         inboundFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
 

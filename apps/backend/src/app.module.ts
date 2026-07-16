@@ -10,6 +10,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
 import { DomainModule } from './modules/domain/domain.module'
+import { ProjectModule } from './modules/project/project.module'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
 import { MailModule } from './modules/mail/mail.module'
 import { BounceModule } from './modules/bounce/bounce.module'
@@ -80,6 +81,7 @@ import { SetupModule } from './modules/setup/setup.module'
         AuthModule,
         UserModule,
         DomainModule,
+        ProjectModule,
         InboundFormModule,
         MailModule,
         BounceModule,

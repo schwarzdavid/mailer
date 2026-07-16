@@ -5,7 +5,11 @@ import { Logger } from '@nestjs/common'
 import { Sequelize } from 'sequelize-typescript'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { InboundFormSubmissionService, PublicSubmission } from './inbound-form-submission.service'
+import { ProjectModel } from '../../project/models/project.model'
 import { InboundFormModel } from '../models/inbound-form.model'
+import { InboundFormFieldModel } from '../models/inbound-form-field.model'
+import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
+import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
 import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model'
 import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model'
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service'
@@ -78,6 +82,7 @@ const publishedTemplate: InboundFormTemplate = {
 
 const formFull: InboundFormFull = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',
@@ -197,6 +202,22 @@ describe('InboundFormSubmissionService', () => {
 
         await expect(service.submitForm('nope', submission, {}, {})).rejects.toThrow(NotFoundException)
         expect(formFindOne).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: 'nope', isActive: true } }))
+    })
+
+    it('requires a live project on the form lookup', async () => {
+        formFindOne.mockResolvedValue(null)
+
+        await expect(service.submitForm('contact', {}, {}, {})).rejects.toThrow(new NotFoundException('Unknown form'))
+
+        expect(formFindOne).toHaveBeenCalledWith({
+            where: { slug: 'contact', isActive: true },
+            include: [
+                InboundFormFieldModel,
+                InboundFormSecurityModel,
+                InboundFormReceiverModel,
+                { model: ProjectModel, required: true },
+            ],
+        })
     })
 
     it('rejects invalid data with a BadRequestException and stores nothing', async () => {

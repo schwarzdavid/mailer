@@ -4,11 +4,12 @@
             <VCardItem>
                 <VTextField name="name" :label="t('field.name')" v-model="name" :error-messages="errors.name" />
                 <VTextField name="slug" :label="t('field.slug')" v-model="slug" :error-messages="errors.slug" />
+                <VTextField :label="t('field.project')" :model-value="project?.name" readonly />
                 <VSelect
                     name="domainId"
                     :label="t('field.domain')"
                     v-model="domainId"
-                    :items="domains ?? []"
+                    :items="project?.domains ?? []"
                     item-title="fqdn"
                     item-value="domainId"
                     clearable
@@ -42,14 +43,14 @@
     import { useI18n } from 'vue-i18n'
     import { useQuery } from '@tanstack/vue-query'
     import type { InboundFormDetailDto } from 'api'
-    import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
+    import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
     import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto }>()
 
     const { t } = useI18n()
-    const { data: domains } = useQuery(useDomainsQuery())
+    const { data: project } = useQuery(useProjectQuery(() => props.form.projectId))
     const { mutateAsync, isPending } = useInboundFormUpdateMutation()
     const copied = ref(false)
 

@@ -14,6 +14,7 @@
         "password": "Password",
         "domain": "Domain name",
         "name": "Name",
+        "project": "Project",
         "slug": "Slug",
         "firstName": "First name",
         "lastName": "Last name",
@@ -104,11 +105,45 @@
                 }
             }
         },
-        "inboundForms": {
-            "nav": "Forms",
+        "projects": {
+            "nav": "Projects",
             "list": {
-                "title": "Inbound Forms"
+                "title": "Projects",
+                "empty": "No projects yet. Create one to group your forms and domains.",
+                "counts": "{forms} forms · {domains} domains"
             },
+            "add": {
+                "title": "New Project",
+                "intro": "Give your project a name. Forms live inside a project; domains can be assigned to it.",
+                "error": "The project could not be created"
+            },
+            "deleted": {
+                "title": "Recently deleted",
+                "purgeAt": "Will be permanently deleted on {date}",
+                "restore": "Restore"
+            },
+            "details": {
+                "general": {
+                    "title": "General",
+                    "error": "The project could not be saved"
+                },
+                "domains": {
+                    "title": "Domains",
+                    "empty": "No domains assigned yet. Assign a domain so forms in this project can send mail.",
+                    "add": "Assign",
+                    "error": "The domain could not be removed"
+                },
+                "forms": {
+                    "title": "Inbound Forms",
+                    "empty": "No forms in this project yet."
+                },
+                "delete": {
+                    "title": "Delete project",
+                    "intro": "The project and its forms are moved to the trash and permanently deleted after 30 days. Domains are kept."
+                }
+            }
+        },
+        "inboundForms": {
             "add": {
                 "title": "New Form",
                 "intro": "Give your form a name. The slug becomes part of the public endpoint URL."

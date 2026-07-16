@@ -8,6 +8,7 @@ import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
 import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
 import { DomainService } from '../../domain/services/domain.service'
 import { Domain } from '../../domain/interfaces/domain.interface'
+import { ProjectService } from '../../project/services/project.service'
 import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
 import {
     InboundFormField,
@@ -28,6 +29,7 @@ export interface InboundFormCreateRequest {
     name: string
     slug: string
     domainId: number | null
+    projectId: number
 }
 
 export type InboundFormUpdateRequest = Partial<InboundFormCreateRequest & { isActive: boolean }>
@@ -40,12 +42,16 @@ export class InboundFormService {
         @InjectModel(InboundFormSecurityModel) private readonly securityModel: typeof InboundFormSecurityModel,
         @InjectModel(InboundFormReceiverModel) private readonly receiverModel: typeof InboundFormReceiverModel,
         private readonly domainService: DomainService,
+        private readonly projectService: ProjectService,
         private readonly sequelize: Sequelize,
     ) {}
 
     async createForm(create: InboundFormCreateRequest): Promise<InboundForm> {
+        await this.assertProjectExists(create.projectId)
+
         if (create.domainId !== null) {
             await this.assertDomainExists(create.domainId)
+            await this.projectService.assertDomainInProject(create.projectId, create.domainId)
         }
 
         try {
@@ -59,8 +65,8 @@ export class InboundFormService {
         }
     }
 
-    async getForms(): Promise<InboundForm[]> {
-        const forms = await this.formModel.findAll()
+    async getForms(projectId?: number): Promise<InboundForm[]> {
+        const forms = await this.formModel.findAll(projectId !== undefined ? { where: { projectId } } : undefined)
 
         return forms.map((form) => form.get({ plain: true }))
     }
@@ -81,6 +87,7 @@ export class InboundFormService {
                 }
             } else {
                 const domain = await this.assertDomainExists(update.domainId)
+                await this.projectService.assertDomainInProject(form.projectId, update.domainId)
                 for (const receiver of form.inboundFormReceivers) {
                     this.assertEmailFrom(receiver.emailFrom, domain)
                 }
@@ -266,6 +273,14 @@ export class InboundFormService {
             return await this.domainService.getDomainById(domainId)
         } catch {
             throw new BadRequestException('Unknown domain')
+        }
+    }
+
+    private async assertProjectExists(projectId: number): Promise<void> {
+        try {
+            await this.projectService.getProjectById(projectId)
+        } catch {
+            throw new BadRequestException('Unknown project')
         }
     }
 

@@ -9,6 +9,7 @@ import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/in
 
 const form: InboundForm = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',
@@ -113,17 +114,28 @@ describe('InboundFormController', () => {
     })
 
     it('creates a form', async () => {
-        const result = await controller.createInboundForm({ name: 'Contact', slug: 'contact', domainId: 3 })
+        const result = await controller.createInboundForm({
+            name: 'Contact',
+            slug: 'contact',
+            domainId: 3,
+            projectId: 5,
+        })
 
-        expect(createForm).toHaveBeenCalledWith({ name: 'Contact', slug: 'contact', domainId: 3 })
+        expect(createForm).toHaveBeenCalledWith({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 })
         expect(result.slug).toBe('contact')
     })
 
     it('lists forms', async () => {
-        const result = await controller.getInboundForms()
+        const result = await controller.getInboundForms(undefined)
 
         expect(result).toHaveLength(1)
         expect(result[0]).toMatchObject({ inboundFormId: 1, slug: 'contact' })
+    })
+
+    it('passes the project filter through', async () => {
+        await controller.getInboundForms(5)
+
+        expect(getForms).toHaveBeenCalledWith(5)
     })
 
     it('returns the detail view with template summaries per receiver', async () => {

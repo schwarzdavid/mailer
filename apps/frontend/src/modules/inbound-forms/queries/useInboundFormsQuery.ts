@@ -1,9 +1,15 @@
+import { type MaybeRefOrGetter, toValue } from 'vue'
 import { queryOptions } from '@tanstack/vue-query'
 import { InboundFormApi } from 'api'
 
-export function useInboundFormsQuery() {
+export function useInboundFormsQuery(projectId: MaybeRefOrGetter<number>) {
     return queryOptions({
-        queryKey: ['inboundForms'],
-        queryFn: () => InboundFormApi.getInboundForms(),
+        queryKey: ['projects', projectId, 'inboundForms'],
+        queryFn: () =>
+            InboundFormApi.getInboundForms({
+                query: {
+                    projectId: toValue(projectId),
+                },
+            }),
     })
 }

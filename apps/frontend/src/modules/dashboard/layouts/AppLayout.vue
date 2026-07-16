@@ -4,8 +4,8 @@
             Logo
             <VTabs>
                 <VTab :to="{ name: RouteNames.DASHBOARD }" exact :text="t('module.dashboard.nav')" />
+                <VTab :to="{ name: RouteNames.PROJECT_LIST }" :text="t('module.projects.nav')" />
                 <VTab :to="{ name: RouteNames.DOMAIN_LIST }" :text="t('module.domains.nav')" />
-                <VTab :to="{ name: RouteNames.INBOUND_FORM_LIST }" :text="t('module.inboundForms.nav')" />
                 <VTab :to="{ name: RouteNames.BOUNCE_LIST }" :text="t('module.bounces.nav')" />
                 <VTab :to="{ name: RouteNames.SETTINGS }">
                     {{ t('module.settings.nav') }}

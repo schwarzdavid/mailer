@@ -10,7 +10,7 @@ export function useInboundFormDeleteMutation() {
             waitAtleast(InboundFormApi.deleteInboundForm({ path: { inboundFormId } })),
         onSuccess(_result, inboundFormId) {
             client.removeQueries({ queryKey: ['inboundForms', inboundFormId] })
-            void client.invalidateQueries({ queryKey: ['inboundForms'], exact: true })
+            void client.invalidateQueries({ queryKey: ['projects'] })
         },
     })
 }

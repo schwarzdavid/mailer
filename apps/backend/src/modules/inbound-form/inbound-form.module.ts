@@ -8,6 +8,7 @@ import { InboundFormTemplateModel } from './models/inbound-form-template.model'
 import { InboundFormSubmissionModel } from './models/inbound-form-submission.model'
 import { InboundFormDeliveryModel } from './models/inbound-form-delivery.model'
 import { DomainModule } from '../domain/domain.module'
+import { ProjectModule } from '../project/project.module'
 import { MailModule } from '../mail/mail.module'
 import { InboundFormController } from './controller/inbound-form.controller'
 import { PublicInboundFormController } from './controller/public-inbound-form.controller'
@@ -28,6 +29,7 @@ import { InboundFormSubmissionService } from './services/inbound-form-submission
             InboundFormDeliveryModel,
         ]),
         DomainModule,
+        ProjectModule,
         MailModule,
     ],
     controllers: [InboundFormController, PublicInboundFormController],

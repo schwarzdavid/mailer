@@ -11,6 +11,8 @@ import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
 import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
 import { DomainService } from '../../domain/services/domain.service'
 import { Domain } from '../../domain/interfaces/domain.interface'
+import { ProjectService } from '../../project/services/project.service'
+import { ProjectWithDomains } from '../../project/interfaces/project.interface'
 import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
 import {
     InboundFormField,
@@ -66,6 +68,7 @@ const receiver: InboundFormReceiver = {
 
 const form: InboundForm = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',
@@ -79,6 +82,15 @@ const formFull: InboundFormFull = {
     inboundFormFields: [emailField, textField],
     inboundFormReceivers: [receiver],
     inboundFormSecurity: [],
+}
+
+const projectWithDomains: ProjectWithDomains = {
+    projectId: 5,
+    name: 'Acme',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    domains: [domain],
 }
 
 type FormRow = InboundFormFull & {
@@ -113,6 +125,8 @@ describe('InboundFormService', () => {
     let receiverFindOne: Mock<(typeof InboundFormReceiverModel)['findOne']>
     let receiverCreate: Mock<(typeof InboundFormReceiverModel)['create']>
     let getDomainById: Mock<DomainService['getDomainById']>
+    let getProjectById: Mock<ProjectService['getProjectById']>
+    let assertDomainInProject: Mock<ProjectService['assertDomainInProject']>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
 
     beforeEach(async () => {
@@ -128,6 +142,8 @@ describe('InboundFormService', () => {
         receiverFindOne = vi.fn<typeof receiverFindOne>()
         receiverCreate = vi.fn<typeof receiverCreate>()
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
+        getProjectById = vi.fn<typeof getProjectById>().mockResolvedValue(projectWithDomains)
+        assertDomainInProject = vi.fn<typeof assertDomainInProject>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
@@ -157,6 +173,7 @@ describe('InboundFormService', () => {
                     useValue: { findOne: receiverFindOne, create: receiverCreate },
                 },
                 { provide: DomainService, useValue: { getDomainById } },
+                { provide: ProjectService, useValue: { getProjectById, assertDomainInProject } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
         }).compile()
@@ -169,11 +186,11 @@ describe('InboundFormService', () => {
             const row = formRow()
             formCreate.mockResolvedValue(row)
 
-            const result = await service.createForm({ name: 'Contact', slug: 'contact', domainId: 3 })
+            const result = await service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 })
 
             expect(getDomainById).toHaveBeenCalledWith(3)
             expect(formCreate).toHaveBeenCalledWith(
-                { name: 'Contact', slug: 'contact', domainId: 3, isActive: true },
+                { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5, isActive: true },
                 { returning: true },
             )
             expect(result.slug).toBe('contact')
@@ -182,7 +199,7 @@ describe('InboundFormService', () => {
         it('creates a form without a domain', async () => {
             formCreate.mockResolvedValue(formRow({ domainId: null }))
 
-            await service.createForm({ name: 'Contact', slug: 'contact', domainId: null })
+            await service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 })
 
             expect(getDomainById).not.toHaveBeenCalled()
         })
@@ -190,9 +207,30 @@ describe('InboundFormService', () => {
         it('rejects an unknown domain with a BadRequestException', async () => {
             getDomainById.mockRejectedValue(new Error('empty result'))
 
-            await expect(service.createForm({ name: 'X', slug: 'x', domainId: 99 })).rejects.toThrow(
+            await expect(service.createForm({ name: 'X', slug: 'x', domainId: 99, projectId: 5 })).rejects.toThrow(
                 BadRequestException,
             )
+        })
+    })
+
+    describe('createForm project rules', () => {
+        it('rejects unknown projects', async () => {
+            getProjectById.mockRejectedValue(new NotFoundException('Unknown project'))
+
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }),
+            ).rejects.toThrow(new BadRequestException('Unknown project'))
+            expect(formCreate).not.toHaveBeenCalled()
+        })
+
+        it('rejects domains that are not assigned to the project', async () => {
+            assertDomainInProject.mockRejectedValue(new BadRequestException('Domain does not belong to the project'))
+
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 }),
+            ).rejects.toThrow(new BadRequestException('Domain does not belong to the project'))
+            expect(assertDomainInProject).toHaveBeenCalledWith(5, 3)
+            expect(formCreate).not.toHaveBeenCalled()
         })
     })
 
@@ -204,6 +242,18 @@ describe('InboundFormService', () => {
 
             expect(formFindAll).toHaveBeenCalledOnce()
             expect(result).toEqual([formFull])
+        })
+
+        it('filters by project when a projectId is given', async () => {
+            await service.getForms(5)
+
+            expect(formFindAll).toHaveBeenCalledWith({ where: { projectId: 5 } })
+        })
+
+        it('returns all forms without a filter', async () => {
+            await service.getForms()
+
+            expect(formFindAll).toHaveBeenCalledWith(undefined)
         })
     })
 
@@ -244,6 +294,18 @@ describe('InboundFormService', () => {
             await service.updateForm(1, { name: 'New name' })
 
             expect(row.update).toHaveBeenCalledWith({ name: 'New name' })
+        })
+    })
+
+    describe('updateForm project rules', () => {
+        it('rejects domain changes to domains outside the form project', async () => {
+            formFindByPk.mockResolvedValue(formRow({ inboundFormReceivers: [] }) as unknown as InboundFormModel)
+            assertDomainInProject.mockRejectedValue(new BadRequestException('Domain does not belong to the project'))
+
+            await expect(service.updateForm(1, { domainId: 4 })).rejects.toThrow(
+                new BadRequestException('Domain does not belong to the project'),
+            )
+            expect(assertDomainInProject).toHaveBeenCalledWith(5, 4)
         })
     })
 

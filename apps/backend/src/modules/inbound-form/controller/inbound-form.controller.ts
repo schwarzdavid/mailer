@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth'
 import { ResponseDto } from '../../../decorators/ResponseDto'
@@ -31,6 +31,7 @@ export class InboundFormController {
             name: body.name,
             slug: body.slug,
             domainId: body.domainId,
+            projectId: body.projectId,
         })
 
         return InboundFormDto.fromInboundForm(form)
@@ -38,8 +39,8 @@ export class InboundFormController {
 
     @SerializeOptions({ type: InboundFormDto })
     @Get()
-    async getInboundForms(): Promise<InboundFormDto[]> {
-        const forms = await this.inboundFormService.getForms()
+    async getInboundForms(@Query('projectId') projectId?: number): Promise<InboundFormDto[]> {
+        const forms = await this.inboundFormService.getForms(projectId)
 
         return forms.map((form) => InboundFormDto.fromInboundForm(form))
     }

@@ -7,6 +7,7 @@ import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
 import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
 import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model'
 import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model'
+import { ProjectModel } from '../../project/models/project.model'
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service'
 import { InboundFormTemplateService } from './inbound-form-template.service'
 import { TemplateRendererService } from '../../mail/services/template-renderer.service'
@@ -54,7 +55,12 @@ export class InboundFormSubmissionService {
     ): Promise<void> {
         const form = await this.formModel.findOne({
             where: { slug, isActive: true },
-            include: [InboundFormFieldModel, InboundFormSecurityModel, InboundFormReceiverModel],
+            include: [
+                InboundFormFieldModel,
+                InboundFormSecurityModel,
+                InboundFormReceiverModel,
+                { model: ProjectModel, required: true },
+            ],
         })
 
         if (!form) {

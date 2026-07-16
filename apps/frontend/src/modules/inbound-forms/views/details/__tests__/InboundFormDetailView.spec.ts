@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DomainApi, InboundFormApi, type InboundFormDetailDto } from 'api'
+import { DomainApi, InboundFormApi, ProjectApi, type InboundFormDetailDto } from 'api'
 import type { Router } from 'vue-router'
 import InboundFormDetailView from '../InboundFormDetailView.vue'
 import { mountView } from '@/__tests__/support.ts'
@@ -17,6 +17,7 @@ vi.mock('vue-router', async (importOriginal) => {
 
 const detail: InboundFormDetailDto = {
     inboundFormId: 1,
+    projectId: 5,
     domainId: 3,
     name: 'Contact',
     slug: 'contact',
@@ -62,6 +63,13 @@ afterEach(() => {
 describe('InboundFormDetailView', () => {
     it('renders all four setup cards from the loaded form', async () => {
         vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
+        vi.spyOn(ProjectApi, 'getProject').mockResolvedValue({
+            projectId: 5,
+            name: 'Acme',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            domains: [],
+        })
         vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
         const wrapper = mountView(InboundFormDetailView)
 
@@ -74,5 +82,6 @@ describe('InboundFormDetailView', () => {
         expect(wrapper.text()).toContain('Honeypot')
         expect(wrapper.text()).toContain('owner@business.com')
         expect(wrapper.text()).toContain('Published v2')
+        expect(wrapper.html()).toContain('Acme')
     })
 })

@@ -19,6 +19,7 @@ import { DomainModel } from '../../domain/models/domain.model'
 import { InboundFormFieldModel } from './inbound-form-field.model'
 import { InboundFormReceiverModel } from './inbound-form-receiver.model'
 import { InboundFormSecurityModel } from './inbound-form-security.model'
+import { ProjectModel } from '../../project/models/project.model'
 
 @Table({
     tableName: 'inbound_form',
@@ -35,6 +36,11 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
     @AllowNull
     @Column(DataType.INTEGER)
     declare domainId: number | null
+
+    @ForeignKey(() => ProjectModel)
+    @AllowNull(false)
+    @Column(DataType.INTEGER)
+    declare projectId: number
 
     @AllowNull(false)
     @Column(DataType.STRING(255))
@@ -55,6 +61,12 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
         onUpdate: 'CASCADE',
     })
     domain: DomainModel | null = null
+
+    @BelongsTo(() => ProjectModel, {
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+    })
+    declare project?: ProjectModel
 
     @HasMany(() => InboundFormFieldModel)
     declare inboundFormFields: InboundFormFieldModel[]

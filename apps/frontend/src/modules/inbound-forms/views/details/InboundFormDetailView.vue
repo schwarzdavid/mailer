@@ -1,7 +1,12 @@
 <template>
     <VContainer v-if="form">
         <div class="d-flex align-center gc-3">
-            <VBtn icon="mdi-arrow-left" variant="text" size="small" :to="{ name: RouteNames.INBOUND_FORM_LIST }" />
+            <VBtn
+                icon="mdi-arrow-left"
+                variant="text"
+                size="small"
+                :to="{ name: RouteNames.PROJECT_DETAILS, params: { projectId: form.projectId } }"
+            />
             <h1>{{ form.name }}</h1>
             <VChip :color="form.isActive ? 'success' : 'default'" size="small">
                 {{ form.isActive ? t('module.inboundForms.status.active') : t('module.inboundForms.status.inactive') }}

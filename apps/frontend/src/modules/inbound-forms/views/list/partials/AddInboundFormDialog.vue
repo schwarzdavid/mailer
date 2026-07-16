@@ -16,7 +16,7 @@
                         name="domainId"
                         :label="t('field.domain')"
                         v-model="domainId"
-                        :items="domains ?? []"
+                        :items="project?.domains ?? []"
                         item-title="fqdn"
                         item-value="domainId"
                         clearable
@@ -41,14 +41,16 @@
     import { useI18n } from 'vue-i18n'
     import { useQuery } from '@tanstack/vue-query'
     import { useRouter } from 'vue-router'
-    import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
+    import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import { useInboundFormCreateMutation } from '@/modules/inbound-forms/mutations/useInboundFormCreateMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
+
+    const props = defineProps<{ projectId: number }>()
 
     const model = ref<undefined | boolean>()
     const slugTouched = ref(false)
     const { t } = useI18n()
-    const { data: domains } = useQuery(useDomainsQuery())
+    const { data: project } = useQuery(useProjectQuery(() => props.projectId))
     const { mutateAsync, isPending } = useInboundFormCreateMutation()
     const router = useRouter()
 
@@ -94,6 +96,7 @@
             name: values.name,
             slug: values.slug,
             domainId: values.domainId ?? null,
+            projectId: props.projectId,
         })
         void router.push({ name: RouteNames.INBOUND_FORM_DETAILS, params: { inboundFormId } })
     })

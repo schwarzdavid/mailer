@@ -22,6 +22,10 @@ export class InboundFormCreateDto {
     @IsOptional()
     @IsInt()
     domainId: number | null = null
+
+    @Expose()
+    @IsInt()
+    projectId!: number
 }
 
 export class InboundFormUpdateDto {

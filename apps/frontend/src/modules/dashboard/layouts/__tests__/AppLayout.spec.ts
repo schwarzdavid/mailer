@@ -18,8 +18,8 @@ function createTestRouter(): Router {
         history: createMemoryHistory(),
         routes: [
             { path: '/', name: RouteNames.DASHBOARD, component: EmptyView },
+            { path: '/projects', name: RouteNames.PROJECT_LIST, component: EmptyView },
             { path: '/domains', name: RouteNames.DOMAIN_LIST, component: EmptyView },
-            { path: '/forms', name: RouteNames.INBOUND_FORM_LIST, component: EmptyView },
             { path: '/bounces', name: RouteNames.BOUNCE_LIST, component: EmptyView },
             { path: '/settings', name: RouteNames.SETTINGS, component: EmptyView },
             { path: '/login', name: RouteNames.LOGIN, component: EmptyView },

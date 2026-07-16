@@ -4,6 +4,7 @@ import { InboundFormSecurity } from './inbound-form-security.interface'
 
 export interface InboundForm {
     inboundFormId: number
+    projectId: number
     domainId: number | null
     name: string
     slug: string
