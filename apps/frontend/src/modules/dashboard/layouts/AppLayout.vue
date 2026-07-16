@@ -7,6 +7,10 @@
                 <VTab :to="{ name: RouteNames.DOMAIN_LIST }" :text="t('module.domains.nav')" />
                 <VTab :to="{ name: RouteNames.INBOUND_FORM_LIST }" :text="t('module.inboundForms.nav')" />
                 <VTab :to="{ name: RouteNames.BOUNCE_LIST }" :text="t('module.bounces.nav')" />
+                <VTab :to="{ name: RouteNames.SETTINGS }">
+                    {{ t('module.settings.nav') }}
+                    <VIcon :icon="healthIcon" :color="healthColor" size="small" class="ms-1" />
+                </VTab>
             </VTabs>
             <VSpacer />
             <VBtn variant="flat" :text="t('cta.logout')" @click="logout" />
@@ -18,17 +22,29 @@
 </template>
 
 <script setup lang="ts">
+    import { computed } from 'vue'
     import { RouteNames } from '@/router/RouteNames.ts'
     import { useI18n } from 'vue-i18n'
-    import { useQueryClient } from '@tanstack/vue-query'
+    import { useQuery, useQueryClient } from '@tanstack/vue-query'
     import { useLocalStorage } from '@vueuse/core'
     import { JWT_KEY } from '@/constants/jwtKey.ts'
     import { useRouter } from 'vue-router'
+    import { useSettingsQuery } from '@/modules/settings/queries/useSettingsQuery.ts'
 
     const { t } = useI18n()
     const client = useQueryClient()
     const jwt = useLocalStorage<string | null>(JWT_KEY, null)
     const router = useRouter()
+
+    const { data: settings } = useQuery({ ...useSettingsQuery(), refetchInterval: 60_000 })
+
+    const isHealthy = computed(
+        () =>
+            !!settings.value?.sendingDomain &&
+            settings.value.sendingDomain.records.every((record) => record.status === 'valid'),
+    )
+    const healthIcon = computed(() => (isHealthy.value ? 'mdi-check-circle' : 'mdi-alert-circle'))
+    const healthColor = computed(() => (isHealthy.value ? 'success' : 'warning'))
 
     function logout() {
         jwt.value = null

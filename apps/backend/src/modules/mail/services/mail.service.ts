@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import type { Transporter } from 'nodemailer'
 import { MAIL_TRANSPORTER } from '../mail.constants'
 import { DomainService } from '../../domain/services/domain.service'
@@ -26,7 +25,6 @@ export class MailService {
         private readonly dkimEncryptionService: DkimEncryptionService,
         private readonly emailBlockService: EmailBlockService,
         private readonly bounceService: BounceService,
-        private readonly configService: ConfigService,
     ) {}
 
     async sendMail(mail: SendMail): Promise<void> {
@@ -43,7 +41,7 @@ export class MailService {
         }
 
         const privateKey = await this.dkimEncryptionService.decryptDkimPrivateKey(domain.activeDkim.privateKey)
-        const bounceAddress = this.configService.get<string>('BOUNCE_ADDRESS')
+        const sendingDomain = await this.domainService.getConfiguredSendingDomain()
 
         try {
             await this.transporter.sendMail({
@@ -52,7 +50,7 @@ export class MailService {
                 replyTo: mail.replyTo,
                 subject: mail.subject,
                 html: mail.html,
-                envelope: bounceAddress ? { from: bounceAddress, to: mail.to } : undefined,
+                envelope: sendingDomain ? { from: `bounce@${sendingDomain.fqdn}`, to: mail.to } : undefined,
                 dkim: {
                     domainName: domain.fqdn,
                     keySelector: domain.activeDkim.selector,

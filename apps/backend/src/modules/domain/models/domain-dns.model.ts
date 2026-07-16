@@ -9,7 +9,6 @@ import {
     Model,
     PrimaryKey,
     Table,
-    Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
 import {
@@ -23,6 +22,13 @@ import { DomainModel } from './domain.model'
 
 @Table({
     tableName: 'domain_dns',
+    indexes: [
+        {
+            name: 'domain_dns_host_use_unique',
+            unique: true,
+            fields: ['host', 'use'],
+        },
+    ],
 })
 export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate> implements DomainDnsRecord {
     @PrimaryKey
@@ -48,7 +54,6 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
     @Column(DataType.ENUM(...Object.values(DomainDnsRecordStatus)))
     declare status: DomainDnsRecordStatus
 
-    @Unique
     @AllowNull(false)
     @Column(DataType.STRING(255))
     declare host: string

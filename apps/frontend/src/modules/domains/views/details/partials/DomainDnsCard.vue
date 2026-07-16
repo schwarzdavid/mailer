@@ -35,7 +35,7 @@
 <script lang="ts" setup>
     import type { DomainDto } from 'api'
     import { useI18n } from 'vue-i18n'
-    import DomainDnsRecord from '@/modules/domains/views/details/partials/DomainDnsRecord.vue'
+    import DomainDnsRecord from '@/modules/domains/components/DomainDnsRecord.vue'
     import { useDomainRefreshMutation } from '@/modules/domains/mutations/useDomainRefreshMutation.ts'
     import { useDateFormat } from '@vueuse/core'
 

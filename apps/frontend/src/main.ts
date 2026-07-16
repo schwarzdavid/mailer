@@ -37,6 +37,10 @@ z.config({
                     return t('validation.email')
                 case 'hostname':
                     return t('validation.hostname')
+                case 'ipv4':
+                    return t('validation.ipv4')
+                case 'ipv6':
+                    return t('validation.ipv6')
                 default:
                     if (import.meta.env.DEV) {
                         console.warn('Unmapped format error', issue)

@@ -5,6 +5,7 @@ import type { App } from 'supertest/types'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app'
 import { login, seedUser, type Credentials } from './support/session'
+import { configureSendingDomain } from './support/sending-domain'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model'
 
@@ -51,6 +52,7 @@ describe('InboundForm (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
+        await configureSendingDomain(app, token)
 
         const domainResponse = await http()
             .post('/api/domain')

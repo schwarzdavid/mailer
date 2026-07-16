@@ -3,7 +3,18 @@ import { DomainDnsRecordDto } from './domain-dns-record.dto'
 import { Expose, plainToInstance } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 
-export class DomainDnsDto implements Record<DomainDnsRecordUse, DomainDnsRecordDto> {
+type CustomerDnsRecordUse = DomainDnsRecordUse.SPF | DomainDnsRecordUse.DKIM | DomainDnsRecordUse.DMARC
+
+const CUSTOMER_DNS_RECORD_USES: readonly DomainDnsRecordUse[] = [
+    DomainDnsRecordUse.SPF,
+    DomainDnsRecordUse.DKIM,
+    DomainDnsRecordUse.DMARC,
+]
+
+const isCustomerDnsRecordUse = (use: DomainDnsRecordUse): use is CustomerDnsRecordUse =>
+    CUSTOMER_DNS_RECORD_USES.includes(use)
+
+export class DomainDnsDto implements Record<CustomerDnsRecordUse, DomainDnsRecordDto> {
     @Expose()
     @ApiProperty({ name: DomainDnsRecordUse.SPF })
     [DomainDnsRecordUse.SPF]!: DomainDnsRecordDto;
@@ -19,10 +30,12 @@ export class DomainDnsDto implements Record<DomainDnsRecordUse, DomainDnsRecordD
     static fromArray(records: DomainDnsRecord[]): DomainDnsDto {
         const dnsDto = new DomainDnsDto()
         records.forEach((record) => {
-            dnsDto[record.use] = plainToInstance(DomainDnsRecordDto, record, {
-                excludeExtraneousValues: true,
-                exposeDefaultValues: true,
-            })
+            if (isCustomerDnsRecordUse(record.use)) {
+                dnsDto[record.use] = plainToInstance(DomainDnsRecordDto, record, {
+                    excludeExtraneousValues: true,
+                    exposeDefaultValues: true,
+                })
+            }
         })
         return dnsDto
     }

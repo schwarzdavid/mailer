@@ -1,5 +1,6 @@
 export enum RouteNames {
     LOGIN = 'auth::login',
+    ONBOARDING = 'onboarding::index',
     DASHBOARD = 'dashboard::index',
     DOMAIN_LIST = 'domains::list',
     DOMAIN_DETAILS = 'domains::details',
@@ -7,4 +8,5 @@ export enum RouteNames {
     INBOUND_FORM_DETAILS = 'inboundForms::details',
     INBOUND_FORM_TEMPLATE = 'inboundForms::template',
     BOUNCE_LIST = 'bounces::list',
+    SETTINGS = 'settings::index',
 }

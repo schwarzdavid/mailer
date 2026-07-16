@@ -20,7 +20,7 @@ pnpm + Turborepo monorepo. Three workspaces (`apps/*`, `packages/*`):
 - `apps/frontend` — Vue 3 SPA (Vuetify, Vue Router, TanStack Query, vue-i18n, vee-validate + Zod).
 - `packages/api` — Typed client + Zod schemas generated from the backend's OpenAPI spec by `@hey-api/openapi-ts`. Consumed by the frontend as `api` (`workspace:*`).
 
-`dev/docker-compose.yml` provides local Postgres, Redis, MailHog (outbound SMTP sink), and GreenMail (SMTP :3025 / IMAP :3143 — the bounce mailbox: inject DSN mails via its SMTP port and the backend's IMAP poller ingests them). Runtime config comes from a root `.env` (gitignored, template in `.env.example`) — see keys referenced in `apps/backend/src/app.module.ts`, `apps/backend/src/modules/mail/mail.module.ts`, and the bounce module (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_DKIM_SECRET`, `ADMIN_EMAIL`, `SMTP_*`, `BOUNCE_ADDRESS`, `IMAP_*`).
+`dev/docker-compose.yml` provides local Postgres, Redis, MailHog (outbound SMTP sink), and GreenMail (SMTP :3025 / IMAP :3143 — the bounce mailbox: inject DSN mails via its SMTP port and the backend's IMAP poller ingests them). Runtime config comes from a root `.env` (gitignored, template in `.env.example`) — see keys referenced in `apps/backend/src/app.module.ts`, `apps/backend/src/modules/mail/mail.module.ts`, and the bounce module (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_DKIM_SECRET`, `SMTP_*`, `IMAP_*`).
 
 ## Common commands
 
@@ -81,7 +81,7 @@ Feature modules live under `src/modules/<feature>/` and follow a consistent laye
 - `dtos/` — request/response shapes; response DTOs expose a static `fromX(...)` mapper (see `DomainDto.fromDomain`).
 - `mappers/` — where a model carries secrets, a mapper projects it to the public interface (`user.mapper.ts` strips the password hash — the single chokepoint that keeps hashes out of every layer above persistence).
 
-Cross-cutting wiring (`app.module.ts`): `ConfigModule` (global, reads root `.env`), `SequelizeModule` (Postgres), `CacheModule` (Redis via `@keyv/redis`, global), `JwtModule` (global, 31-day tokens). `BootstrapService.onApplicationBootstrap` seeds an admin user with a random password (logged once) when the users table is empty.
+Cross-cutting wiring (`app.module.ts`): `ConfigModule` (global, reads root `.env`), `SequelizeModule` (Postgres), `CacheModule` (Redis via `@keyv/redis`, global), `JwtModule` (global, 31-day tokens). The setup module registers the first user via public endpoints (GET /setup/status, POST /setup/user); no admin user is seeded.
 
 **Auth flow:** Passport with `local` and `jwt` strategies. `JwtAuthGuard` extends the passport JWT guard but honors a `@Public()` metadata marker to skip auth. Apply `@JwtAuth()` (composed decorator) to controllers/routes that require a token. `@Principal()` is a param decorator that returns the authenticated `User` (401s if absent).
 

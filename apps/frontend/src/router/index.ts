@@ -6,16 +6,24 @@ import AppLayout from '@/modules/dashboard/layouts/AppLayout.vue'
 import DashboardView from '@/modules/dashboard/views/DashboardView.vue'
 import DomainListView from '@/modules/domains/views/list/DomainListView.vue'
 import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
+import { useSetupStatusQuery } from '@/modules/onboarding/queries/useSetupStatusQuery.ts'
 import { queryClient } from '@/plugins/tanstack.ts'
 import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.vue'
 import InboundFormListView from '@/modules/inbound-forms/views/list/InboundFormListView.vue'
 import InboundFormDetailView from '@/modules/inbound-forms/views/details/InboundFormDetailView.vue'
 import InboundFormTemplateView from '@/modules/inbound-forms/views/template/InboundFormTemplateView.vue'
 import BounceListView from '@/modules/bounces/views/list/BounceListView.vue'
+import SettingsView from '@/modules/settings/views/SettingsView.vue'
+import OnboardingView from '@/modules/onboarding/views/OnboardingView.vue'
 
 export const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
+        {
+            path: '/onboarding',
+            name: RouteNames.ONBOARDING,
+            component: OnboardingView,
+        },
         {
             path: '/login',
             component: AuthLayout,
@@ -66,6 +74,11 @@ export const router = createRouter({
                     name: RouteNames.BOUNCE_LIST,
                     component: BounceListView,
                 },
+                {
+                    path: '/settings',
+                    name: RouteNames.SETTINGS,
+                    component: SettingsView,
+                },
             ],
             meta: {
                 requiresAuth: true,
@@ -75,6 +88,19 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+    let needsSetup = false
+    try {
+        needsSetup = (await queryClient.fetchQuery(useSetupStatusQuery())).needsSetup
+    } catch (err) {
+        console.error(err)
+    }
+
+    if (needsSetup && to.name !== RouteNames.ONBOARDING) {
+        return { name: RouteNames.ONBOARDING }
+    }
+    if (!needsSetup && to.name === RouteNames.ONBOARDING) {
+        return { name: RouteNames.DASHBOARD }
+    }
     if (!to.meta.requiresAuth) {
         return true
     }

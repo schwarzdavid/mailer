@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { ConfigService } from '@nestjs/config'
 import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Transporter } from 'nodemailer'
@@ -7,7 +6,7 @@ import { MailService, SendMail } from './mail.service'
 import { MAIL_TRANSPORTER } from '../mail.constants'
 import { DomainService } from '../../domain/services/domain.service'
 import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service'
-import { DomainWithActiveDkim } from '../../domain/interfaces/domain.interface'
+import { Domain, DomainWithActiveDkim } from '../../domain/interfaces/domain.interface'
 import { DomainDkimAlgorithm } from '../../domain/interfaces/domain-dkim.interface'
 import { EmailBlockService } from '../../bounce/services/email-block.service'
 import { BounceService } from '../../bounce/services/bounce.service'
@@ -18,10 +17,10 @@ describe('MailService', () => {
     let service: MailService
     let sendMail: Mock<Transporter['sendMail']>
     let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
+    let getConfiguredSendingDomain: Mock<DomainService['getConfiguredSendingDomain']>
     let decryptDkimPrivateKey: Mock<DkimEncryptionService['decryptDkimPrivateKey']>
     let assertNotBlocked: Mock<EmailBlockService['assertNotBlocked']>
     let recordBounce: Mock<BounceService['recordBounce']>
-    let config: Record<string, string>
 
     const sendingDomain: DomainWithActiveDkim = {
         domainId: 1,
@@ -53,9 +52,9 @@ describe('MailService', () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
         vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
-        config = {}
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue({})
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
+        getConfiguredSendingDomain = vi.fn<typeof getConfiguredSendingDomain>().mockResolvedValue(null)
         decryptDkimPrivateKey = vi.fn<typeof decryptDkimPrivateKey>().mockResolvedValue('-----BEGIN PRIVATE KEY-----')
         assertNotBlocked = vi.fn<typeof assertNotBlocked>().mockResolvedValue(undefined)
         recordBounce = vi.fn<typeof recordBounce>().mockResolvedValue(undefined)
@@ -64,14 +63,10 @@ describe('MailService', () => {
             providers: [
                 MailService,
                 { provide: MAIL_TRANSPORTER, useValue: { sendMail } },
-                { provide: DomainService, useValue: { getSendingDomainByFqdn } },
+                { provide: DomainService, useValue: { getSendingDomainByFqdn, getConfiguredSendingDomain } },
                 { provide: DkimEncryptionService, useValue: { decryptDkimPrivateKey } },
                 { provide: EmailBlockService, useValue: { assertNotBlocked } },
                 { provide: BounceService, useValue: { recordBounce } },
-                {
-                    provide: ConfigService,
-                    useValue: { get: (key: string, fallback?: string) => config[key] ?? fallback },
-                },
             ],
         }).compile()
 
@@ -128,16 +123,30 @@ describe('MailService', () => {
         expect(sendMail).not.toHaveBeenCalled()
     })
 
-    it('routes the envelope through the bounce address when configured', async () => {
-        config.BOUNCE_ADDRESS = 'bounces@schwarzdavid.email'
+    it('uses a bounce address at the configured sending domain as the envelope sender', async () => {
+        const configuredSendingDomain: Domain = {
+            domainId: 10,
+            fqdn: 'mail.sending-domain.org',
+            rootDomain: 'sending-domain.org',
+            activeDkimId: 77,
+            dnsRecords: [],
+            lastCheckedAt: null,
+        }
+        getConfiguredSendingDomain.mockResolvedValue(configuredSendingDomain)
 
         await service.sendMail(mail)
 
         expect(sendMail).toHaveBeenCalledWith(
             expect.objectContaining({
-                envelope: { from: 'bounces@schwarzdavid.email', to: 'owner@business.com' },
+                envelope: { from: 'bounce@mail.sending-domain.org', to: 'owner@business.com' },
             }),
         )
+    })
+
+    it('sends without an envelope override when no sending domain is configured', async () => {
+        await service.sendMail(mail)
+
+        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ envelope: undefined }))
     })
 
     it('records a permanent bounce when the relay rejects with a 5xx and rethrows', async () => {

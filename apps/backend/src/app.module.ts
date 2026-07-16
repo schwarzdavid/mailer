@@ -4,7 +4,6 @@ import { SequelizeModule } from '@nestjs/sequelize'
 import { createSequelizeOptions, envFilePath } from './factories/database.config'
 import { AuthModule } from './modules/auth/auth.module'
 import { UserModule } from './modules/user/user.module'
-import { BootstrapService } from './services/bootstrap.service'
 import { CacheModule } from '@nestjs/cache-manager'
 import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
@@ -14,6 +13,8 @@ import { DomainModule } from './modules/domain/domain.module'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
 import { MailModule } from './modules/mail/mail.module'
 import { BounceModule } from './modules/bounce/bounce.module'
+import { SettingsModule } from './modules/settings/settings.module'
+import { SetupModule } from './modules/setup/setup.module'
 
 @Module({
     imports: [
@@ -34,11 +35,10 @@ import { BounceModule } from './modules/bounce/bounce.module'
                 const logger = new Logger('CacheModule')
                 const host = configService.get<string>('REDIS_HOST', '127.0.0.1')
                 const port = configService.get<string>('REDIS_PORT', '6379')
-                const password = configService.get<string>('REDIS_PASSWORD', '')
 
                 const keyv = createKeyv(
                     {
-                        url: `redis://:${password}@${host}:${port}/0`,
+                        url: `redis://${host}:${port}/0`,
                         socket: {
                             connectTimeout: 1000,
                             reconnectStrategy: (retries: number) => Math.min(retries * 200, 2000),
@@ -83,7 +83,8 @@ import { BounceModule } from './modules/bounce/bounce.module'
         InboundFormModule,
         MailModule,
         BounceModule,
+        SettingsModule,
+        SetupModule,
     ],
-    providers: [BootstrapService],
 })
 export class AppModule {}

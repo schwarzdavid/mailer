@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
+import { BadRequestException } from '@nestjs/common'
+import { Op } from 'sequelize'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { resolve } from 'node:dns/promises'
+import { resolve, resolve4, resolve6, resolveMx, reverse } from 'node:dns/promises'
 import { DomainDnsService } from './domain-dns.service'
 import { DomainDnsModel } from '../models/domain-dns.model'
 import { DomainModel } from '../models/domain.model'
-import { Domain } from '../interfaces/domain.interface'
+import { Domain, SendingDomainIps } from '../interfaces/domain.interface'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
 import {
     DomainDnsRecord,
@@ -14,10 +16,22 @@ import {
     DomainDnsRecordType,
     DomainDnsRecordUse,
 } from '../interfaces/domain-dns.interface'
+import { SettingsModel } from '../../settings/models/settings.model'
+import { Settings } from '../../settings/interfaces/settings.interface'
 
-vi.mock('node:dns/promises', () => ({ resolve: vi.fn() }))
+vi.mock('node:dns/promises', () => ({
+    resolve: vi.fn(),
+    resolve4: vi.fn(),
+    resolve6: vi.fn(),
+    resolveMx: vi.fn(),
+    reverse: vi.fn(),
+}))
 
 const resolveTxt = vi.mocked(resolve)
+const resolveA = vi.mocked(resolve4)
+const resolveAaaa = vi.mocked(resolve6)
+const resolveMxRecords = vi.mocked(resolveMx)
+const reversePtr = vi.mocked(reverse)
 
 type DnsRow = DomainDnsRecord & { get(options: { plain: true }): DomainDnsRecord }
 type ReloadDnsRow = DomainDnsRecord & { save: Mock<() => Promise<void>> }
@@ -43,7 +57,10 @@ describe('DomainDnsService', () => {
     let service: DomainDnsService
     let create: Mock<(values: DomainDnsRecordCreate, options: { returning: true }) => Promise<DnsRow>>
     let findAll: Mock<(options: { where: { domainId: number } }) => Promise<ReloadDnsRow[]>>
-    let findByPk: Mock<(id: number, options: { rejectOnEmpty: true }) => Promise<DomainRow>>
+    let findByPk: Mock<(id: number, options?: { rejectOnEmpty: true }) => Promise<DomainRow>>
+    let settingsFindOne: Mock<() => Promise<Settings | null>>
+    let update: Mock<(typeof DomainDnsModel)['update']>
+    let destroy: Mock<(options: { where: { domainId: number } }) => Promise<number>>
     let nextDnsId: number
 
     const domain: Domain = {
@@ -51,6 +68,24 @@ describe('DomainDnsService', () => {
         fqdn: 'example.com',
         rootDomain: 'example.com',
         activeDkimId: 55,
+        dnsRecords: [],
+        lastCheckedAt: null,
+    }
+
+    const settings: Settings = {
+        settingId: 1,
+        sendingDomainId: 10,
+        serverIpv4: '203.0.113.10',
+        serverIpv6: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+
+    const sendingDomain: Domain = {
+        domainId: 10,
+        fqdn: 'mail.sending-domain.org',
+        rootDomain: 'sending-domain.org',
+        activeDkimId: 77,
         dnsRecords: [],
         lastCheckedAt: null,
     }
@@ -80,23 +115,31 @@ describe('DomainDnsService', () => {
                 ),
             )
         findAll = vi.fn<typeof findAll>()
-        findByPk = vi.fn<typeof findByPk>()
+        findByPk = vi
+            .fn<typeof findByPk>()
+            .mockImplementation((id) => Promise.resolve(domainRow(id === 10 ? sendingDomain : domain)))
+        settingsFindOne = vi.fn<typeof settingsFindOne>().mockResolvedValue(settings)
+        update = vi.fn<typeof update>().mockResolvedValue([0])
+        destroy = vi.fn<typeof destroy>().mockResolvedValue(0)
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 DomainDnsService,
                 { provide: getModelToken(DomainModel), useValue: { findByPk } },
-                { provide: getModelToken(DomainDnsModel), useValue: { create, findAll } },
+                { provide: getModelToken(DomainDnsModel), useValue: { create, findAll, update, destroy } },
+                { provide: getModelToken(SettingsModel), useValue: { findOne: settingsFindOne } },
             ],
         }).compile()
 
         service = module.get(DomainDnsService)
     })
 
-    it('rejects a DKIM key that belongs to a different domain', () => {
+    it('rejects a DKIM key that belongs to a different domain', async () => {
         const foreignDkim: DomainDkim = { ...dkim, domainId: 99 }
 
-        expect(() => service.createDefaultDnsRecords(domain, foreignDkim)).toThrow('Domain and DKIM do not match')
+        await expect(service.createDefaultDnsRecords(domain, foreignDkim)).rejects.toThrow(
+            'Domain and DKIM do not match',
+        )
         expect(create).not.toHaveBeenCalled()
     })
 
@@ -109,13 +152,13 @@ describe('DomainDnsService', () => {
         )
     })
 
-    it('builds the SPF record from the domain fqdn', async () => {
+    it('builds the customer SPF record from the configured sending domain', async () => {
         await service.createDefaultDnsRecords(domain, dkim)
 
         expect(attrsFor(DomainDnsRecordUse.SPF)).toEqual({
             domainId: 3,
             host: 'example.com',
-            value: 'v=spf1 include:spf.schwarzdavid.email ~all',
+            value: 'v=spf1 include:mail.sending-domain.org ~all',
             use: DomainDnsRecordUse.SPF,
             current: null,
             status: DomainDnsRecordStatus.INVALID,
@@ -152,6 +195,106 @@ describe('DomainDnsService', () => {
 
         expect(result).toHaveLength(3)
         result.forEach((record) => expect(record.dnsId).toBeGreaterThan(0))
+    })
+
+    describe('createDefaultDnsRecords without a configured sending domain', () => {
+        it('rejects with a bad request', async () => {
+            settingsFindOne.mockResolvedValue(null)
+
+            await expect(service.createDefaultDnsRecords(domain, dkim)).rejects.toBeInstanceOf(BadRequestException)
+            expect(create).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('createSendingDomainDnsRecords', () => {
+        const sendingDkim: DomainDkim = { ...dkim, dkimId: 77, domainId: 10 }
+        const ips: SendingDomainIps = { serverIpv4: '203.0.113.10', serverIpv6: null }
+
+        it('creates a, mx, ip-based spf, dkim, dmarc and ptr records', async () => {
+            await service.createSendingDomainDnsRecords(sendingDomain, sendingDkim, ips)
+
+            expect(attrsFor(DomainDnsRecordUse.A)).toMatchObject({
+                domainId: 10,
+                host: 'mail.sending-domain.org',
+                value: '203.0.113.10',
+                type: DomainDnsRecordType.A,
+            })
+            expect(attrsFor(DomainDnsRecordUse.MX)).toMatchObject({
+                host: 'mail.sending-domain.org',
+                value: '10 mail.sending-domain.org',
+                type: DomainDnsRecordType.MX,
+            })
+            expect(attrsFor(DomainDnsRecordUse.SPF)).toMatchObject({
+                host: 'mail.sending-domain.org',
+                value: 'v=spf1 ip4:203.0.113.10 -all',
+                type: DomainDnsRecordType.TXT,
+            })
+            expect(attrsFor(DomainDnsRecordUse.PTR)).toMatchObject({
+                host: '203.0.113.10',
+                value: 'mail.sending-domain.org',
+                type: DomainDnsRecordType.PTR,
+            })
+            expect(attrsFor(DomainDnsRecordUse.DKIM)).toMatchObject({
+                host: 's1._domainkey.mail.sending-domain.org',
+            })
+            expect(attrsFor(DomainDnsRecordUse.DMARC)).toMatchObject({
+                host: '_dmarc.mail.sending-domain.org',
+                value: 'v=DMARC1; p=none;',
+            })
+            expect(create).toHaveBeenCalledTimes(6)
+        })
+
+        it('adds aaaa and a second ptr record when an ipv6 address is configured', async () => {
+            await service.createSendingDomainDnsRecords(sendingDomain, sendingDkim, {
+                serverIpv4: '203.0.113.10',
+                serverIpv6: '2001:db8::1',
+            })
+
+            expect(attrsFor(DomainDnsRecordUse.AAAA)).toMatchObject({
+                host: 'mail.sending-domain.org',
+                value: '2001:db8::1',
+                type: DomainDnsRecordType.AAAA,
+            })
+            expect(attrsFor(DomainDnsRecordUse.SPF)).toMatchObject({
+                value: 'v=spf1 ip4:203.0.113.10 ip6:2001:db8::1 -all',
+            })
+            const ptrCalls = create.mock.calls.filter(([values]) => values.use === DomainDnsRecordUse.PTR)
+            expect(ptrCalls.map(([values]) => values.host)).toEqual(['203.0.113.10', '2001:db8::1'])
+            expect(create).toHaveBeenCalledTimes(8)
+        })
+
+        it('rejects a DKIM key that belongs to a different domain', async () => {
+            await expect(service.createSendingDomainDnsRecords(sendingDomain, dkim, ips)).rejects.toThrow(
+                'Domain and DKIM do not match',
+            )
+        })
+    })
+
+    describe('regenerateCustomerSpfRecords', () => {
+        it('rewrites every customer spf record and resets its status', async () => {
+            await service.regenerateCustomerSpfRecords(sendingDomain)
+
+            expect(update).toHaveBeenCalledWith(
+                {
+                    value: 'v=spf1 include:mail.sending-domain.org ~all',
+                    status: DomainDnsRecordStatus.INVALID,
+                },
+                {
+                    where: {
+                        use: DomainDnsRecordUse.SPF,
+                        domainId: { [Op.ne]: 10 },
+                    },
+                },
+            )
+        })
+    })
+
+    describe('deleteRecordsForDomain', () => {
+        it('destroys all records of the domain', async () => {
+            await service.deleteRecordsForDomain(10)
+
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 10 } })
+        })
     })
 
     describe('reloadDnsRecords', () => {
@@ -235,14 +378,119 @@ describe('DomainDnsService', () => {
             await expect(service.reloadDnsRecords(3)).rejects.toBe(serverFailure)
         })
 
-        it('throws when a host resolves to more than one TXT record', async () => {
-            const record = reloadDnsRow(dnsRecord({ host: 'example.com', value: 'v=spf1 ~all' }))
+        it('accepts the expected TXT value even when unrelated TXT records exist on the host', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    use: DomainDnsRecordUse.SPF,
+                    host: 'example.com',
+                    value: 'v=spf1 include:mail.sending-domain.org ~all',
+                }),
+            )
 
             findByPk.mockResolvedValue(domainRow(domain))
             findAll.mockResolvedValue([record])
-            resolveTxt.mockResolvedValue([['first-record'], ['second-record']])
+            resolveTxt.mockResolvedValue([
+                ['google-site-verification=abc'],
+                ['v=spf1 include:mail.sending-domain.org ~all'],
+            ])
 
-            await expect(service.reloadDnsRecords(3)).rejects.toThrow('Multiple TXT records found for example.com')
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+            expect(record.current).toBe('v=spf1 include:mail.sending-domain.org ~all')
+        })
+
+        it('treats ENODATA as a missing record', async () => {
+            const record = reloadDnsRow(dnsRecord({ value: 'v=DKIM1; k=rsa; p=abc' }))
+            const noData: NodeJS.ErrnoException = Object.assign(new Error('no data'), { code: 'ENODATA' })
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockRejectedValue(noData)
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.current).toBeNull()
+            expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
+        })
+
+        it('resolves an A record against the expected server ip', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    type: DomainDnsRecordType.A,
+                    use: DomainDnsRecordUse.A,
+                    host: 'mail.sending-domain.org',
+                    value: '203.0.113.10',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveA.mockResolvedValue(['203.0.113.10'])
+
+            await service.reloadDnsRecords(3)
+
+            expect(resolveA).toHaveBeenCalledWith('mail.sending-domain.org')
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+        })
+
+        it('resolves an AAAA record against the expected server ip', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    type: DomainDnsRecordType.AAAA,
+                    use: DomainDnsRecordUse.AAAA,
+                    host: 'mail.sending-domain.org',
+                    value: '2001:db8::1',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveAaaa.mockResolvedValue(['2001:db8::1'])
+
+            await service.reloadDnsRecords(3)
+
+            expect(resolveAaaa).toHaveBeenCalledWith('mail.sending-domain.org')
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+        })
+
+        it('resolves an MX record by priority and exchange', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    type: DomainDnsRecordType.MX,
+                    use: DomainDnsRecordUse.MX,
+                    host: 'mail.sending-domain.org',
+                    value: '10 mail.sending-domain.org',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveMxRecords.mockResolvedValue([{ priority: 10, exchange: 'mail.sending-domain.org' }])
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+        })
+
+        it('resolves a PTR record through a reverse lookup of the ip host', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    type: DomainDnsRecordType.PTR,
+                    use: DomainDnsRecordUse.PTR,
+                    host: '203.0.113.10',
+                    value: 'mail.sending-domain.org',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            reversePtr.mockResolvedValue(['mail.sending-domain.org'])
+
+            await service.reloadDnsRecords(3)
+
+            expect(reversePtr).toHaveBeenCalledWith('203.0.113.10')
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
         })
     })
 })

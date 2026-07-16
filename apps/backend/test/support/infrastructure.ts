@@ -9,7 +9,6 @@ export interface E2eEnv {
     DB_DATABASE: string
     REDIS_HOST: string
     REDIS_PORT: string
-    REDIS_PASSWORD: string
     BACKEND_JWT_SECRET: string
     BACKEND_DKIM_SECRET: string
     SMTP_HOST: string
@@ -59,7 +58,6 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         DB_DATABASE: postgres.getDatabase(),
         REDIS_HOST: redis.getHost(),
         REDIS_PORT: String(redis.getMappedPort(6379)),
-        REDIS_PASSWORD: '',
         BACKEND_JWT_SECRET: 'e2e-jwt-secret',
         BACKEND_DKIM_SECRET: 'e2e-dkim-secret',
         SMTP_HOST: mailhog.getHost(),

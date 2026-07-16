@@ -1,11 +1,19 @@
 export enum DomainDnsRecordType {
     TXT = 'txt',
+    A = 'a',
+    AAAA = 'aaaa',
+    MX = 'mx',
+    PTR = 'ptr',
 }
 
 export enum DomainDnsRecordUse {
     SPF = 'spf',
     DKIM = 'dkim',
     DMARC = 'dmarc',
+    A = 'a',
+    AAAA = 'aaaa',
+    MX = 'mx',
+    PTR = 'ptr',
 }
 
 export enum DomainDnsRecordStatus {

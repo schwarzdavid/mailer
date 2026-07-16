@@ -5,6 +5,7 @@ import type { App } from 'supertest/types'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app'
 import { login, seedUser, type Credentials } from './support/session'
+import { configureSendingDomain } from './support/sending-domain'
 import { DomainModel } from '../src/modules/domain/models/domain.model'
 import { DomainDkimModel } from '../src/modules/domain/models/domain-dkim.model'
 
@@ -23,6 +24,7 @@ describe('DomainController (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
+        await configureSendingDomain(app, token)
     })
 
     afterAll(async () => {

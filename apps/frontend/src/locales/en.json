@@ -5,14 +5,20 @@
         "maxLength": "Max {max} characters",
         "email": "Invalid email",
         "invalid": "Invalid value",
-        "hostname": "Invalid domain name"
+        "hostname": "Invalid domain name",
+        "ipv4": "Invalid IPv4 address",
+        "ipv6": "Invalid IPv6 address"
     },
     "field": {
         "email": "Email Address",
         "password": "Password",
         "domain": "Domain name",
         "name": "Name",
-        "slug": "Slug"
+        "slug": "Slug",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "serverIpv4": "Server IPv4 address",
+        "serverIpv6": "Server IPv6 address (optional)"
     },
     "cta": {
         "abort": "Abort",
@@ -29,9 +35,28 @@
         "edit": "Edit",
         "delete": "Delete",
         "publish": "Publish",
-        "saveDraft": "Save draft"
+        "saveDraft": "Save draft",
+        "continue": "Continue",
+        "finish": "Finish"
     },
     "module": {
+        "onboarding": {
+            "title": "Welcome",
+            "steps": {
+                "account": {
+                    "title": "Create your account",
+                    "intro": "Create the administrator account for this installation."
+                },
+                "domain": {
+                    "title": "Sending domain",
+                    "intro": "Configure the domain this server sends mail from."
+                },
+                "records": {
+                    "title": "DNS records",
+                    "intro": "Publish these DNS records so receivers can authenticate your mail. You can finish setup while they are still propagating."
+                }
+            }
+        },
         "auth": {
             "login": {
                 "title": "Welcome Back",
@@ -196,6 +221,47 @@
                     "email": "Recipient",
                     "blockedUntil": "Blocked until",
                     "blockCount": "Times blocked"
+                }
+            }
+        },
+        "settings": {
+            "nav": "Settings",
+            "title": "Settings",
+            "sendingDomain": {
+                "title": "Sending Domain",
+                "intro": "The sending domain is the mail infrastructure domain of this server. It is used as the bounce address for outgoing mails and as the SPF include target for all sender domains.",
+                "records": {
+                    "title": "DNS Records",
+                    "intro": "Configure these records in your DNS zone (the PTR record is set at your hosting provider). Once every record is valid, your server is fully set up for reliable delivery.",
+                    "lastChecked": "Last checked at {date}",
+                    "a": {
+                        "title": "A",
+                        "description": "Points the sending domain at your server's IPv4 address."
+                    },
+                    "aaaa": {
+                        "title": "AAAA",
+                        "description": "Points the sending domain at your server's IPv6 address."
+                    },
+                    "mx": {
+                        "title": "MX",
+                        "description": "Routes bounce messages back to this server so failed deliveries are detected."
+                    },
+                    "spf": {
+                        "title": "SPF",
+                        "description": "Authorizes your server's IP addresses to send mail for this domain."
+                    },
+                    "dkim": {
+                        "title": "DKIM",
+                        "description": "Allows receivers to verify that mails were signed by this server."
+                    },
+                    "dmarc": {
+                        "title": "DMARC",
+                        "description": "Defines how receivers should treat mails that fail SPF or DKIM."
+                    },
+                    "ptr": {
+                        "title": "PTR (Reverse DNS)",
+                        "description": "Set at your hosting provider: the server IP must resolve back to the sending domain."
+                    }
                 }
             }
         }

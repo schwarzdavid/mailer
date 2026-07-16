@@ -18,3 +18,8 @@ export interface DomainWithDkim extends Domain {
 export interface DomainWithActiveDkim extends Domain {
     activeDkim: DomainDkim
 }
+
+export interface SendingDomainIps {
+    serverIpv4: string
+    serverIpv6: string | null
+}

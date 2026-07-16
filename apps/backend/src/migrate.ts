@@ -10,8 +10,8 @@ import { SequelizeStorage, Umzug } from 'umzug'
 import type { QueryInterface } from 'sequelize'
 import { createSequelizeOptions, envFilePath } from './factories/database.config'
 
-// Migrations must not boot AppModule: its BootstrapService queries tables that
-// don't exist yet on a fresh database, and the cache module needs Redis.
+// Migrations must not boot AppModule: its cache module needs Redis, which
+// isn't available while running migrations against a fresh database.
 @Module({
     imports: [
         ConfigModule.forRoot({
