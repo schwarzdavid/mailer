@@ -1,8 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Sequelize } from 'sequelize-typescript'
 import { Op } from 'sequelize'
+import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { InboundFormService } from './inbound-form.service'
 import { InboundFormModel } from '../models/inbound-form.model'
@@ -12,7 +13,9 @@ import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
 import { DomainService } from '../../domain/services/domain.service'
 import { Domain } from '../../domain/interfaces/domain.interface'
 import { ProjectService } from '../../project/services/project.service'
-import { ProjectWithDomains } from '../../project/interfaces/project.interface'
+import { AbilityFactory } from '../../permission/services/ability-factory.service'
+import { AppAbility } from '../../permission/interfaces/app-ability'
+import { User } from '../../user/interfaces/user.interface'
 import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
 import {
     InboundFormField,
@@ -84,14 +87,17 @@ const formFull: InboundFormFull = {
     inboundFormSecurity: [],
 }
 
-const projectWithDomains: ProjectWithDomains = {
-    projectId: 5,
-    name: 'Acme',
+const principal: User = {
+    userId: 5,
+    firstName: 'Grace',
+    lastName: 'Hopper',
+    email: 'grace@example.com',
+    roleId: 3,
     createdAt: new Date(),
     updatedAt: new Date(),
-    deletedAt: null,
-    domains: [domain],
 }
+
+const manageAll = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
 
 type FormRow = InboundFormFull & {
     get: (options: { plain: true }) => InboundFormFull
@@ -125,8 +131,9 @@ describe('InboundFormService', () => {
     let receiverFindOne: Mock<(typeof InboundFormReceiverModel)['findOne']>
     let receiverCreate: Mock<(typeof InboundFormReceiverModel)['create']>
     let getDomainById: Mock<DomainService['getDomainById']>
-    let getProjectById: Mock<ProjectService['getProjectById']>
+    let assertProjectExists: Mock<ProjectService['assertProjectExists']>
     let assertDomainInProject: Mock<ProjectService['assertDomainInProject']>
+    let getProjectIdsFor: Mock<AbilityFactory['getProjectIdsFor']>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
 
     beforeEach(async () => {
@@ -142,8 +149,9 @@ describe('InboundFormService', () => {
         receiverFindOne = vi.fn<typeof receiverFindOne>()
         receiverCreate = vi.fn<typeof receiverCreate>()
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
-        getProjectById = vi.fn<typeof getProjectById>().mockResolvedValue(projectWithDomains)
+        assertProjectExists = vi.fn<typeof assertProjectExists>().mockResolvedValue(undefined)
         assertDomainInProject = vi.fn<typeof assertDomainInProject>().mockResolvedValue(undefined)
+        getProjectIdsFor = vi.fn<typeof getProjectIdsFor>().mockResolvedValue('all')
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
@@ -173,7 +181,8 @@ describe('InboundFormService', () => {
                     useValue: { findOne: receiverFindOne, create: receiverCreate },
                 },
                 { provide: DomainService, useValue: { getDomainById } },
-                { provide: ProjectService, useValue: { getProjectById, assertDomainInProject } },
+                { provide: ProjectService, useValue: { assertProjectExists, assertDomainInProject } },
+                { provide: AbilityFactory, useValue: { getProjectIdsFor } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
         }).compile()
@@ -186,7 +195,10 @@ describe('InboundFormService', () => {
             const row = formRow()
             formCreate.mockResolvedValue(row)
 
-            const result = await service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 })
+            const result = await service.createForm(
+                { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 },
+                manageAll,
+            )
 
             expect(getDomainById).toHaveBeenCalledWith(3)
             expect(formCreate).toHaveBeenCalledWith(
@@ -199,7 +211,7 @@ describe('InboundFormService', () => {
         it('creates a form without a domain', async () => {
             formCreate.mockResolvedValue(formRow({ domainId: null }))
 
-            await service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 })
+            await service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll)
 
             expect(getDomainById).not.toHaveBeenCalled()
         })
@@ -207,18 +219,18 @@ describe('InboundFormService', () => {
         it('rejects an unknown domain with a BadRequestException', async () => {
             getDomainById.mockRejectedValue(new Error('empty result'))
 
-            await expect(service.createForm({ name: 'X', slug: 'x', domainId: 99, projectId: 5 })).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.createForm({ name: 'X', slug: 'x', domainId: 99, projectId: 5 }, manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
     })
 
     describe('createForm project rules', () => {
         it('rejects unknown projects', async () => {
-            getProjectById.mockRejectedValue(new NotFoundException('Unknown project'))
+            assertProjectExists.mockRejectedValue(new NotFoundException('Unknown project'))
 
             await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }),
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
             ).rejects.toThrow(new BadRequestException('Unknown project'))
             expect(formCreate).not.toHaveBeenCalled()
         })
@@ -227,7 +239,7 @@ describe('InboundFormService', () => {
             assertDomainInProject.mockRejectedValue(new BadRequestException('Domain does not belong to the project'))
 
             await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 }),
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 }, manageAll),
             ).rejects.toThrow(new BadRequestException('Domain does not belong to the project'))
             expect(assertDomainInProject).toHaveBeenCalledWith(5, 3)
             expect(formCreate).not.toHaveBeenCalled()
@@ -238,22 +250,33 @@ describe('InboundFormService', () => {
         it('returns every form as plain object', async () => {
             formFindAll.mockResolvedValue([formRow() as unknown as InboundFormModel])
 
-            const result = await service.getForms()
+            const result = await service.getForms(principal, manageAll)
 
             expect(formFindAll).toHaveBeenCalledOnce()
             expect(result).toEqual([formFull])
         })
 
         it('filters by project when a projectId is given', async () => {
-            await service.getForms(5)
+            await service.getForms(principal, manageAll, 5)
 
             expect(formFindAll).toHaveBeenCalledWith({ where: { projectId: 5 } })
         })
 
-        it('returns all forms without a filter', async () => {
-            await service.getForms()
+        it('returns all forms without a filter for all-projects access', async () => {
+            getProjectIdsFor.mockResolvedValue('all')
 
+            await service.getForms(principal, manageAll)
+
+            expect(getProjectIdsFor).toHaveBeenCalledWith(principal, 'read')
             expect(formFindAll).toHaveBeenCalledWith(undefined)
+        })
+
+        it('scopes to the readable project ids otherwise', async () => {
+            getProjectIdsFor.mockResolvedValue([1, 4])
+
+            await service.getForms(principal, manageAll)
+
+            expect(formFindAll).toHaveBeenCalledWith({ where: { projectId: { [Op.in]: [1, 4] } } })
         })
     })
 
@@ -261,7 +284,7 @@ describe('InboundFormService', () => {
         it('returns the full form as plain object', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            const result = await service.getFormById(1)
+            const result = await service.getFormById(1, manageAll)
 
             expect(result.inboundFormFields).toHaveLength(2)
         })
@@ -269,7 +292,16 @@ describe('InboundFormService', () => {
         it('throws NotFoundException for an unknown id', async () => {
             formFindByPk.mockResolvedValue(null)
 
-            await expect(service.getFormById(404)).rejects.toThrow(NotFoundException)
+            await expect(service.getFormById(404, manageAll)).rejects.toThrow(NotFoundException)
+        })
+
+        it('hides forms of unreadable projects behind a 404', async () => {
+            const readAbility = createMongoAbility<AppAbility>([
+                { action: 'read', subject: 'Project', conditions: { projectId: { $in: [99] } } },
+            ])
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(service.getFormById(1, readAbility)).rejects.toThrow(NotFoundException)
         })
     })
 
@@ -278,20 +310,20 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
             getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
 
-            await expect(service.updateForm(1, { domainId: 4 })).rejects.toThrow(BadRequestException)
+            await expect(service.updateForm(1, { domainId: 4 }, manageAll)).rejects.toThrow(BadRequestException)
         })
 
         it('rejects removing the domain while receivers exist', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.updateForm(1, { domainId: null })).rejects.toThrow(BadRequestException)
+            await expect(service.updateForm(1, { domainId: null }, manageAll)).rejects.toThrow(BadRequestException)
         })
 
         it('applies a simple rename', async () => {
             const row = formRow()
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
 
-            await service.updateForm(1, { name: 'New name' })
+            await service.updateForm(1, { name: 'New name' }, manageAll)
 
             expect(row.update).toHaveBeenCalledWith({ name: 'New name' })
         })
@@ -302,7 +334,7 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow({ inboundFormReceivers: [] }) as unknown as InboundFormModel)
             assertDomainInProject.mockRejectedValue(new BadRequestException('Domain does not belong to the project'))
 
-            await expect(service.updateForm(1, { domainId: 4 })).rejects.toThrow(
+            await expect(service.updateForm(1, { domainId: 4 }, manageAll)).rejects.toThrow(
                 new BadRequestException('Domain does not belong to the project'),
             )
             expect(assertDomainInProject).toHaveBeenCalledWith(5, 4)
@@ -314,9 +346,18 @@ describe('InboundFormService', () => {
             const row = formRow()
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
 
-            await service.deleteForm(1)
+            await service.deleteForm(1, manageAll)
 
             expect(row.destroy).toHaveBeenCalled()
+        })
+
+        it('rejects mutations with read-only project access', async () => {
+            const readAbility = createMongoAbility<AppAbility>([
+                { action: 'read', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+            ])
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(service.deleteForm(1, readAbility)).rejects.toThrow(ForbiddenException)
         })
     })
 
@@ -334,7 +375,7 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await expect(
-                service.replaceFields(1, [upsert({ key: 'email' }), upsert({ key: 'email' })]),
+                service.replaceFields(1, [upsert({ key: 'email' }), upsert({ key: 'email' })], manageAll),
             ).rejects.toThrow(BadRequestException)
         })
 
@@ -345,7 +386,7 @@ describe('InboundFormService', () => {
             )
 
             await expect(
-                service.replaceFields(1, [upsert({ key: 'firstName', type: InboundFormFieldType.TEXT })]),
+                service.replaceFields(1, [upsert({ key: 'firstName', type: InboundFormFieldType.TEXT })], manageAll),
             ).rejects.toThrow(BadRequestException)
         })
 
@@ -356,7 +397,7 @@ describe('InboundFormService', () => {
             )
 
             await expect(
-                service.replaceFields(1, [upsert({ key: 'email', type: InboundFormFieldType.TEXT })]),
+                service.replaceFields(1, [upsert({ key: 'email', type: InboundFormFieldType.TEXT })], manageAll),
             ).rejects.toThrow(BadRequestException)
         })
 
@@ -364,10 +405,14 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
             fieldFindAll.mockResolvedValue([])
 
-            await service.replaceFields(1, [
-                upsert({ key: 'email' }),
-                upsert({ key: 'message', type: InboundFormFieldType.TEXT, label: 'Message' }),
-            ])
+            await service.replaceFields(
+                1,
+                [
+                    upsert({ key: 'email' }),
+                    upsert({ key: 'message', type: InboundFormFieldType.TEXT, label: 'Message' }),
+                ],
+                manageAll,
+            )
 
             expect(fieldDestroy).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -387,9 +432,9 @@ describe('InboundFormService', () => {
         it('rejects a field with a pattern that does not compile', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.replaceFields(1, [upsert({ validation: { pattern: '[' } })])).rejects.toThrow(
-                new BadRequestException('Invalid pattern for field "email"'),
-            )
+            await expect(
+                service.replaceFields(1, [upsert({ validation: { pattern: '[' } })], manageAll),
+            ).rejects.toThrow(new BadRequestException('Invalid pattern for field "email"'))
         })
     })
 
@@ -405,7 +450,7 @@ describe('InboundFormService', () => {
         it('rejects duplicate scheme types', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.replaceSecurity(1, [scheme({}), scheme({ key: 'other' })])).rejects.toThrow(
+            await expect(service.replaceSecurity(1, [scheme({}), scheme({ key: 'other' })], manageAll)).rejects.toThrow(
                 BadRequestException,
             )
         })
@@ -413,30 +458,38 @@ describe('InboundFormService', () => {
         it('rejects the csrf type', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.CSRF })])).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.CSRF })], manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
 
         it('rejects recaptcha without a secret', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await expect(
-                service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.RECAPTCHA, config: null })]),
+                service.replaceSecurity(
+                    1,
+                    [scheme({ type: InboundFormSecurityType.RECAPTCHA, config: null })],
+                    manageAll,
+                ),
             ).rejects.toThrow(BadRequestException)
         })
 
         it('replaces all schemes in a transaction', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await service.replaceSecurity(1, [
-                scheme({}),
-                scheme({
-                    type: InboundFormSecurityType.RECAPTCHA,
-                    key: 'recaptcha-token',
-                    config: { secret: 's3cret', minScore: 0.5 },
-                }),
-            ])
+            await service.replaceSecurity(
+                1,
+                [
+                    scheme({}),
+                    scheme({
+                        type: InboundFormSecurityType.RECAPTCHA,
+                        key: 'recaptcha-token',
+                        config: { secret: 's3cret', minScore: 0.5 },
+                    }),
+                ],
+                manageAll,
+            )
 
             expect(securityDestroy).toHaveBeenCalledWith(expect.objectContaining({ where: { inboundFormId: 1 } }))
             expect(securityBulkCreate).toHaveBeenCalledWith(
@@ -464,7 +517,7 @@ describe('InboundFormService', () => {
                 get: () => receiver,
             })
 
-            const result = await service.createReceiver(1, upsert({}))
+            const result = await service.createReceiver(1, upsert({}), manageAll)
 
             expect(receiverCreate).toHaveBeenCalledWith(
                 expect.objectContaining({ inboundFormId: 1, emailFrom: 'noreply@mail.example.com' }),
@@ -477,7 +530,7 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
             receiverCreate.mockResolvedValue({ get: () => receiver })
 
-            await service.createReceiver(1, upsert({ emailReceiver: '{{email}}' }))
+            await service.createReceiver(1, upsert({ emailReceiver: '{{email}}' }), manageAll)
 
             expect(receiverCreate).toHaveBeenCalled()
         })
@@ -485,39 +538,39 @@ describe('InboundFormService', () => {
         it('rejects a placeholder referencing a non-email field', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.createReceiver(1, upsert({ emailReceiver: '{{firstName}}' }))).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.createReceiver(1, upsert({ emailReceiver: '{{firstName}}' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
 
         it('rejects a recipient that is neither placeholder nor email', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.createReceiver(1, upsert({ emailReceiver: 'not-an-address' }))).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.createReceiver(1, upsert({ emailReceiver: 'not-an-address' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
 
         it('rejects a malformed sender address', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.createReceiver(1, upsert({ emailFrom: '@mail.example.com' }))).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.createReceiver(1, upsert({ emailFrom: '@mail.example.com' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
 
         it('rejects a sender outside the form domain', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
-            await expect(service.createReceiver(1, upsert({ emailFrom: 'noreply@evil.example.com' }))).rejects.toThrow(
-                BadRequestException,
-            )
+            await expect(
+                service.createReceiver(1, upsert({ emailFrom: 'noreply@evil.example.com' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
         })
 
         it('rejects receivers on a form without a domain', async () => {
             formFindByPk.mockResolvedValue(formRow({ domainId: null }) as unknown as InboundFormModel)
 
-            await expect(service.createReceiver(1, upsert({}))).rejects.toThrow(BadRequestException)
+            await expect(service.createReceiver(1, upsert({}), manageAll)).rejects.toThrow(BadRequestException)
         })
     })
 
@@ -531,7 +584,7 @@ describe('InboundFormService', () => {
                 update,
             } as unknown as InboundFormReceiverModel)
 
-            await service.updateReceiver(1, 31, { emailReplyTo: '{{email}}' })
+            await service.updateReceiver(1, 31, { emailReplyTo: '{{email}}' }, manageAll)
 
             expect(update).toHaveBeenCalledWith({ emailReplyTo: '{{email}}' })
         })
@@ -540,7 +593,9 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
             receiverFindOne.mockResolvedValue(null)
 
-            await expect(service.updateReceiver(1, 999, { isActive: false })).rejects.toThrow(NotFoundException)
+            await expect(service.updateReceiver(1, 999, { isActive: false }, manageAll)).rejects.toThrow(
+                NotFoundException,
+            )
         })
     })
 
@@ -550,7 +605,7 @@ describe('InboundFormService', () => {
             const destroy = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
             receiverFindOne.mockResolvedValue({ get: () => receiver, destroy } as unknown as InboundFormReceiverModel)
 
-            await service.deleteReceiver(1, 31)
+            await service.deleteReceiver(1, 31, manageAll)
 
             expect(destroy).toHaveBeenCalled()
         })

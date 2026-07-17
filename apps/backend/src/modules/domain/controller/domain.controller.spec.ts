@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { DomainController } from './domain.controller'
 import { DomainService } from '../services/domain.service'
 import { DomainDnsService } from '../services/domain-dns.service'
+import { PoliciesGuard } from '../../permission/guards/policies.guard'
 import { Domain, DomainWithDkim } from '../interfaces/domain.interface'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
 import {
@@ -79,7 +80,10 @@ describe('DomainController', () => {
                 { provide: DomainService, useValue: { createDomain, getDomains, getDomainById } },
                 { provide: DomainDnsService, useValue: { reloadDnsRecords } },
             ],
-        }).compile()
+        })
+            .overrideGuard(PoliciesGuard)
+            .useValue({ canActivate: vi.fn().mockResolvedValue(true) })
+            .compile()
 
         controller = module.get(DomainController)
     })

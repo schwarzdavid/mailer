@@ -11,6 +11,8 @@ import { i18n } from '@/plugins/i18n.ts'
 import { z } from 'zod'
 import { client } from 'api/client'
 import { JWT_KEY } from '@/constants/jwtKey.ts'
+import { abilitiesPlugin } from '@casl/vue'
+import { ability } from '@/plugins/casl.ts'
 
 createApp(App)
     .use(router)
@@ -19,6 +21,7 @@ createApp(App)
         queryClient,
     })
     .use(i18n)
+    .use(abilitiesPlugin, ability)
     .mount('#app')
 
 z.config({

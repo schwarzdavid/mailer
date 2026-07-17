@@ -8,6 +8,7 @@
         <div class="d-flex flex-column gr-6">
             <ProjectGeneralCard :project="project" />
             <ProjectDomainsCard :project="project" />
+            <ProjectMembersCard :project-id="project.projectId" />
             <ProjectFormsCard :project="project" />
         </div>
     </VContainer>
@@ -19,6 +20,7 @@
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import ProjectGeneralCard from '@/modules/projects/views/details/partials/ProjectGeneralCard.vue'
     import ProjectDomainsCard from '@/modules/projects/views/details/partials/ProjectDomainsCard.vue'
+    import ProjectMembersCard from '@/modules/projects/views/details/partials/ProjectMembersCard.vue'
     import ProjectFormsCard from '@/modules/projects/views/details/partials/ProjectFormsCard.vue'
     import { RouteNames } from '@/router/RouteNames.ts'
 

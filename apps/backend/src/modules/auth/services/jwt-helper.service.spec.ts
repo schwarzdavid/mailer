@@ -14,6 +14,7 @@ describe('JwtHelperService', () => {
         firstName: 'Grace',
         lastName: 'Hopper',
         email: 'grace@example.com',
+        roleId: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
     }

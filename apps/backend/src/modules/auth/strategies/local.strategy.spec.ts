@@ -13,6 +13,7 @@ describe('LocalStrategy', () => {
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'ada@example.com',
+        roleId: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
     }

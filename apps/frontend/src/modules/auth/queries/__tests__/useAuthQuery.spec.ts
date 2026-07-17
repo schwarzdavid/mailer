@@ -9,6 +9,11 @@ const user: UserDto = {
     firstName: 'Ada',
     lastName: 'Lovelace',
     email: 'admin@example.com',
+    role: {
+        type: 'super_admin',
+        roleId: 1,
+        name: 'Super Admin',
+    },
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
 }

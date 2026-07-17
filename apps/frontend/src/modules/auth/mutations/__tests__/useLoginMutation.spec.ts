@@ -15,6 +15,11 @@ const authentication: AuthenticationDto = {
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'admin@example.com',
+        role: {
+            type: 'super_admin',
+            roleId: 1,
+            name: 'Super Admin',
+        },
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     },
@@ -42,6 +47,17 @@ describe('useLoginMutation', () => {
         await result.mutateAsync(credentials)
 
         expect(queryClient.getQueryData(['auth.user'])).toEqual(authentication.user)
+        unmount()
+    })
+
+    it('clears the stale ability cache on success', async () => {
+        vi.spyOn(AuthApi, 'login').mockResolvedValue(authentication)
+        const { result, queryClient, unmount } = withVueQuery(() => useLoginMutation())
+        queryClient.setQueryData(['auth.ability'], [{ action: ['read'], subject: 'Domain' }])
+
+        await result.mutateAsync(credentials)
+
+        expect(queryClient.getQueryData(['auth.ability'])).toBeUndefined()
         unmount()
     })
 

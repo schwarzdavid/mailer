@@ -7,8 +7,6 @@ import AppLayout from '../AppLayout.vue'
 import { mountView } from '@/__tests__/support.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 
-const EmptyView = defineComponent({ render: () => h('div') })
-
 const AppLayoutHost = defineComponent({
     setup: () => () => h(VApp, () => h(AppLayout)),
 })
@@ -16,14 +14,11 @@ const AppLayoutHost = defineComponent({
 function createTestRouter(): Router {
     return createRouter({
         history: createMemoryHistory(),
-        routes: [
-            { path: '/', name: RouteNames.DASHBOARD, component: EmptyView },
-            { path: '/projects', name: RouteNames.PROJECT_LIST, component: EmptyView },
-            { path: '/domains', name: RouteNames.DOMAIN_LIST, component: EmptyView },
-            { path: '/bounces', name: RouteNames.BOUNCE_LIST, component: EmptyView },
-            { path: '/settings', name: RouteNames.SETTINGS, component: EmptyView },
-            { path: '/login', name: RouteNames.LOGIN, component: EmptyView },
-        ],
+        routes: Object.values(RouteNames).map((name, index) => ({
+            path: index === 0 ? '/' : `/${index}`,
+            name,
+            component: { template: '<div />' },
+        })),
     })
 }
 
@@ -51,38 +46,62 @@ afterEach(() => {
 })
 
 describe('AppLayout', () => {
-    it('shows a warning icon while no sending domain is configured', async () => {
-        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-        const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+    describe('sending domain health indicator', () => {
+        it('shows a warning icon while no sending domain is configured', async () => {
+            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
+            await vi.waitFor(() => {
+                expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
+            })
+            expect(wrapper.find('.mdi-check-circle').exists()).toBe(false)
         })
-        expect(wrapper.find('.mdi-check-circle').exists()).toBe(false)
+
+        it('shows a healthy icon when every record is valid', async () => {
+            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+
+            await vi.waitFor(() => {
+                expect(wrapper.find('.mdi-check-circle').exists()).toBe(true)
+            })
+            expect(wrapper.find('.mdi-alert-circle').exists()).toBe(false)
+        })
+
+        it('shows a warning icon when a record is invalid', async () => {
+            const ill: SettingsDto = {
+                sendingDomain: {
+                    ...healthy.sendingDomain!,
+                    records: [{ ...healthy.sendingDomain!.records[0]!, status: 'invalid' }],
+                },
+            }
+            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(ill)
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+
+            await vi.waitFor(() => {
+                expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
+            })
+        })
     })
 
-    it('shows a healthy icon when every record is valid', async () => {
-        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
-        const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+    describe('navigation tab visibility', () => {
+        it('shows every tab for manage-all abilities', async () => {
+            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.mdi-check-circle').exists()).toBe(true)
+            await vi.waitFor(() => expect(wrapper.text()).toContain('Users'))
+            expect(wrapper.text()).toContain('Domains')
+            expect(wrapper.text()).toContain('Bounces')
+            expect(wrapper.text()).toContain('Settings')
         })
-        expect(wrapper.find('.mdi-alert-circle').exists()).toBe(false)
-    })
 
-    it('shows a warning icon when a record is invalid', async () => {
-        const ill: SettingsDto = {
-            sendingDomain: {
-                ...healthy.sendingDomain!,
-                records: [{ ...healthy.sendingDomain!.records[0]!, status: 'invalid' }],
-            },
-        }
-        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(ill)
-        const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+        it('hides gated tabs without the read permissions', async () => {
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [])
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
+            await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
+            expect(wrapper.text()).not.toContain('Domains')
+            expect(wrapper.text()).not.toContain('Bounces')
+            expect(wrapper.text()).not.toContain('Users')
+            expect(wrapper.text()).not.toContain('Settings')
         })
     })
 })

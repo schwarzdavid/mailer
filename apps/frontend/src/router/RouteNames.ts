@@ -10,4 +10,6 @@ export enum RouteNames {
     INBOUND_FORM_TEMPLATE = 'inboundForms::template',
     BOUNCE_LIST = 'bounces::list',
     SETTINGS = 'settings::index',
+    USER_LIST = 'users::list',
+    USER_DETAILS = 'users::details',
 }

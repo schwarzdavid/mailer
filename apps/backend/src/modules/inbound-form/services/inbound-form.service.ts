@@ -22,6 +22,10 @@ import {
 } from '../interfaces/inbound-form-security.interface'
 import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface'
 import { parsePlaceholder } from '../helpers/placeholder'
+import { AbilityFactory } from '../../permission/services/ability-factory.service'
+import { assertProjectReadable, assertProjectUpdatable } from '../../permission/helpers/project-access'
+import { AppAbility } from '../../permission/interfaces/app-ability'
+import { User } from '../../user/interfaces/user.interface'
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
@@ -43,11 +47,13 @@ export class InboundFormService {
         @InjectModel(InboundFormReceiverModel) private readonly receiverModel: typeof InboundFormReceiverModel,
         private readonly domainService: DomainService,
         private readonly projectService: ProjectService,
+        private readonly abilityFactory: AbilityFactory,
         private readonly sequelize: Sequelize,
     ) {}
 
-    async createForm(create: InboundFormCreateRequest): Promise<InboundForm> {
+    async createForm(create: InboundFormCreateRequest, ability: AppAbility): Promise<InboundForm> {
         await this.assertProjectExists(create.projectId)
+        assertProjectUpdatable(ability, create.projectId)
 
         if (create.domainId !== null) {
             await this.assertDomainExists(create.domainId)
@@ -65,20 +71,34 @@ export class InboundFormService {
         }
     }
 
-    async getForms(projectId?: number): Promise<InboundForm[]> {
-        const forms = await this.formModel.findAll(projectId !== undefined ? { where: { projectId } } : undefined)
+    async getForms(principal: User, ability: AppAbility, projectId?: number): Promise<InboundForm[]> {
+        let query: { where: { projectId: number | { [Op.in]: number[] } } } | undefined
+
+        if (projectId !== undefined) {
+            assertProjectReadable(ability, projectId)
+            query = { where: { projectId } }
+        } else {
+            const scope = await this.abilityFactory.getProjectIdsFor(principal, 'read')
+            query = scope === 'all' ? undefined : { where: { projectId: { [Op.in]: scope } } }
+        }
+
+        const forms = await this.formModel.findAll(query)
 
         return forms.map((form) => form.get({ plain: true }))
     }
 
-    async getFormById(inboundFormId: number): Promise<InboundFormFull> {
-        const form = await this.loadForm(inboundFormId)
+    async getFormById(inboundFormId: number, ability: AppAbility): Promise<InboundFormFull> {
+        const form = await this.loadFormChecked(inboundFormId, ability, 'read')
 
         return form.get({ plain: true }) as InboundFormFull
     }
 
-    async updateForm(inboundFormId: number, update: InboundFormUpdateRequest): Promise<InboundFormFull> {
-        const form = await this.loadForm(inboundFormId)
+    async updateForm(
+        inboundFormId: number,
+        update: InboundFormUpdateRequest,
+        ability: AppAbility,
+    ): Promise<InboundFormFull> {
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
 
         if (update.domainId !== undefined && update.domainId !== form.domainId) {
             if (update.domainId === null) {
@@ -103,17 +123,21 @@ export class InboundFormService {
             throw error
         }
 
-        return this.getFormById(inboundFormId)
+        return this.getFormById(inboundFormId, ability)
     }
 
-    async deleteForm(inboundFormId: number): Promise<void> {
-        const form = await this.loadForm(inboundFormId)
+    async deleteForm(inboundFormId: number, ability: AppAbility): Promise<void> {
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
 
         await form.destroy()
     }
 
-    async replaceFields(inboundFormId: number, fields: InboundFormFieldUpsert[]): Promise<InboundFormField[]> {
-        const form = await this.loadForm(inboundFormId)
+    async replaceFields(
+        inboundFormId: number,
+        fields: InboundFormFieldUpsert[],
+        ability: AppAbility,
+    ): Promise<InboundFormField[]> {
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
 
         const keys = fields.map((field) => field.key)
         if (new Set(keys).size !== keys.length) {
@@ -176,8 +200,12 @@ export class InboundFormService {
         return result.map((field) => field.get({ plain: true }))
     }
 
-    async replaceSecurity(inboundFormId: number, schemes: InboundFormSecurityUpsert[]): Promise<InboundFormSecurity[]> {
-        await this.loadForm(inboundFormId)
+    async replaceSecurity(
+        inboundFormId: number,
+        schemes: InboundFormSecurityUpsert[],
+        ability: AppAbility,
+    ): Promise<InboundFormSecurity[]> {
+        await this.loadFormChecked(inboundFormId, ability, 'update')
 
         const types = schemes.map((scheme) => scheme.type)
         if (new Set(types).size !== types.length) {
@@ -205,8 +233,12 @@ export class InboundFormService {
         return created.map((scheme) => scheme.get({ plain: true }))
     }
 
-    async createReceiver(inboundFormId: number, create: InboundFormReceiverUpsert): Promise<InboundFormReceiver> {
-        const form = await this.loadForm(inboundFormId)
+    async createReceiver(
+        inboundFormId: number,
+        create: InboundFormReceiverUpsert,
+        ability: AppAbility,
+    ): Promise<InboundFormReceiver> {
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
         await this.assertReceiverValid(form, create)
 
         const created = await this.receiverModel.create({ ...create, inboundFormId }, { returning: true })
@@ -218,8 +250,9 @@ export class InboundFormService {
         inboundFormId: number,
         inboundFormReceiverId: number,
         update: Partial<InboundFormReceiverUpsert>,
+        ability: AppAbility,
     ): Promise<InboundFormReceiver> {
-        const form = await this.loadForm(inboundFormId)
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
 
         await this.assertReceiverValid(form, { ...receiver.get({ plain: true }), ...update })
@@ -228,14 +261,20 @@ export class InboundFormService {
         return receiver.get({ plain: true })
     }
 
-    async deleteReceiver(inboundFormId: number, inboundFormReceiverId: number): Promise<void> {
-        await this.loadForm(inboundFormId)
+    async deleteReceiver(inboundFormId: number, inboundFormReceiverId: number, ability: AppAbility): Promise<void> {
+        await this.loadFormChecked(inboundFormId, ability, 'update')
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
 
         await receiver.destroy()
     }
 
-    async getReceiver(inboundFormId: number, inboundFormReceiverId: number): Promise<InboundFormReceiver> {
+    async getReceiver(
+        inboundFormId: number,
+        inboundFormReceiverId: number,
+        ability: AppAbility,
+        permission: 'read' | 'update' = 'read',
+    ): Promise<InboundFormReceiver> {
+        await this.loadFormChecked(inboundFormId, ability, permission)
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
 
         return receiver.get({ plain: true })
@@ -248,6 +287,21 @@ export class InboundFormService {
 
         if (!form) {
             throw new NotFoundException('Unknown form')
+        }
+
+        return form
+    }
+
+    private async loadFormChecked(
+        inboundFormId: number,
+        ability: AppAbility,
+        permission: 'read' | 'update',
+    ): Promise<InboundFormModel> {
+        const form = await this.loadForm(inboundFormId)
+        if (permission === 'read') {
+            assertProjectReadable(ability, form.projectId)
+        } else {
+            assertProjectUpdatable(ability, form.projectId)
         }
 
         return form
@@ -278,7 +332,7 @@ export class InboundFormService {
 
     private async assertProjectExists(projectId: number): Promise<void> {
         try {
-            await this.projectService.getProjectById(projectId)
+            await this.projectService.assertProjectExists(projectId)
         } catch {
             throw new BadRequestException('Unknown project')
         }

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SetupController } from './setup.controller'
 import { SetupService } from '../services/setup.service'
 import { JwtHelperService } from '../../auth/services/jwt-helper.service'
-import { User } from '../../user/interfaces/user.interface'
+import { UserWithRole } from '../../user/interfaces/user.interface'
+import { Role } from '../../permission/interfaces/role.interface'
 import { RegisterUserDto } from '../dtos/register-user.dto'
 
 describe('SetupController', () => {
@@ -13,11 +14,21 @@ describe('SetupController', () => {
     let registerFirstUser: Mock<SetupService['registerFirstUser']>
     let createToken: Mock<JwtHelperService['createToken']>
 
-    const user: User = {
+    const superAdminRole: Role = {
+        roleId: 1,
+        name: 'Super Admin',
+        type: 'super_admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+
+    const user: UserWithRole = {
         userId: 1,
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'ada@example.com',
+        roleId: 1,
+        role: superAdminRole,
         createdAt: new Date(),
         updatedAt: new Date(),
     }

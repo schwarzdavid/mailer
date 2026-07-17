@@ -23,3 +23,7 @@ if (typeof window.matchMedia !== 'function') {
         dispatchEvent: () => false,
     })
 }
+
+if (typeof document.queryCommandSupported !== 'function') {
+    document.queryCommandSupported = () => false
+}

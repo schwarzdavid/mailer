@@ -5,7 +5,7 @@
             <p v-if="project.domains.length === 0">{{ t('module.projects.details.domains.empty') }}</p>
             <VList v-else>
                 <VListItem v-for="domain in project.domains" :key="domain.domainId" :title="domain.fqdn">
-                    <template #append>
+                    <template v-if="canManageDomains" #append>
                         <VIconBtn
                             icon="mdi-close"
                             :loading="isUnassigning && unassigningId === domain.domainId"
@@ -14,7 +14,7 @@
                     </template>
                 </VListItem>
             </VList>
-            <div class="d-flex gc-3 align-center pt-4">
+            <div v-if="canManageDomains" class="d-flex gc-3 align-center pt-4">
                 <VSelect
                     :items="unassignedDomains"
                     item-title="fqdn"
@@ -38,6 +38,8 @@
     import { computed, ref } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
+    import { useAbility } from '@casl/vue'
+    import { subject } from '@casl/ability'
     import type { ProjectDetailDto } from 'api'
     import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
     import { useProjectDomainAssignMutation } from '@/modules/projects/mutations/useProjectDomainAssignMutation.ts'
@@ -47,7 +49,17 @@
     const props = defineProps<{ project: ProjectDetailDto }>()
 
     const { t } = useI18n()
-    const { data: domains } = useQuery(useDomainsQuery())
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
+    const canManageDomains = computed(
+        () => can('update', subject('Project', { projectId: props.project.projectId })) && can('read', 'Domain'),
+    )
+    const domainsQueryOptions = useDomainsQuery()
+    const { data: domains } = useQuery({
+        queryKey: domainsQueryOptions.queryKey,
+        queryFn: domainsQueryOptions.queryFn,
+        enabled: canManageDomains,
+    })
     const { mutateAsync: assignDomain, isPending: isAssigning } = useProjectDomainAssignMutation()
     const { mutateAsync: unassignDomain, isPending: isUnassigning } = useProjectDomainUnassignMutation()
     const selectedDomainId = ref<number | null>(null)

@@ -13,6 +13,7 @@ describe('UserDto serialization', () => {
             lastName: 'Lovelace',
             email: 'ada@example.com',
             password: 'super-secret-hash',
+            role: { roleId: 3, name: 'User', type: 'user' },
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -21,7 +22,12 @@ describe('UserDto serialization', () => {
             excludeExtraneousValues: true,
         })
 
-        expect(serialized).toMatchObject({ userId: 1, email: 'ada@example.com' })
+        expect(serialized).toMatchObject({
+            userId: 1,
+            email: 'ada@example.com',
+            role: { roleId: 3, name: 'User', type: 'user' },
+        })
+        expect('roleId' in serialized).toBe(false)
         expect('password' in serialized).toBe(false)
     })
 })

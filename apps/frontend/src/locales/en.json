@@ -18,8 +18,10 @@
         "slug": "Slug",
         "firstName": "First name",
         "lastName": "Last name",
+        "role": "Role",
         "serverIpv4": "Server IPv4 address",
-        "serverIpv6": "Server IPv6 address (optional)"
+        "serverIpv6": "Server IPv6 address (optional)",
+        "user": "User"
     },
     "cta": {
         "abort": "Abort",
@@ -141,6 +143,13 @@
                     "title": "Delete project",
                     "intro": "The project and its forms are moved to the trash and permanently deleted after 30 days. Domains are kept."
                 }
+            },
+            "members": {
+                "title": "Members",
+                "add": "Add member",
+                "edit": "Edit member",
+                "empty": "No members yet.",
+                "error": "The member could not be saved"
             }
         },
         "inboundForms": {
@@ -259,6 +268,38 @@
                 }
             }
         },
+        "users": {
+            "nav": "Users",
+            "list": {
+                "title": "Users"
+            },
+            "add": {
+                "title": "New User",
+                "intro": "Create the account and share the initial password with the user yourself.",
+                "error": "The user could not be created"
+            },
+            "delete": {
+                "title": "Delete User",
+                "confirm": "Do you really want to delete {name}? This cannot be undone.",
+                "error": "The user could not be deleted"
+            },
+            "details": {
+                "profile": {
+                    "title": "Profile",
+                    "newPassword": "New password (optional)",
+                    "error": "The user could not be updated"
+                },
+                "permissions": {
+                    "title": "Direct permissions",
+                    "intro": "Permissions granted in addition to the role.",
+                    "error": "The permissions could not be saved"
+                },
+                "memberships": {
+                    "title": "Project memberships",
+                    "empty": "No project access granted."
+                }
+            }
+        },
         "settings": {
             "nav": "Settings",
             "title": "Settings",
@@ -299,6 +340,39 @@
                     }
                 }
             }
+        }
+    },
+    "permissions": {
+        "groups": {
+            "domains": "Domains",
+            "projects": "Projects",
+            "bounces": "Bounces",
+            "settings": "Settings",
+            "users": "Users",
+            "roles": "Roles"
+        },
+        "labels": {
+            "domains_read": "View domains",
+            "domains_create": "Create domains",
+            "domains_update": "Update domains",
+            "domains_delete": "Delete domains",
+            "projects_create": "Create projects",
+            "projects_all": "Access all projects",
+            "bounces_read": "View bounces",
+            "bounces_block": "Block addresses",
+            "bounces_unblock": "Unblock addresses",
+            "settings_read": "View settings",
+            "settings_update": "Update settings",
+            "users_read": "View users",
+            "users_create": "Create users",
+            "users_update": "Update users",
+            "users_delete": "Delete users",
+            "roles_read": "View roles"
+        },
+        "project": {
+            "read": "Read",
+            "update": "Update",
+            "delete": "Delete"
         }
     }
 }

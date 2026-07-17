@@ -6,7 +6,7 @@
                 <InboundFormListEntry v-for="form in forms" :key="form.inboundFormId" :form="form" />
             </div>
         </VCardItem>
-        <VCardActions>
+        <VCardActions v-if="canUpdate">
             <VSpacer />
             <AddInboundFormDialog :project-id="project.projectId" v-slot="{ props: activator }">
                 <VBtn v-bind="activator" :text="t('cta.add')" />
@@ -16,8 +16,11 @@
 </template>
 
 <script setup lang="ts">
+    import { computed } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
+    import { useAbility } from '@casl/vue'
+    import { subject } from '@casl/ability'
     import type { ProjectDetailDto } from 'api'
     import { useInboundFormsQuery } from '@/modules/inbound-forms/queries/useInboundFormsQuery.ts'
     import InboundFormListEntry from '@/modules/inbound-forms/views/list/partials/InboundFormListEntry.vue'
@@ -26,5 +29,8 @@
     const props = defineProps<{ project: ProjectDetailDto }>()
 
     const { t } = useI18n()
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
+    const canUpdate = computed(() => can('update', subject('Project', { projectId: props.project.projectId })))
     const { data: forms } = useQuery(useInboundFormsQuery(() => props.project.projectId))
 </script>

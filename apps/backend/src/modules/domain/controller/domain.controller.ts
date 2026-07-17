@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth'
+import { RequireAbility } from '../../permission/decorators/RequireAbility'
 import { DomainCreateDto } from '../dtos/domain-create.dto'
 import { DomainDto } from '../dtos/domain.dto'
 import { DomainService } from '../services/domain.service'
@@ -17,6 +18,7 @@ export class DomainController {
         private readonly domainDnsService: DomainDnsService,
     ) {}
 
+    @RequireAbility({ action: 'create', subject: 'Domain' })
     @ResponseDto(DomainDto)
     @Post()
     async createDomain(@Body() { fqdn }: DomainCreateDto): Promise<DomainDto> {
@@ -28,6 +30,7 @@ export class DomainController {
         }
     }
 
+    @RequireAbility({ action: 'read', subject: 'Domain' })
     @SerializeOptions({ type: DomainDto })
     @Get()
     async getDomains(): Promise<DomainDto[]> {
@@ -39,6 +42,7 @@ export class DomainController {
         }))
     }
 
+    @RequireAbility({ action: 'read', subject: 'Domain' })
     @ResponseDto(DomainDto)
     @Get(':domainId')
     async getDomain(@Param('domainId') domainId: number): Promise<DomainDto> {
@@ -50,6 +54,7 @@ export class DomainController {
         }
     }
 
+    @RequireAbility({ action: 'update', subject: 'Domain' })
     @ResponseDto(DomainDto)
     @Post(':domainId/refresh')
     async refreshDomainRecords(@Param('domainId') domainId: number): Promise<DomainDto> {

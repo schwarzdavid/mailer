@@ -5,9 +5,18 @@
             <VTabs>
                 <VTab :to="{ name: RouteNames.DASHBOARD }" exact :text="t('module.dashboard.nav')" />
                 <VTab :to="{ name: RouteNames.PROJECT_LIST }" :text="t('module.projects.nav')" />
-                <VTab :to="{ name: RouteNames.DOMAIN_LIST }" :text="t('module.domains.nav')" />
-                <VTab :to="{ name: RouteNames.BOUNCE_LIST }" :text="t('module.bounces.nav')" />
-                <VTab :to="{ name: RouteNames.SETTINGS }">
+                <VTab
+                    v-if="can('read', 'Domain')"
+                    :to="{ name: RouteNames.DOMAIN_LIST }"
+                    :text="t('module.domains.nav')"
+                />
+                <VTab
+                    v-if="can('read', 'Bounce')"
+                    :to="{ name: RouteNames.BOUNCE_LIST }"
+                    :text="t('module.bounces.nav')"
+                />
+                <VTab v-if="can('read', 'User')" :to="{ name: RouteNames.USER_LIST }" :text="t('module.users.nav')" />
+                <VTab v-if="can('read', 'Settings')" :to="{ name: RouteNames.SETTINGS }">
                     {{ t('module.settings.nav') }}
                     <VIcon :icon="healthIcon" :color="healthColor" size="small" class="ms-1" />
                 </VTab>
@@ -30,13 +39,23 @@
     import { JWT_KEY } from '@/constants/jwtKey.ts'
     import { useRouter } from 'vue-router'
     import { useSettingsQuery } from '@/modules/settings/queries/useSettingsQuery.ts'
+    import { useAbility } from '@casl/vue'
+    import { ability } from '@/plugins/casl.ts'
 
     const { t } = useI18n()
     const client = useQueryClient()
     const jwt = useLocalStorage<string | null>(JWT_KEY, null)
     const router = useRouter()
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
 
-    const { data: settings } = useQuery({ ...useSettingsQuery(), refetchInterval: 60_000 })
+    const { queryKey: settingsQueryKey, queryFn: settingsQueryFn } = useSettingsQuery()
+    const { data: settings } = useQuery({
+        queryKey: settingsQueryKey,
+        queryFn: settingsQueryFn,
+        refetchInterval: 60_000,
+        enabled: computed(() => can('read', 'Settings')),
+    })
 
     const isHealthy = computed(
         () =>
@@ -49,6 +68,7 @@
     function logout() {
         jwt.value = null
         client.removeQueries()
+        ability.update([])
         void router.push({ name: RouteNames.LOGIN })
     }
 </script>

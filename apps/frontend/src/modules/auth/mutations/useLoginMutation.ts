@@ -15,6 +15,7 @@ export function useLoginMutation() {
         onSuccess({ user, token }) {
             jwt.value = token
             client.setQueryData(['auth.user'], user)
+            client.removeQueries({ queryKey: ['auth.ability'] })
         },
     })
 }

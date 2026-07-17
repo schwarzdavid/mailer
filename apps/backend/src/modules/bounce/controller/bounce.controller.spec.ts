@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { BounceController } from './bounce.controller'
 import { BounceService } from '../services/bounce.service'
 import { EmailBlockService } from '../services/email-block.service'
+import { PoliciesGuard } from '../../permission/guards/policies.guard'
 import { Bounce, BounceType } from '../interfaces/bounce.interface'
 import { EmailBlock } from '../interfaces/email-block.interface'
 
@@ -44,7 +45,10 @@ describe('BounceController', () => {
                 { provide: BounceService, useValue: { getBounces } },
                 { provide: EmailBlockService, useValue: { getBlockedAddresses, unblock } },
             ],
-        }).compile()
+        })
+            .overrideGuard(PoliciesGuard)
+            .useValue({ canActivate: vi.fn().mockResolvedValue(true) })
+            .compile()
 
         controller = module.get(BounceController)
     })

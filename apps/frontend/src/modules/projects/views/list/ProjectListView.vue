@@ -2,7 +2,7 @@
     <VContainer>
         <div class="d-flex justify-space-between align-center">
             <h1>{{ t('module.projects.list.title') }}</h1>
-            <AddProjectDialog v-slot="{ props }">
+            <AddProjectDialog v-if="can('create', 'Project')" v-slot="{ props }">
                 <VBtn v-bind="props">{{ t('cta.add') }}</VBtn>
             </AddProjectDialog>
         </div>
@@ -23,6 +23,7 @@
 <script setup lang="ts">
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
+    import { useAbility } from '@casl/vue'
     import { useProjectsQuery } from '@/modules/projects/queries/useProjectsQuery.ts'
     import ProjectListEntry from '@/modules/projects/views/list/partials/ProjectListEntry.vue'
     import AddProjectDialog from '@/modules/projects/views/list/partials/AddProjectDialog.vue'
@@ -30,4 +31,6 @@
 
     const { data: projects, isPending } = useQuery(useProjectsQuery())
     const { t } = useI18n()
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
 </script>

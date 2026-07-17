@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CredentialsService } from './credentials.service'
 import { UserModel } from '../../user/models/user.model'
+import { RoleModel } from '../../permission/models/role.model'
 
 describe('CredentialsService', () => {
     let service: CredentialsService
@@ -23,6 +24,8 @@ describe('CredentialsService', () => {
             lastName: 'Lovelace',
             email: 'ada@example.com',
             password: hashedPassword,
+            roleId: 1,
+            role: { roleId: 1, name: 'Super Admin', type: 'super_admin' },
             createdAt: new Date(),
             updatedAt: new Date(),
             ...overrides,
@@ -63,6 +66,7 @@ describe('CredentialsService', () => {
             attributes: {
                 include: ['password'],
             },
+            include: [RoleModel],
         })
     })
 

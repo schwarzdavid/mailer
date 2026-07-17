@@ -4,6 +4,9 @@ import { createI18n } from 'vue-i18n'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { vuetify } from '@/plugins/vuetify.ts'
 import en from '@/locales/en.json'
+import { abilitiesPlugin } from '@casl/vue'
+import { createMongoAbility, type RawRuleOf } from '@casl/ability'
+import type { AppAbility } from '@/plugins/casl.ts'
 
 // A composition-API i18n instance seeded with the real global messages. `legacy`
 // must be false, otherwise `useI18n()` throws in the components under test.
@@ -29,9 +32,14 @@ export function createTestQueryClient() {
 
 type MountArgs = Parameters<typeof mount>
 
-// Mounts a component with the plugins it needs at runtime: Vuetify, i18n and
-// Vue Query. Extra options (props, slots, further plugins) are merged in.
-export function mountView(component: MountArgs[0], options: MountArgs[1] = {}) {
+// Mounts a component with the plugins it needs at runtime: Vuetify, i18n,
+// Vue Query and CASL abilities. Extra options (props, slots, further plugins)
+// are merged in. `rules` defaults to manage-all so existing specs keep passing.
+export function mountView(
+    component: MountArgs[0],
+    options: MountArgs[1] = {},
+    rules: RawRuleOf<AppAbility>[] = [{ action: 'manage', subject: 'all' }],
+) {
     const i18n = createTestI18n()
     const queryClient = createTestQueryClient()
 
@@ -39,7 +47,13 @@ export function mountView(component: MountArgs[0], options: MountArgs[1] = {}) {
         ...options,
         global: {
             ...options?.global,
-            plugins: [vuetify, i18n, [VueQueryPlugin, { queryClient }], ...(options?.global?.plugins ?? [])],
+            plugins: [
+                vuetify,
+                i18n,
+                [VueQueryPlugin, { queryClient }],
+                [abilitiesPlugin, createMongoAbility(rules)],
+                ...(options?.global?.plugins ?? []),
+            ],
         },
     })
 }

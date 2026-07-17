@@ -2,6 +2,8 @@ import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import type { App } from 'supertest/types'
 import { UserService } from '../../src/modules/user/services/user.service'
+import { RoleService } from '../../src/modules/permission/services/role.service'
+import type { RoleType } from '../../src/modules/permission/permission.constants'
 
 export interface Credentials {
     email: string
@@ -10,12 +12,18 @@ export interface Credentials {
 
 // Persists a user with known credentials so a test can authenticate as them.
 // Files sharing the database must use distinct emails to avoid collisions.
-export async function seedUser(app: INestApplication, credentials: Credentials): Promise<void> {
+export async function seedUser(
+    app: INestApplication,
+    credentials: Credentials,
+    roleType: RoleType = 'super_admin',
+): Promise<void> {
+    const role = await app.get(RoleService).getRoleByType(roleType)
     await app.get(UserService).createUser({
         firstName: 'Test',
         lastName: 'User',
         email: credentials.email,
         password: credentials.password,
+        roleId: role.roleId,
     })
 }
 

@@ -2,7 +2,7 @@ import { Expose } from 'class-transformer'
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator'
 import { UserCreate } from '../../user/interfaces/user.interface'
 
-export class RegisterUserDto implements UserCreate {
+export class RegisterUserDto implements Omit<UserCreate, 'roleId'> {
     @Expose()
     @IsString()
     @IsNotEmpty()

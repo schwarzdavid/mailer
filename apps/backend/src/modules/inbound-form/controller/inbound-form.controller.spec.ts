@@ -1,11 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing'
+import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { InboundFormController } from './inbound-form.controller'
 import { InboundFormService } from '../services/inbound-form.service'
 import { InboundFormTemplateService } from '../services/inbound-form-template.service'
+import { PoliciesGuard } from '../../permission/guards/policies.guard'
 import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
 import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface'
 import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface'
+import { AppAbility } from '../../permission/interfaces/app-ability'
+import { UserWithRole } from '../../user/interfaces/user.interface'
 
 const form: InboundForm = {
     inboundFormId: 1,
@@ -46,6 +50,19 @@ const template: InboundFormTemplate = {
     createdAt: new Date(),
     updatedAt: new Date(),
 }
+
+const principal: UserWithRole = {
+    userId: 5,
+    firstName: 'Grace',
+    lastName: 'Hopper',
+    email: 'grace@example.com',
+    roleId: 3,
+    role: { roleId: 3, name: 'User', type: 'user', createdAt: new Date(), updatedAt: new Date() },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+}
+
+const manageAll = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
 
 describe('InboundFormController', () => {
     let controller: InboundFormController
@@ -108,38 +125,47 @@ describe('InboundFormController', () => {
                     useValue: { listVersions, saveDraft, publishDraft, getVersionSummaries },
                 },
             ],
-        }).compile()
+        })
+            .overrideGuard(PoliciesGuard)
+            .useValue({ canActivate: vi.fn().mockResolvedValue(true) })
+            .compile()
 
         controller = module.get(InboundFormController)
     })
 
     it('creates a form', async () => {
-        const result = await controller.createInboundForm({
-            name: 'Contact',
-            slug: 'contact',
-            domainId: 3,
-            projectId: 5,
-        })
+        const result = await controller.createInboundForm(
+            {
+                name: 'Contact',
+                slug: 'contact',
+                domainId: 3,
+                projectId: 5,
+            },
+            manageAll,
+        )
 
-        expect(createForm).toHaveBeenCalledWith({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 })
+        expect(createForm).toHaveBeenCalledWith(
+            { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 },
+            manageAll,
+        )
         expect(result.slug).toBe('contact')
     })
 
     it('lists forms', async () => {
-        const result = await controller.getInboundForms(undefined)
+        const result = await controller.getInboundForms(undefined, principal, manageAll)
 
         expect(result).toHaveLength(1)
         expect(result[0]).toMatchObject({ inboundFormId: 1, slug: 'contact' })
     })
 
     it('passes the project filter through', async () => {
-        await controller.getInboundForms(5)
+        await controller.getInboundForms(5, principal, manageAll)
 
-        expect(getForms).toHaveBeenCalledWith(5)
+        expect(getForms).toHaveBeenCalledWith(principal, manageAll, 5)
     })
 
     it('returns the detail view with template summaries per receiver', async () => {
-        const result = await controller.getInboundForm(1)
+        const result = await controller.getInboundForm(1, manageAll)
 
         expect(getVersionSummaries).toHaveBeenCalledWith([31])
         expect(result.receivers[0]).toMatchObject({
@@ -150,66 +176,74 @@ describe('InboundFormController', () => {
     })
 
     it('replaces fields through the service', async () => {
-        await controller.updateInboundFormFields(1, { fields: [] })
+        await controller.updateInboundFormFields(1, { fields: [] }, manageAll)
 
-        expect(replaceFields).toHaveBeenCalledWith(1, [])
+        expect(replaceFields).toHaveBeenCalledWith(1, [], manageAll)
     })
 
     it('replaces security schemes through the service', async () => {
-        await controller.updateInboundFormSecurity(1, { security: [] })
+        await controller.updateInboundFormSecurity(1, { security: [] }, manageAll)
 
-        expect(replaceSecurity).toHaveBeenCalledWith(1, [])
+        expect(replaceSecurity).toHaveBeenCalledWith(1, [], manageAll)
     })
 
     it('creates a receiver from the request body', async () => {
-        const result = await controller.createInboundFormReceiver(1, {
-            emailFrom: 'noreply@mail.example.com',
-            emailReceiver: 'owner@business.com',
-            emailReplyTo: null,
-            isActive: true,
-        })
+        const result = await controller.createInboundFormReceiver(
+            1,
+            {
+                emailFrom: 'noreply@mail.example.com',
+                emailReceiver: 'owner@business.com',
+                emailReplyTo: null,
+                isActive: true,
+            },
+            manageAll,
+        )
 
-        expect(createReceiver).toHaveBeenCalledWith(1, {
-            emailFrom: 'noreply@mail.example.com',
-            emailReceiver: 'owner@business.com',
-            emailReplyTo: null,
-            isActive: true,
-        })
+        expect(createReceiver).toHaveBeenCalledWith(
+            1,
+            {
+                emailFrom: 'noreply@mail.example.com',
+                emailReceiver: 'owner@business.com',
+                emailReplyTo: null,
+                isActive: true,
+            },
+            manageAll,
+        )
         expect(result).toMatchObject({ inboundFormReceiverId: 31, draftVersion: null, publishedVersion: null })
     })
 
     it('updates a receiver and merges its template summary', async () => {
-        const result = await controller.updateInboundFormReceiver(1, 31, { isActive: false })
+        const result = await controller.updateInboundFormReceiver(1, 31, { isActive: false }, manageAll)
 
-        expect(updateReceiver).toHaveBeenCalledWith(1, 31, { isActive: false })
+        expect(updateReceiver).toHaveBeenCalledWith(1, 31, { isActive: false }, manageAll)
         expect(getVersionSummaries).toHaveBeenCalledWith([31])
         expect(result).toMatchObject({ inboundFormReceiverId: 31, draftVersion: 1, publishedVersion: null })
     })
 
     it('deletes a receiver through the service', async () => {
-        await controller.deleteInboundFormReceiver(1, 31)
+        await controller.deleteInboundFormReceiver(1, 31, manageAll)
 
-        expect(deleteReceiver).toHaveBeenCalledWith(1, 31)
+        expect(deleteReceiver).toHaveBeenCalledWith(1, 31, manageAll)
     })
 
     it('scopes template access to the form before saving a draft', async () => {
-        await controller.saveInboundFormTemplateDraft(1, 31, { subject: 'S', template: 'T' })
+        await controller.saveInboundFormTemplateDraft(1, 31, { subject: 'S', template: 'T' }, manageAll)
 
-        expect(getReceiver).toHaveBeenCalledWith(1, 31)
+        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'update')
         expect(saveDraft).toHaveBeenCalledWith(31, { subject: 'S', template: 'T' })
     })
 
     it('publishes the draft of a receiver', async () => {
-        await controller.publishInboundFormTemplate(1, 31)
+        await controller.publishInboundFormTemplate(1, 31, manageAll)
 
-        expect(getReceiver).toHaveBeenCalledWith(1, 31)
+        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'update')
         expect(publishDraft).toHaveBeenCalledWith(31)
     })
 
     it('lists template versions', async () => {
-        const result = await controller.getInboundFormTemplates(1, 31)
+        const result = await controller.getInboundFormTemplates(1, 31, manageAll)
 
-        expect(getReceiver).toHaveBeenCalledWith(1, 31)
+        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll)
         expect(result).toHaveLength(1)
     })
 })

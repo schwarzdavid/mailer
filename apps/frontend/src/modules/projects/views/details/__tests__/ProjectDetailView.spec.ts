@@ -43,6 +43,7 @@ afterEach(() => {
 describe('ProjectDetailView', () => {
     it('renders the project with its domains and forms sections', async () => {
         vi.spyOn(ProjectApi, 'getProject').mockResolvedValue(project)
+        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue([])
         vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue(forms)
         vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
         const wrapper = mountView(ProjectDetailView)

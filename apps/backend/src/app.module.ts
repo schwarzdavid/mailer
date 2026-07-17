@@ -16,6 +16,7 @@ import { MailModule } from './modules/mail/mail.module'
 import { BounceModule } from './modules/bounce/bounce.module'
 import { SettingsModule } from './modules/settings/settings.module'
 import { SetupModule } from './modules/setup/setup.module'
+import { PermissionModule } from './modules/permission/permission.module'
 
 @Module({
     imports: [
@@ -87,6 +88,7 @@ import { SetupModule } from './modules/setup/setup.module'
         BounceModule,
         SettingsModule,
         SetupModule,
+        PermissionModule,
     ],
 })
 export class AppModule {}

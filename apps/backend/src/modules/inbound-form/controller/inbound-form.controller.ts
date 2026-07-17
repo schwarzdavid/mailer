@@ -1,6 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, SerializeOptions } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseIntPipe,
+    Patch,
+    Post,
+    Put,
+    Query,
+    SerializeOptions,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth'
+import { Principal } from '../../auth/decorators/Principal'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility'
 import { ResponseDto } from '../../../decorators/ResponseDto'
 import { InboundFormService } from '../services/inbound-form.service'
 import { InboundFormTemplateService } from '../services/inbound-form-template.service'
@@ -14,6 +28,8 @@ import {
     InboundFormReceiverUpdateDto,
 } from '../dtos/inbound-form-receiver.dto'
 import { InboundFormTemplateDraftDto, InboundFormTemplateDto } from '../dtos/inbound-form-template.dto'
+import type { UserWithRole } from '../../user/interfaces/user.interface'
+import type { AppAbility } from '../../permission/interfaces/app-ability'
 
 @JwtAuth()
 @ApiTags('inbound-form')
@@ -26,29 +42,42 @@ export class InboundFormController {
 
     @ResponseDto(InboundFormDto)
     @Post()
-    async createInboundForm(@Body() body: InboundFormCreateDto): Promise<InboundFormDto> {
-        const form = await this.inboundFormService.createForm({
-            name: body.name,
-            slug: body.slug,
-            domainId: body.domainId,
-            projectId: body.projectId,
-        })
+    async createInboundForm(
+        @Body() body: InboundFormCreateDto,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<InboundFormDto> {
+        const form = await this.inboundFormService.createForm(
+            {
+                name: body.name,
+                slug: body.slug,
+                domainId: body.domainId,
+                projectId: body.projectId,
+            },
+            ability,
+        )
 
         return InboundFormDto.fromInboundForm(form)
     }
 
     @SerializeOptions({ type: InboundFormDto })
     @Get()
-    async getInboundForms(@Query('projectId') projectId?: number): Promise<InboundFormDto[]> {
-        const forms = await this.inboundFormService.getForms(projectId)
+    async getInboundForms(
+        @Query('projectId', new ParseIntPipe({ optional: true })) projectId: number | undefined,
+        @Principal() principal: UserWithRole,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<InboundFormDto[]> {
+        const forms = await this.inboundFormService.getForms(principal, ability, projectId)
 
         return forms.map((form) => InboundFormDto.fromInboundForm(form))
     }
 
     @ResponseDto(InboundFormDetailDto)
     @Get(':inboundFormId')
-    async getInboundForm(@Param('inboundFormId') inboundFormId: number): Promise<InboundFormDetailDto> {
-        const form = await this.inboundFormService.getFormById(inboundFormId)
+    async getInboundForm(
+        @Param('inboundFormId') inboundFormId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<InboundFormDetailDto> {
+        const form = await this.inboundFormService.getFormById(inboundFormId, ability)
 
         return this.toDetailDto(form)
     }
@@ -58,15 +87,19 @@ export class InboundFormController {
     async updateInboundForm(
         @Param('inboundFormId') inboundFormId: number,
         @Body() body: InboundFormUpdateDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormDetailDto> {
-        const form = await this.inboundFormService.updateForm(inboundFormId, body)
+        const form = await this.inboundFormService.updateForm(inboundFormId, body, ability)
 
         return this.toDetailDto(form)
     }
 
     @Delete(':inboundFormId')
-    async deleteInboundForm(@Param('inboundFormId') inboundFormId: number): Promise<void> {
-        await this.inboundFormService.deleteForm(inboundFormId)
+    async deleteInboundForm(
+        @Param('inboundFormId') inboundFormId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<void> {
+        await this.inboundFormService.deleteForm(inboundFormId, ability)
     }
 
     @SerializeOptions({ type: InboundFormFieldDto })
@@ -74,8 +107,9 @@ export class InboundFormController {
     async updateInboundFormFields(
         @Param('inboundFormId') inboundFormId: number,
         @Body() body: InboundFormFieldsPutDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormFieldDto[]> {
-        const fields = await this.inboundFormService.replaceFields(inboundFormId, body.fields)
+        const fields = await this.inboundFormService.replaceFields(inboundFormId, body.fields, ability)
 
         return fields.map((field) => InboundFormFieldDto.fromField(field))
     }
@@ -85,8 +119,9 @@ export class InboundFormController {
     async updateInboundFormSecurity(
         @Param('inboundFormId') inboundFormId: number,
         @Body() body: InboundFormSecurityPutDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormSecurityDto[]> {
-        const security = await this.inboundFormService.replaceSecurity(inboundFormId, body.security)
+        const security = await this.inboundFormService.replaceSecurity(inboundFormId, body.security, ability)
 
         return security.map((scheme) => InboundFormSecurityDto.fromSecurity(scheme))
     }
@@ -96,13 +131,18 @@ export class InboundFormController {
     async createInboundFormReceiver(
         @Param('inboundFormId') inboundFormId: number,
         @Body() body: InboundFormReceiverCreateDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormReceiverDto> {
-        const receiver = await this.inboundFormService.createReceiver(inboundFormId, {
-            emailFrom: body.emailFrom,
-            emailReceiver: body.emailReceiver,
-            emailReplyTo: body.emailReplyTo,
-            isActive: body.isActive,
-        })
+        const receiver = await this.inboundFormService.createReceiver(
+            inboundFormId,
+            {
+                emailFrom: body.emailFrom,
+                emailReceiver: body.emailReceiver,
+                emailReplyTo: body.emailReplyTo,
+                isActive: body.isActive,
+            },
+            ability,
+        )
 
         return InboundFormReceiverDto.fromReceiver(receiver)
     }
@@ -113,8 +153,14 @@ export class InboundFormController {
         @Param('inboundFormId') inboundFormId: number,
         @Param('inboundFormReceiverId') inboundFormReceiverId: number,
         @Body() body: InboundFormReceiverUpdateDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormReceiverDto> {
-        const receiver = await this.inboundFormService.updateReceiver(inboundFormId, inboundFormReceiverId, body)
+        const receiver = await this.inboundFormService.updateReceiver(
+            inboundFormId,
+            inboundFormReceiverId,
+            body,
+            ability,
+        )
         const summaries = await this.templateService.getVersionSummaries([inboundFormReceiverId])
 
         return InboundFormReceiverDto.fromReceiver(receiver, summaries[inboundFormReceiverId])
@@ -124,8 +170,9 @@ export class InboundFormController {
     async deleteInboundFormReceiver(
         @Param('inboundFormId') inboundFormId: number,
         @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
-        await this.inboundFormService.deleteReceiver(inboundFormId, inboundFormReceiverId)
+        await this.inboundFormService.deleteReceiver(inboundFormId, inboundFormReceiverId, ability)
     }
 
     @SerializeOptions({ type: InboundFormTemplateDto })
@@ -133,8 +180,9 @@ export class InboundFormController {
     async getInboundFormTemplates(
         @Param('inboundFormId') inboundFormId: number,
         @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto[]> {
-        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId)
+        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability)
         const templates = await this.templateService.listVersions(inboundFormReceiverId)
 
         return templates.map((template) => InboundFormTemplateDto.fromTemplate(template))
@@ -146,8 +194,9 @@ export class InboundFormController {
         @Param('inboundFormId') inboundFormId: number,
         @Param('inboundFormReceiverId') inboundFormReceiverId: number,
         @Body() body: InboundFormTemplateDraftDto,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
-        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId)
+        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'update')
         const draft = await this.templateService.saveDraft(inboundFormReceiverId, body)
 
         return InboundFormTemplateDto.fromTemplate(draft)
@@ -158,8 +207,9 @@ export class InboundFormController {
     async publishInboundFormTemplate(
         @Param('inboundFormId') inboundFormId: number,
         @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
-        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId)
+        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'update')
         const published = await this.templateService.publishDraft(inboundFormReceiverId)
 
         return InboundFormTemplateDto.fromTemplate(published)

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Put } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth'
+import { RequireAbility } from '../../permission/decorators/RequireAbility'
 import { ResponseDto } from '../../../decorators/ResponseDto'
 import { SettingsService } from '../services/settings.service'
 import { SettingsDto } from '../dtos/settings.dto'
@@ -13,6 +14,7 @@ import { SendingDomainConfigureDto } from '../dtos/sending-domain-configure.dto'
 export class SettingsController {
     constructor(private readonly settingsService: SettingsService) {}
 
+    @RequireAbility({ action: 'read', subject: 'Settings' })
     @ResponseDto(SettingsDto)
     @Get()
     async getSettings(): Promise<SettingsDto> {
@@ -21,6 +23,7 @@ export class SettingsController {
         return { sendingDomain }
     }
 
+    @RequireAbility({ action: 'update', subject: 'Settings' })
     @ResponseDto(SendingDomainDto)
     @Put('sending-domain')
     configureSendingDomain(@Body() config: SendingDomainConfigureDto): Promise<SendingDomainDto> {
@@ -31,6 +34,7 @@ export class SettingsController {
         })
     }
 
+    @RequireAbility({ action: 'update', subject: 'Settings' })
     @ResponseDto(SendingDomainDto)
     @Post('sending-domain/refresh')
     refreshSendingDomain(): Promise<SendingDomainDto> {
