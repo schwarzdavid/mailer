@@ -13,7 +13,8 @@
         "sourceMap": true,
         "declaration": true,
         "removeComments": true,
-        "incremental": true
+        "incremental": true,
+        "preserveWatchOutput": true
     },
     "exclude": ["node_modules", "dist", "**/*.config.ts", "**/*.config.mts", "**/*.config.*.ts"],
     "references": [{ "path": "./tsconfig.node.json" }],
