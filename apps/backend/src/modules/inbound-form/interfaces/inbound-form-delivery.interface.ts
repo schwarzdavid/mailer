@@ -14,6 +14,7 @@ export interface InboundFormDelivery {
     status: InboundFormDeliveryStatus
     error: string | null
     sentAt: Date | null
+    mailMessageId: number | null
     createdAt: Date
     updatedAt: Date
 }

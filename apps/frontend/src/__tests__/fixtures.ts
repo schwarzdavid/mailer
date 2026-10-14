@@ -1,4 +1,6 @@
 import type {
+    ApiKeyCreatedDto,
+    ApiKeyDto,
     DeletedProjectDto,
     DomainDetailDto,
     DomainDnsRecordDto,
@@ -7,6 +9,7 @@ import type {
     InboundFormTemplateDto,
     InboundFormListDto,
     InboundFormReceiverDto,
+    MailMessageDto,
     ProjectDetailDto,
     ProjectListDto,
     ProjectMemberDto,
@@ -177,6 +180,43 @@ export function template(overrides: Partial<InboundFormTemplateDto> = {}): Inbou
         template: '<p>{{name}}</p>',
         version: 2,
         updatedAt: created,
+        ...overrides,
+    }
+}
+
+export function apiKey(overrides: Partial<ApiKeyDto> = {}): ApiKeyDto {
+    return {
+        apiKeyId: 11,
+        name: 'Newsletter',
+        prefix: 'sdm_a1B2c3D4',
+        createdByUserId: 1,
+        lastUsedAt: null,
+        revokedAt: null,
+        createdAt: new Date('2026-10-01T10:00:00Z'),
+        ...overrides,
+    }
+}
+
+export function apiKeyCreated(overrides: Partial<ApiKeyCreatedDto> = {}): ApiKeyCreatedDto {
+    return {
+        ...apiKey(),
+        key: 'sdm_a1B2c3D4_Zx9-Q8_wV7uT6sR5qP4oN3mL2kJ1iH0gF9eD8cB7aA6',
+        ...overrides,
+    }
+}
+
+export function mailMessage(overrides: Partial<MailMessageDto> = {}): MailMessageDto {
+    return {
+        mailMessageId: 70,
+        source: 'api',
+        apiKeyId: 11,
+        emailFrom: 'news@forms.acme.com',
+        emailTo: 'reader@example.org',
+        subject: 'Welcome aboard',
+        status: 'sent',
+        error: null,
+        sentAt: new Date('2026-10-01T10:00:00Z'),
+        createdAt: new Date('2026-10-01T10:00:00Z'),
         ...overrides,
     }
 }

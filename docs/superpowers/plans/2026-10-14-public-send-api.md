@@ -4,9 +4,9 @@
 
 **Goal:** Let customers send email through `POST /api/v1/send` with a project-scoped API key, and record every outbound mail (API and inbound forms) in a central `mail_messages` log.
 
-**Architecture:** A new `api-key` module owns key storage (SHA-256 hash + visible prefix), the `ApiKeyAuthGuard`, key management endpoints and the public send endpoint. The `mail` module gains a `MailMessageService` that `MailService.sendMail` uses to write a log row for every send; failures surface as `MailSendError` carrying the log row id. Inbound-form deliveries link to their log row through a new `mailMessageId` FK.
+**Architecture:** A new `api-key` module owns key storage (SHA-256 hash + visible prefix), the `ApiKeyAuthGuard`, key management endpoints and the public send endpoint. The `mail` module gains a `MailMessageService` that `MailService.sendMail` uses to write a log row for every send; failures surface as `MailSendError` carrying the log row id. Inbound-form deliveries link to their log row through a new `mailMessageId` FK. The reworked ("Mail Admin") frontend gets an API keys card on the project page and a paged "Sent mail" page per project, built from the shared components in `apps/frontend/src/components/`.
 
-**Tech Stack:** NestJS 12 (native ESM), sequelize-typescript, umzug migrations, `@nestjs/throttler` (Redis storage), `@nestjs/cache-manager`, nodemailer, class-validator/class-transformer, Vitest (SWC), supertest + Testcontainers e2e.
+**Tech Stack:** NestJS 12 (native ESM), sequelize-typescript, umzug migrations, `@nestjs/throttler` (Redis storage), `@nestjs/cache-manager`, nodemailer, class-validator/class-transformer, Vitest (SWC), supertest + Testcontainers e2e; Vue 3 + Vuetify + TanStack Query + vue-i18n frontend with Vitest (jsdom) and Playwright.
 
 **Spec:** `docs/superpowers/specs/2026-10-14-public-send-api-design.md`
 
@@ -18,7 +18,8 @@
 - ESM: relative imports end in `.js`. Singular model associations to classes in circular import chains use `Relation<T>` or `X | null`.
 - Prettier: 4-space indent, single quotes, no semicolons, trailing commas. Run `pnpm format:fix` instead of hand-formatting.
 - Test doubles: `vi.fn<Service['method']>()` held as `Mock<…>`; typed fixtures, no loose literals or `as` casts on domain data.
-- Backend + `packages/api` only. **No frontend changes** (UI deferred until the design rework lands).
+- Frontend follows `docs/handoff.md` (Mail Admin design): shared components only (SectionCard, ListRow, StatusBadge, TagLabel, CopyField, FormDialog, useConfirm, useNotify, EmptyState/ErrorState, skeletons, RelativeTime); what a user can't do is absent, not disabled; irreversible destructive actions use Confirm; i18n keys under `module.projects.*` in `src/locales/en.json` (no SFC i18n blocks); views go through query/mutation composables, never the SDK directly.
+- Frontend tasks 10–14 were added on 2026-10-14 after the design rework landed; backend tasks 1–9 were revised the same day (migration 015, paged message log, no `@Public()` on the send route, route-access matrix entries).
 - Key format: `sdm_<8 base62 chars>_<43 char base64url secret>`; stored: `prefix` (`sdm_<8>`) + hex SHA-256 `secretHash`.
 - Rate limit env: `PUBLIC_API_RATE_LIMIT` default `60`, `PUBLIC_API_RATE_TTL` default `60000` (ms).
 - Send payload limits: `subject` 1–998 chars, `html` 1–1 000 000 chars, `text` ≤ 1 000 000 chars.
@@ -45,7 +46,8 @@
 ## File Structure
 
 **Create**
-- `apps/backend/src/migrations/014-create-api-keys-and-mail-messages.ts` — schema.
+
+- `apps/backend/src/migrations/015-create-api-keys-and-mail-messages.ts` — schema.
 - `apps/backend/src/modules/mail/interfaces/mail-message.interface.ts` — `MailMessage`, enums.
 - `apps/backend/src/modules/mail/models/mail-message.model.ts`
 - `apps/backend/src/modules/mail/services/mail-message.service.ts` (+ `.spec.ts`) — log writes + paginated reads.
@@ -71,6 +73,7 @@
 - `apps/backend/test/public-send.e2e-spec.ts`
 
 **Modify**
+
 - `apps/backend/src/modules/mail/services/mail.service.ts` (+ spec) — context arg, logging, `text`, `MailSendError`.
 - `apps/backend/src/modules/mail/mail.module.ts` — register model, service, controller.
 - `apps/backend/src/modules/inbound-form/interfaces/inbound-form-delivery.interface.ts`, `models/inbound-form-delivery.model.ts` — `mailMessageId`.
@@ -88,7 +91,8 @@
 ### Task 1: Schema — migration, models, interfaces
 
 **Files:**
-- Create: `apps/backend/src/migrations/014-create-api-keys-and-mail-messages.ts`
+
+- Create: `apps/backend/src/migrations/015-create-api-keys-and-mail-messages.ts`
 - Create: `apps/backend/src/modules/mail/interfaces/mail-message.interface.ts`
 - Create: `apps/backend/src/modules/mail/models/mail-message.model.ts`
 - Create: `apps/backend/src/modules/api-key/interfaces/api-key.interface.ts`
@@ -101,15 +105,16 @@
 - Test: existing `apps/backend/test/schema.e2e-spec.ts` and `test/migrations.e2e-spec.ts` (they compare every registered model to the migrated DB: columns, types, nullability, indexes, FKs, referential actions)
 
 **Interfaces:**
+
 - Produces:
-  - `enum MailMessageSource { API = 'api', INBOUND_FORM = 'inbound_form' }`
-  - `enum MailMessageStatus { PENDING = 'pending', SENT = 'sent', FAILED = 'failed', BLOCKED = 'blocked' }`
-  - `interface MailMessage { mailMessageId; projectId: number | null; source; apiKeyId: number | null; emailFrom; emailTo; subject; status; error: string | null; smtpMessageId: string | null; sentAt: Date | null; createdAt; updatedAt }`
-  - `type MailMessageCreate = Omit<MailMessage, 'mailMessageId' | 'createdAt' | 'updatedAt'>`
-  - `interface ApiKey { apiKeyId; projectId; name; prefix; createdByUserId: number | null; lastUsedAt: Date | null; revokedAt: Date | null; createdAt; updatedAt }`
-  - `interface ApiKeyRecord extends ApiKey { secretHash: string }`
-  - `type ApiKeyCreate = Pick<ApiKeyRecord, 'projectId' | 'name' | 'prefix' | 'secretHash' | 'createdByUserId'>`
-  - `MailMessageModel`, `ApiKeyModel`; `InboundFormDelivery.mailMessageId: number | null`
+    - `enum MailMessageSource { API = 'api', INBOUND_FORM = 'inbound_form' }`
+    - `enum MailMessageStatus { PENDING = 'pending', SENT = 'sent', FAILED = 'failed', BLOCKED = 'blocked' }`
+    - `interface MailMessage { mailMessageId; projectId: number | null; source; apiKeyId: number | null; emailFrom; emailTo; subject; status; error: string | null; smtpMessageId: string | null; sentAt: Date | null; createdAt; updatedAt }`
+    - `type MailMessageCreate = Omit<MailMessage, 'mailMessageId' | 'createdAt' | 'updatedAt'>`
+    - `interface ApiKey { apiKeyId; projectId; name; prefix; createdByUserId: number | null; lastUsedAt: Date | null; revokedAt: Date | null; createdAt; updatedAt }`
+    - `interface ApiKeyRecord extends ApiKey { secretHash: string }`
+    - `type ApiKeyCreate = Pick<ApiKeyRecord, 'projectId' | 'name' | 'prefix' | 'secretHash' | 'createdByUserId'>`
+    - `MailMessageModel`, `ApiKeyModel`; `InboundFormDelivery.mailMessageId: number | null`
 
 - [ ] **Step 1: Write the migration**
 
@@ -534,7 +539,7 @@ export class MailMessageModel extends Model<MailMessage, MailMessageCreate> impl
 In `inbound-form-delivery.interface.ts` add to `InboundFormDelivery` after `sentAt`:
 
 ```ts
-    mailMessageId: number | null
+mailMessageId: number | null
 ```
 
 `InboundFormDeliveryCreate` is derived via `Omit`, so `deliveryModel.create(...)` calls must now pass `mailMessageId: null` (Task 3 does this; for now add `mailMessageId: null` to the existing `create` call in `inbound-form-submission.service.ts` so it compiles).
@@ -596,6 +601,7 @@ Run: `pnpm --filter backend lint` — Expected: no new errors. Do not commit.
 ### Task 2: Message log service and MailService logging
 
 **Files:**
+
 - Create: `apps/backend/src/modules/mail/services/mail-message.service.ts`
 - Create: `apps/backend/src/modules/mail/services/mail-message.service.spec.ts`
 - Create: `apps/backend/src/modules/mail/exceptions/mail-send.error.ts`
@@ -604,17 +610,33 @@ Run: `pnpm --filter backend lint` — Expected: no new errors. Do not commit.
 - Modify: `apps/backend/src/modules/mail/mail.module.ts`
 
 **Interfaces:**
+
 - Consumes: `MailMessageModel`, `MailMessage*` types (Task 1)
 - Produces:
-  - `MailMessageService.recordPending(values: MailMessagePending): Promise<MailMessage>` where `type MailMessagePending = Pick<MailMessage, 'projectId' | 'source' | 'apiKeyId' | 'emailFrom' | 'emailTo' | 'subject'>`
-  - `MailMessageService.markSent(mailMessageId: number, smtpMessageId: string): Promise<void>`
-  - `MailMessageService.markUnsent(mailMessageId: number, status: MailMessageStatus.FAILED | MailMessageStatus.BLOCKED, error: string): Promise<void>`
-  - `MailMessageService.getProjectMessages(projectId: number, query: MailMessageQuery): Promise<MailMessage[]>` where `interface MailMessageQuery { limit: number; before?: number; source?: MailMessageSource; status?: MailMessageStatus }`
-  - `class MailSendError extends Error { readonly mailMessageId: number; readonly cause: unknown }`
-  - `SendMail` gains `text?: string`
-  - `interface SendMailContext { projectId: number | null; source: MailMessageSource; apiKeyId?: number }`
-  - `interface SentMail { mailMessageId: number; smtpMessageId: string }`
-  - `MailService.sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail>`
+    - `MailMessageService.recordPending(values: MailMessagePending): Promise<MailMessage>` where `type MailMessagePending = Pick<MailMessage, 'projectId' | 'source' | 'apiKeyId' | 'emailFrom' | 'emailTo' | 'subject'>`
+    - `MailMessageService.markSent(mailMessageId: number, smtpMessageId: string): Promise<void>`
+    - `MailMessageService.markUnsent(mailMessageId: number, status: MailMessageStatus.FAILED | MailMessageStatus.BLOCKED, error: string): Promise<void>`
+    - `MailMessageService.getProjectMessages(projectId: number, query: MailMessageQuery): Promise<MailMessagePage>` — `MailMessageQuery` / `MailMessagePage` are added to `mail-message.interface.ts` in this task:
+        ```ts
+        export interface MailMessageQuery {
+            page: number
+            itemsPerPage: number
+            search?: string
+            source?: MailMessageSource
+            status?: MailMessageStatus
+        }
+
+        export interface MailMessagePage {
+            items: MailMessage[]
+            total: number
+        }
+        ```
+        (Offset paging with a total mirrors `BounceService.getBounces` / `BouncePage`, which the reworked frontend drives with `VDataTableServer`.)
+    - `class MailSendError extends Error { readonly mailMessageId: number; readonly cause: unknown }`
+    - `SendMail` gains `text?: string`
+    - `interface SendMailContext { projectId: number | null; source: MailMessageSource; apiKeyId?: number }`
+    - `interface SentMail { mailMessageId: number; smtpMessageId: string }`
+    - `MailService.sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail>`
 
 - [ ] **Step 1: Write the failing `MailMessageService` spec**
 
@@ -633,7 +655,7 @@ describe('MailMessageService', () => {
     let service: MailMessageService
     let create: Mock<(values: Partial<MailMessage>) => Promise<MailMessageRow>>
     let update: Mock<(values: Partial<MailMessage>, options: { where: { mailMessageId: number } }) => Promise<[number]>>
-    let findAll: Mock<(options: object) => Promise<MailMessageRow[]>>
+    let findAndCountAll: Mock<(options: object) => Promise<{ rows: MailMessageRow[]; count: number }>>
 
     const message: MailMessage = {
         mailMessageId: 5,
@@ -655,12 +677,12 @@ describe('MailMessageService', () => {
     beforeEach(async () => {
         create = vi.fn<typeof create>().mockResolvedValue(row)
         update = vi.fn<typeof update>().mockResolvedValue([1])
-        findAll = vi.fn<typeof findAll>().mockResolvedValue([row])
+        findAndCountAll = vi.fn<typeof findAndCountAll>().mockResolvedValue({ rows: [row], count: 31 })
 
         const module = await Test.createTestingModule({
             providers: [
                 MailMessageService,
-                { provide: getModelToken(MailMessageModel), useValue: { create, update, findAll } },
+                { provide: getModelToken(MailMessageModel), useValue: { create, update, findAndCountAll } },
             ],
         }).compile()
         service = module.get(MailMessageService)
@@ -695,7 +717,11 @@ describe('MailMessageService', () => {
         await service.markSent(5, '<abc@mail.example.com>')
 
         expect(update).toHaveBeenCalledWith(
-            { status: MailMessageStatus.SENT, smtpMessageId: '<abc@mail.example.com>', sentAt: expect.any(Date) as Date },
+            {
+                status: MailMessageStatus.SENT,
+                smtpMessageId: '<abc@mail.example.com>',
+                sentAt: expect.any(Date) as Date,
+            },
             { where: { mailMessageId: 5 } },
         )
     })
@@ -709,35 +735,48 @@ describe('MailMessageService', () => {
         )
     })
 
-    it('lists project messages newest first with cursor and filters', async () => {
+    it('pages project messages newest first with filters and a total', async () => {
         const result = await service.getProjectMessages(3, {
-            limit: 20,
-            before: 100,
+            page: 2,
+            itemsPerPage: 10,
             source: MailMessageSource.INBOUND_FORM,
             status: MailMessageStatus.FAILED,
         })
 
-        expect(findAll).toHaveBeenCalledWith({
+        expect(findAndCountAll).toHaveBeenCalledWith({
             where: {
-                projectId: 3,
-                mailMessageId: { [Op.lt]: 100 },
-                source: MailMessageSource.INBOUND_FORM,
-                status: MailMessageStatus.FAILED,
+                [Op.and]: [
+                    { projectId: 3 },
+                    { source: MailMessageSource.INBOUND_FORM },
+                    { status: MailMessageStatus.FAILED },
+                ],
             },
             order: [['mailMessageId', 'DESC']],
-            limit: 20,
+            limit: 10,
+            offset: 10,
         })
-        expect(result).toEqual([message])
+        expect(result).toEqual({ items: [message], total: 31 })
     })
 
-    it('omits cursor and filters that are not given', async () => {
-        await service.getProjectMessages(3, { limit: 50 })
+    it('searches recipient and subject case-insensitively with LIKE wildcards escaped', async () => {
+        await service.getProjectMessages(3, { page: 1, itemsPerPage: 25, search: ' 50%_off ' })
 
-        expect(findAll).toHaveBeenCalledWith({
-            where: { projectId: 3 },
-            order: [['mailMessageId', 'DESC']],
-            limit: 50,
-        })
+        expect(findAndCountAll).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    [Op.and]: [
+                        { projectId: 3 },
+                        {
+                            [Op.or]: [
+                                { emailTo: { [Op.iLike]: '%50\\%\\_off%' } },
+                                { subject: { [Op.iLike]: '%50\\%\\_off%' } },
+                            ],
+                        },
+                    ],
+                },
+                offset: 0,
+            }),
+        )
     })
 })
 ```
@@ -749,24 +788,24 @@ Expected: FAIL — cannot resolve `./mail-message.service.js`.
 
 - [ ] **Step 3: Implement `MailMessageService`**
 
+First append `MailMessageQuery` and `MailMessagePage` (exact code in this task's Interfaces block) to `mail/interfaces/mail-message.interface.ts`.
+
 ```ts
 import { Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Op, type WhereOptions } from 'sequelize'
 import { MailMessageModel } from '../models/mail-message.model.js'
-import { MailMessage, MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+import {
+    MailMessage,
+    MailMessagePage,
+    MailMessageQuery,
+    MailMessageStatus,
+} from '../interfaces/mail-message.interface.js'
 
 export type MailMessagePending = Pick<
     MailMessage,
     'projectId' | 'source' | 'apiKeyId' | 'emailFrom' | 'emailTo' | 'subject'
 >
-
-export interface MailMessageQuery {
-    limit: number
-    before?: number
-    source?: MailMessageSource
-    status?: MailMessageStatus
-}
 
 @Injectable()
 export class MailMessageService {
@@ -799,24 +838,40 @@ export class MailMessageService {
         await this.mailMessageModel.update({ status, error }, { where: { mailMessageId } })
     }
 
-    async getProjectMessages(projectId: number, query: MailMessageQuery): Promise<MailMessage[]> {
-        const where: WhereOptions<MailMessage> = {
-            projectId,
-            ...(query.before !== undefined && { mailMessageId: { [Op.lt]: query.before } }),
-            ...(query.source && { source: query.source }),
-            ...(query.status && { status: query.status }),
-        }
-
-        const rows = await this.mailMessageModel.findAll({
-            where,
+    async getProjectMessages(projectId: number, query: MailMessageQuery): Promise<MailMessagePage> {
+        const { rows, count } = await this.mailMessageModel.findAndCountAll({
+            where: this.buildFilter(projectId, query),
             order: [['mailMessageId', 'DESC']],
-            limit: query.limit,
+            limit: query.itemsPerPage,
+            offset: (query.page - 1) * query.itemsPerPage,
         })
 
-        return rows.map((row) => row.get({ plain: true }))
+        return { items: rows.map((row) => row.get({ plain: true })), total: count }
+    }
+
+    private buildFilter(projectId: number, query: MailMessageQuery): WhereOptions<MailMessage> {
+        const conditions: WhereOptions<MailMessage>[] = [{ projectId }]
+
+        const search = query.search?.trim()
+        if (search) {
+            const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`
+            conditions.push({
+                [Op.or]: [{ emailTo: { [Op.iLike]: pattern } }, { subject: { [Op.iLike]: pattern } }],
+            })
+        }
+        if (query.source) {
+            conditions.push({ source: query.source })
+        }
+        if (query.status) {
+            conditions.push({ status: query.status })
+        }
+
+        return { [Op.and]: conditions }
     }
 }
 ```
+
+The search escaping is the same as `BounceService.buildFilter`.
 
 - [ ] **Step 4: Run it to see it pass**
 
@@ -840,136 +895,137 @@ export class MailSendError extends Error {
 - [ ] **Step 6: Update `mail.service.spec.ts` to the new contract (failing)**
 
 Changes to the existing spec:
-1. Imports: add
-   ```ts
-   import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
-   import { MailMessageService } from './mail-message.service.js'
-   import { MailSendError } from '../exceptions/mail-send.error.js'
-   import { MailMessage, MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
-   import { SendMailContext } from './mail.service.js'
-   ```
-   (merge `SendMailContext` into the existing `./mail.service.js` import).
-2. Type the transporter mock as `Mock<Transporter<SMTPTransport.SentMessageInfo>['sendMail']>` and resolve a typed info:
-   ```ts
-   const sentInfo: SMTPTransport.SentMessageInfo = {
-       envelope: { from: 'bounce@mail.example.com', to: ['owner@business.com'] },
-       messageId: '<m1@mail.example.com>',
-       accepted: ['owner@business.com'],
-       rejected: [],
-       pending: [],
-       response: '250 OK',
-   }
-   ```
-   `sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)`.
-3. Add mocks and a context fixture:
-   ```ts
-   let recordPending: Mock<MailMessageService['recordPending']>
-   let markSent: Mock<MailMessageService['markSent']>
-   let markUnsent: Mock<MailMessageService['markUnsent']>
 
-   const context: SendMailContext = { projectId: 3, source: MailMessageSource.INBOUND_FORM }
-   const pendingMessage: MailMessage = {
-       mailMessageId: 41,
-       projectId: 3,
-       source: MailMessageSource.INBOUND_FORM,
-       apiKeyId: null,
-       emailFrom: 'noreply@mail.example.com',
-       emailTo: 'owner@business.com',
-       subject: 'New submission',
-       status: MailMessageStatus.PENDING,
-       error: null,
-       smtpMessageId: null,
-       sentAt: null,
-       createdAt: new Date(),
-       updatedAt: new Date(),
-   }
-   ```
-   In `beforeEach`: `recordPending = vi.fn<typeof recordPending>().mockResolvedValue(pendingMessage)`, `markSent = vi.fn<typeof markSent>().mockResolvedValue(undefined)`, `markUnsent = vi.fn<typeof markUnsent>().mockResolvedValue(undefined)`; add provider `{ provide: MailMessageService, useValue: { recordPending, markSent, markUnsent } }`.
+1. Imports: add
+    ```ts
+    import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
+    import { MailMessageService } from './mail-message.service.js'
+    import { MailSendError } from '../exceptions/mail-send.error.js'
+    import { MailMessage, MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+    import { SendMailContext } from './mail.service.js'
+    ```
+    (merge `SendMailContext` into the existing `./mail.service.js` import).
+2. Type the transporter mock as `Mock<Transporter<SMTPTransport.SentMessageInfo>['sendMail']>` and resolve a typed info:
+    ```ts
+    const sentInfo: SMTPTransport.SentMessageInfo = {
+        envelope: { from: 'bounce@mail.example.com', to: ['owner@business.com'] },
+        messageId: '<m1@mail.example.com>',
+        accepted: ['owner@business.com'],
+        rejected: [],
+        pending: [],
+        response: '250 OK',
+    }
+    ```
+    `sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)`.
+3. Add mocks and a context fixture:
+    ```ts
+    let recordPending: Mock<MailMessageService['recordPending']>
+    let markSent: Mock<MailMessageService['markSent']>
+    let markUnsent: Mock<MailMessageService['markUnsent']>
+
+    const context: SendMailContext = { projectId: 3, source: MailMessageSource.INBOUND_FORM }
+    const pendingMessage: MailMessage = {
+        mailMessageId: 41,
+        projectId: 3,
+        source: MailMessageSource.INBOUND_FORM,
+        apiKeyId: null,
+        emailFrom: 'noreply@mail.example.com',
+        emailTo: 'owner@business.com',
+        subject: 'New submission',
+        status: MailMessageStatus.PENDING,
+        error: null,
+        smtpMessageId: null,
+        sentAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+    ```
+    In `beforeEach`: `recordPending = vi.fn<typeof recordPending>().mockResolvedValue(pendingMessage)`, `markSent = vi.fn<typeof markSent>().mockResolvedValue(undefined)`, `markUnsent = vi.fn<typeof markUnsent>().mockResolvedValue(undefined)`; add provider `{ provide: MailMessageService, useValue: { recordPending, markSent, markUnsent } }`.
 4. Every existing `service.sendMail(x)` call becomes `service.sendMail(x, context)`. Existing `rejects.toThrow('…message…')` assertions keep working because `MailSendError` copies the cause's message. The blocked-recipient test changes to `rejects.toThrow(MailSendError)` and additionally asserts `.cause` is an `EmailBlockedException` (see new test below).
 5. Add these tests:
 
 ```ts
-    it('logs a pending message before sending and marks it sent with the smtp message id', async () => {
-        const result = await service.sendMail(mail, { projectId: 3, source: MailMessageSource.API, apiKeyId: 9 })
+it('logs a pending message before sending and marks it sent with the smtp message id', async () => {
+    const result = await service.sendMail(mail, { projectId: 3, source: MailMessageSource.API, apiKeyId: 9 })
 
-        expect(recordPending).toHaveBeenCalledWith({
-            projectId: 3,
-            source: MailMessageSource.API,
-            apiKeyId: 9,
-            emailFrom: 'noreply@mail.example.com',
-            emailTo: 'owner@business.com',
-            subject: 'New submission',
-        })
-        expect(recordPending.mock.invocationCallOrder[0]).toBeLessThan(sendMail.mock.invocationCallOrder[0]!)
-        expect(markSent).toHaveBeenCalledWith(41, '<m1@mail.example.com>')
-        expect(result).toEqual({ mailMessageId: 41, smtpMessageId: '<m1@mail.example.com>' })
+    expect(recordPending).toHaveBeenCalledWith({
+        projectId: 3,
+        source: MailMessageSource.API,
+        apiKeyId: 9,
+        emailFrom: 'noreply@mail.example.com',
+        emailTo: 'owner@business.com',
+        subject: 'New submission',
     })
+    expect(recordPending.mock.invocationCallOrder[0]).toBeLessThan(sendMail.mock.invocationCallOrder[0]!)
+    expect(markSent).toHaveBeenCalledWith(41, '<m1@mail.example.com>')
+    expect(result).toEqual({ mailMessageId: 41, smtpMessageId: '<m1@mail.example.com>' })
+})
 
-    it('logs inbound form sends without an api key', async () => {
-        await service.sendMail(mail, context)
+it('logs inbound form sends without an api key', async () => {
+    await service.sendMail(mail, context)
 
-        expect(recordPending).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: null }))
+    expect(recordPending).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: null }))
+})
+
+it('passes the plain-text part through to the transporter', async () => {
+    await service.sendMail({ ...mail, text: 'Hello' }, context)
+
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ text: 'Hello' }))
+})
+
+it('marks a blocked recipient as blocked and wraps the block in a MailSendError', async () => {
+    const blocked = new EmailBlockedException('owner@business.com', new Date())
+    assertNotBlocked.mockRejectedValue(blocked)
+
+    const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(MailSendError)
+    expect((error as MailSendError).mailMessageId).toBe(41)
+    expect((error as MailSendError).cause).toBe(blocked)
+    expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.BLOCKED, blocked.message)
+    expect(sendMail).not.toHaveBeenCalled()
+})
+
+it('marks a transporter failure as failed', async () => {
+    sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'))
+
+    await expect(service.sendMail(mail, context)).rejects.toThrow(MailSendError)
+    expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, 'connect ECONNREFUSED')
+})
+
+it('marks a missing sending domain as failed', async () => {
+    getSendingDomainByFqdn.mockResolvedValue(null)
+
+    await expect(service.sendMail(mail, context)).rejects.toThrow('No sending domain configured')
+    expect(markUnsent).toHaveBeenCalledWith(
+        41,
+        MailMessageStatus.FAILED,
+        'No sending domain configured for mail.example.com',
+    )
+})
+
+it('still reports success when marking the message sent fails', async () => {
+    markSent.mockRejectedValue(new Error('db down'))
+
+    await expect(service.sendMail(mail, context)).resolves.toEqual({
+        mailMessageId: 41,
+        smtpMessageId: '<m1@mail.example.com>',
     })
+})
 
-    it('passes the plain-text part through to the transporter', async () => {
-        await service.sendMail({ ...mail, text: 'Hello' }, context)
+it('still rejects with the send error when marking the message failed also fails', async () => {
+    sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'))
+    markUnsent.mockRejectedValue(new Error('db down'))
 
-        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ text: 'Hello' }))
-    })
+    await expect(service.sendMail(mail, context)).rejects.toThrow('connect ECONNREFUSED')
+})
 
-    it('marks a blocked recipient as blocked and wraps the block in a MailSendError', async () => {
-        const blocked = new EmailBlockedException('owner@business.com', new Date())
-        assertNotBlocked.mockRejectedValue(blocked)
+it('sends nothing when the pending message cannot be recorded', async () => {
+    recordPending.mockRejectedValue(new Error('db down'))
 
-        const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
-
-        expect(error).toBeInstanceOf(MailSendError)
-        expect((error as MailSendError).mailMessageId).toBe(41)
-        expect((error as MailSendError).cause).toBe(blocked)
-        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.BLOCKED, blocked.message)
-        expect(sendMail).not.toHaveBeenCalled()
-    })
-
-    it('marks a transporter failure as failed', async () => {
-        sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'))
-
-        await expect(service.sendMail(mail, context)).rejects.toThrow(MailSendError)
-        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, 'connect ECONNREFUSED')
-    })
-
-    it('marks a missing sending domain as failed', async () => {
-        getSendingDomainByFqdn.mockResolvedValue(null)
-
-        await expect(service.sendMail(mail, context)).rejects.toThrow('No sending domain configured')
-        expect(markUnsent).toHaveBeenCalledWith(
-            41,
-            MailMessageStatus.FAILED,
-            'No sending domain configured for mail.example.com',
-        )
-    })
-
-    it('still reports success when marking the message sent fails', async () => {
-        markSent.mockRejectedValue(new Error('db down'))
-
-        await expect(service.sendMail(mail, context)).resolves.toEqual({
-            mailMessageId: 41,
-            smtpMessageId: '<m1@mail.example.com>',
-        })
-    })
-
-    it('still rejects with the send error when marking the message failed also fails', async () => {
-        sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'))
-        markUnsent.mockRejectedValue(new Error('db down'))
-
-        await expect(service.sendMail(mail, context)).rejects.toThrow('connect ECONNREFUSED')
-    })
-
-    it('sends nothing when the pending message cannot be recorded', async () => {
-        recordPending.mockRejectedValue(new Error('db down'))
-
-        await expect(service.sendMail(mail, context)).rejects.toThrow('db down')
-        expect(sendMail).not.toHaveBeenCalled()
-    })
+    await expect(service.sendMail(mail, context)).rejects.toThrow('db down')
+    expect(sendMail).not.toHaveBeenCalled()
+})
 ```
 
 Run: `pnpm --filter backend exec vitest run src/modules/mail/services/mail.service.spec.ts`
@@ -1045,8 +1101,7 @@ export class MailService {
         try {
             smtpMessageId = await this.deliver(mail)
         } catch (error) {
-            const status =
-                error instanceof EmailBlockedException ? MailMessageStatus.BLOCKED : MailMessageStatus.FAILED
+            const status = error instanceof EmailBlockedException ? MailMessageStatus.BLOCKED : MailMessageStatus.FAILED
             await this.updateLog(mailMessageId, () =>
                 this.mailMessageService.markUnsent(mailMessageId, status, errorMessage(error)),
             )
@@ -1149,35 +1204,38 @@ Run: `pnpm --filter backend typecheck` — Expected: errors only in `inbound-for
 ### Task 3: Inbound-form deliveries link to the message log
 
 **Files:**
+
 - Modify: `apps/backend/src/modules/inbound-form/services/inbound-form-submission.service.ts`
 - Modify: `apps/backend/src/modules/inbound-form/services/inbound-form-submission.service.spec.ts`
 - Modify: `apps/backend/test/inbound-form-management.e2e-spec.ts`
 
 **Interfaces:**
+
 - Consumes: `MailService.sendMail(mail, context): Promise<SentMail>`, `MailSendError`, `MailMessageSource.INBOUND_FORM` (Task 2)
 - Produces: delivery rows carry `mailMessageId` (non-null whenever `sendMail` was reached)
 
 - [ ] **Step 1: Update the spec (failing)**
 
 In `inbound-form-submission.service.spec.ts`:
+
 1. Imports: `import { MailSendError } from '../../mail/exceptions/mail-send.error.js'` and `import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'`.
 2. Default mock: `sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 501, smtpMessageId: '<m@x>' })`.
 3. In 'accepts a submission…' change the exact `sendMail` assertion to include the context:
-   ```ts
-        expect(sendMail).toHaveBeenCalledWith(
-            {
-                from: 'noreply@mail.example.com',
-                to: 'owner@business.com',
-                replyTo: 'max@example.com',
-                subject: 'Message from Max',
-                html: '<p>Max wrote in</p>',
-            },
-            { projectId: formFull.projectId, source: MailMessageSource.INBOUND_FORM },
-        )
-   ```
-   and the delivery `create` assertion gains `mailMessageId: null`; the SENT update assertion gains `mailMessageId: 501`.
+    ```ts
+    expect(sendMail).toHaveBeenCalledWith(
+        {
+            from: 'noreply@mail.example.com',
+            to: 'owner@business.com',
+            replyTo: 'max@example.com',
+            subject: 'Message from Max',
+            html: '<p>Max wrote in</p>',
+        },
+        { projectId: formFull.projectId, source: MailMessageSource.INBOUND_FORM },
+    )
+    ```
+    and the delivery `create` assertion gains `mailMessageId: null`; the SENT update assertion gains `mailMessageId: 501`.
 4. Add:
-   ```ts
+    ```ts
     it('links a failed delivery to the logged message of the failed attempt', async () => {
         mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
         sendMail.mockRejectedValue(new MailSendError(502, new Error('SMTP down')))
@@ -1207,7 +1265,7 @@ In `inbound-form-submission.service.spec.ts`:
             }),
         )
     })
-   ```
+    ```
 
 Run: `pnpm --filter backend exec vitest run src/modules/inbound-form/services/inbound-form-submission.service.spec.ts`
 Expected: FAIL.
@@ -1215,6 +1273,7 @@ Expected: FAIL.
 - [ ] **Step 2: Implement**
 
 In `inbound-form-submission.service.ts`:
+
 - Import `MailSendError` and `MailMessageSource`.
 - `PendingDelivery` gains `projectId: number`; in the transaction push `{ delivery, receiver, template, projectId: form.projectId }`.
 - The `deliveryModel.create` values gain `mailMessageId: null`.
@@ -1269,10 +1328,10 @@ Expected: PASS. Any other existing assertion that used exact `toHaveBeenCalledWi
 In `test/inbound-form-management.e2e-spec.ts`, find the test that waits for a delivery to reach `sent` (search for `InboundFormDeliveryStatus.SENT` or `status: 'sent'` on `deliveryModel()`). After that assertion add:
 
 ```ts
-        const deliveries = await deliveryModel().findAll({
-            where: { inboundFormSubmissionId: submission!.inboundFormSubmissionId },
-        })
-        expect(deliveries.every((delivery) => delivery.mailMessageId !== null)).toBe(true)
+const deliveries = await deliveryModel().findAll({
+    where: { inboundFormSubmissionId: submission!.inboundFormSubmissionId },
+})
+expect(deliveries.every((delivery) => delivery.mailMessageId !== null)).toBe(true)
 ```
 
 Adapt the variable name `submission` to the one used in that test (it is the result of `latestSubmission(formId)`).
@@ -1290,6 +1349,7 @@ Expected: PASS. Do not commit.
 ### Task 4: API key format helpers and `ApiKeyService`
 
 **Files:**
+
 - Create: `apps/backend/src/modules/api-key/api-key.constants.ts`
 - Create: `apps/backend/src/modules/api-key/helpers/api-key-format.ts` (+ `.spec.ts`)
 - Create: `apps/backend/src/modules/api-key/mappers/api-key.mapper.ts`
@@ -1297,19 +1357,20 @@ Expected: PASS. Do not commit.
 - Modify: `apps/backend/src/modules/api-key/api-key.module.ts`
 
 **Interfaces:**
+
 - Consumes: `ApiKeyModel`, `ApiKey`, `ApiKeyRecord` (Task 1); `assertProjectReadable`, `assertProjectUpdatable` from `permission/helpers/project-access.js`; `AppAbility`; `User` (`modules/user/interfaces/user.interface.js`); `ProjectModel`
 - Produces:
-  - `generateApiKey(): { key: string; prefix: string; secretHash: string }`
-  - `parseApiKeyPrefix(key: string): string | null`
-  - `hashApiKey(key: string): string`
-  - `matchesApiKeyHash(key: string, secretHash: string): boolean`
-  - `toApiKey(record: ApiKeyRecord): ApiKey`
-  - `ApiKeyService.createKey(projectId: number, name: string, principal: User, ability: AppAbility): Promise<{ apiKey: ApiKey; key: string }>`
-  - `ApiKeyService.listKeys(projectId: number, ability: AppAbility): Promise<ApiKey[]>`
-  - `ApiKeyService.revokeKey(projectId: number, apiKeyId: number, ability: AppAbility): Promise<void>`
-  - `ApiKeyService.authenticate(rawKey: string): Promise<ApiKey | null>`
-  - `ApiKeyService.touchLastUsed(apiKeyId: number): Promise<void>`
-  - constants: `API_KEY_LAST_USED_CACHE_PREFIX = 'api-key:last-used:'`, `API_KEY_LAST_USED_INTERVAL_MS = 60_000`
+    - `generateApiKey(): { key: string; prefix: string; secretHash: string }`
+    - `parseApiKeyPrefix(key: string): string | null`
+    - `hashApiKey(key: string): string`
+    - `matchesApiKeyHash(key: string, secretHash: string): boolean`
+    - `toApiKey(record: ApiKeyRecord): ApiKey`
+    - `ApiKeyService.createKey(projectId: number, name: string, principal: User, ability: AppAbility): Promise<{ apiKey: ApiKey; key: string }>`
+    - `ApiKeyService.listKeys(projectId: number, ability: AppAbility): Promise<ApiKey[]>`
+    - `ApiKeyService.revokeKey(projectId: number, apiKeyId: number, ability: AppAbility): Promise<void>`
+    - `ApiKeyService.authenticate(rawKey: string): Promise<ApiKey | null>`
+    - `ApiKeyService.touchLastUsed(apiKeyId: number): Promise<void>`
+    - constants: `API_KEY_LAST_USED_CACHE_PREFIX = 'api-key:last-used:'`, `API_KEY_LAST_USED_INTERVAL_MS = 60_000`
 
 - [ ] **Step 1: Write the failing format spec**
 
@@ -1512,9 +1573,9 @@ describe('ApiKeyService', () => {
 
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
-        create = vi.fn<typeof create>().mockImplementation((values) =>
-            Promise.resolve(rowFor({ ...record, ...values, apiKeyId: 12 })),
-        )
+        create = vi
+            .fn<typeof create>()
+            .mockImplementation((values) => Promise.resolve(rowFor({ ...record, ...values, apiKeyId: 12 })))
         findAll = vi.fn<typeof findAll>().mockResolvedValue([rowFor(record)])
         findOne = vi.fn<typeof findOne>().mockResolvedValue(rowFor(record))
         update = vi.fn<typeof update>().mockResolvedValue([1])
@@ -1639,7 +1700,11 @@ describe('ApiKeyService', () => {
             await service.touchLastUsed(11)
 
             expect(update).toHaveBeenCalledWith({ lastUsedAt: expect.any(Date) as Date }, { where: { apiKeyId: 11 } })
-            expect(cacheSet).toHaveBeenCalledWith(`${API_KEY_LAST_USED_CACHE_PREFIX}11`, true, API_KEY_LAST_USED_INTERVAL_MS)
+            expect(cacheSet).toHaveBeenCalledWith(
+                `${API_KEY_LAST_USED_CACHE_PREFIX}11`,
+                true,
+                API_KEY_LAST_USED_INTERVAL_MS,
+            )
         })
 
         it('skips the write while a recent one is remembered', async () => {
@@ -1782,6 +1847,7 @@ Run: `pnpm --filter backend typecheck && pnpm --filter backend lint` — Expecte
 ### Task 5: Key extraction, guard, decorators, rate limiting config
 
 **Files:**
+
 - Create: `apps/backend/src/modules/api-key/helpers/extract-api-key.ts` (+ `.spec.ts`)
 - Create: `apps/backend/src/modules/api-key/guards/api-key-auth.guard.ts` (+ `.spec.ts`)
 - Create: `apps/backend/src/modules/api-key/decorators/ApiKeyAuth.ts` (+ `.spec.ts`)
@@ -1792,16 +1858,17 @@ Run: `pnpm --filter backend typecheck && pnpm --filter backend lint` — Expecte
 - Modify: `apps/backend/src/modules/api-key/api-key.module.ts`
 
 **Interfaces:**
-- Consumes: `ApiKeyService.authenticate`, `ApiKeyService.touchLastUsed`, `parseApiKeyPrefix`, constants (Task 4); `Public` decorator (`auth/decorators/Public.js`)
+
+- Consumes: `ApiKeyService.authenticate`, `ApiKeyService.touchLastUsed`, `parseApiKeyPrefix`, constants (Task 4)
 - Produces:
-  - `interface ApiKeyRequest { headers: { authorization?: string }; query: Record<string, unknown>; ip?: string; apiKey?: ApiKey }`
-  - `extractApiKey(request: ApiKeyRequest): string | null`
-  - `publicApiThrottleTracker(request: ApiKeyRequest): string`
-  - `isApiKeyRoute(context: ExecutionContext): boolean`
-  - `ApiKeyAuthGuard` (sets `request.apiKey`)
-  - `@ApiKeyAuth()` — `Public()` + `SkipThrottle({ default: true })` + `UseGuards(ThrottlerGuard, ApiKeyAuthGuard)` + `SetMetadata(API_KEY_AUTH_KEY, true)` + Swagger `ApiSecurity('api-key')` + `ApiSecurity('api-key-query')`
-  - `@ApiKeyPrincipal()` param decorator → `ApiKey`
-  - env: `PUBLIC_API_RATE_LIMIT: number`, `PUBLIC_API_RATE_TTL: number`
+    - `interface ApiKeyRequest { headers: { authorization?: string }; query: Record<string, unknown>; ip?: string; apiKey?: ApiKey }`
+    - `extractApiKey(request: ApiKeyRequest): string | null`
+    - `publicApiThrottleTracker(request: ApiKeyRequest): string`
+    - `isApiKeyRoute(context: ExecutionContext): boolean`
+    - `ApiKeyAuthGuard` (sets `request.apiKey`)
+    - `@ApiKeyAuth()` — `SkipThrottle({ default: true })` + `UseGuards(ThrottlerGuard, ApiKeyAuthGuard)` + `SetMetadata(API_KEY_AUTH_KEY, true)` + Swagger `ApiSecurity('api-key')` + `ApiSecurity('api-key-query')`. No `@Public()`: there is no global JWT guard (JWT applies only through `@JwtAuth()`), and `route-access.spec.ts` would collapse a `@Public` route's guards to `['@Public']`, hiding the API key guard.
+    - `@ApiKeyPrincipal()` param decorator → `ApiKey`
+    - env: `PUBLIC_API_RATE_LIMIT: number`, `PUBLIC_API_RATE_TTL: number`
 
 - [ ] **Step 1: Failing spec for extraction + tracker**
 
@@ -2001,7 +2068,6 @@ import { ThrottlerGuard } from '@nestjs/throttler'
 import { describe, expect, it } from 'vitest'
 import { ApiKeyAuth } from './ApiKeyAuth.js'
 import { ApiKeyAuthGuard } from '../guards/api-key-auth.guard.js'
-import { PUBLIC_KEY } from '../../auth/decorators/Public.js'
 import { API_KEY_AUTH_KEY } from '../api-key.constants.js'
 
 describe('ApiKeyAuth', () => {
@@ -2017,8 +2083,7 @@ describe('ApiKeyAuth', () => {
         ])
     })
 
-    it('opts out of JWT auth and marks the route as an api key route', () => {
-        expect(Reflect.getMetadata(PUBLIC_KEY, Controller.prototype.handler)).toBe(true)
+    it('marks the route as an api key route', () => {
         expect(Reflect.getMetadata(API_KEY_AUTH_KEY, Controller.prototype.handler)).toBe(true)
     })
 
@@ -2035,7 +2100,7 @@ describe('ApiKeyAuth', () => {
 })
 ```
 
-Check the actual skip metadata key in `node_modules/@nestjs/throttler/dist/throttler.constants.js` (`THROTTLER_SKIP`, concatenated with the throttler name) and adjust the string if it differs. Swagger stores `ApiSecurity` entries in decorator order — if the array comes back reversed, assert with `expect.arrayContaining` plus `toHaveLength(2)`.
+`THROTTLER:SKIPdefault` is the key `route-access.spec.ts` already reads for `SetupController.getStatus`. Swagger stores `ApiSecurity` entries in decorator order — if the array comes back reversed, assert with `expect.arrayContaining` plus `toHaveLength(2)`.
 
 `decorators/ApiKeyPrincipal.spec.ts` — mirror `Principal.spec.ts`: resolve the factory via `ROUTE_ARGS_METADATA`, assert it returns `request.apiKey` and throws `UnauthorizedException` when absent (use the `apiKey` fixture from the guard spec).
 
@@ -2049,13 +2114,11 @@ Run: `pnpm --filter backend exec vitest run src/modules/api-key/decorators` — 
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common'
 import { ApiSecurity } from '@nestjs/swagger'
 import { SkipThrottle, ThrottlerGuard } from '@nestjs/throttler'
-import { Public } from '../../auth/decorators/Public.js'
 import { ApiKeyAuthGuard } from '../guards/api-key-auth.guard.js'
 import { API_KEY_AUTH_KEY } from '../api-key.constants.js'
 
 export const ApiKeyAuth = () =>
     applyDecorators(
-        Public(),
         SetMetadata(API_KEY_AUTH_KEY, true),
         SkipThrottle({ default: true }),
         UseGuards(ThrottlerGuard, ApiKeyAuthGuard),
@@ -2086,15 +2149,15 @@ Run the specs — Expected: PASS.
 In `env.schema.spec.ts`, extend the defaults test's `toMatchObject` with `PUBLIC_API_RATE_LIMIT: 60, PUBLIC_API_RATE_TTL: 60000` and add:
 
 ```ts
-    it('coerces the public api rate limit settings', () => {
-        const env = envSchema.parse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '5', PUBLIC_API_RATE_TTL: '1000' })
+it('coerces the public api rate limit settings', () => {
+    const env = envSchema.parse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '5', PUBLIC_API_RATE_TTL: '1000' })
 
-        expect(env).toMatchObject({ PUBLIC_API_RATE_LIMIT: 5, PUBLIC_API_RATE_TTL: 1000 })
-    })
+    expect(env).toMatchObject({ PUBLIC_API_RATE_LIMIT: 5, PUBLIC_API_RATE_TTL: 1000 })
+})
 
-    it('rejects a non-positive public api rate limit', () => {
-        expect(envSchema.safeParse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '0' }).success).toBe(false)
-    })
+it('rejects a non-positive public api rate limit', () => {
+    expect(envSchema.safeParse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '0' }).success).toBe(false)
+})
 ```
 
 Run: `pnpm --filter backend exec vitest run src/config` — Expected: FAIL. Then add to `envSchema` after `OPENAPI_PATH`:
@@ -2145,6 +2208,12 @@ In `app.module.ts` change the `ThrottlerModule.forRootAsync` block to:
 
 Imports: `isApiKeyRoute`, `publicApiThrottleTracker` from `./modules/api-key/helpers/extract-api-key.js`; `PUBLIC_API_THROTTLER` from `./modules/api-key/api-key.constants.js`. (`ConfigService`/`Env` are already imported for `JwtModule`.) The unnamed throttler is `default`; `skipIf: isApiKeyRoute` on it is belt-and-braces alongside `SkipThrottle({ default: true })`. `publicApiThrottleTracker` takes `ApiKeyRequest`; the throttler passes `Record<string, any>`, which is assignable.
 
+**Amendment (task review ruling, 2026-10-14):** prefix buckets let anyone who knows a key's (non-secret) prefix exhaust that key's budget, and rotating fake prefixes evades the limit per IP. Therefore:
+
+- `publicApiThrottleTracker` returns `api-key:<hashApiKey(rawKey)>` for a well-formed key (each distinct secret has its own bucket; only the real secret reaches the real key's bucket) and `api-key-ip:<ip>` otherwise. Unit tests: two keys with the same prefix but different secrets get different trackers; the tracker never contains the raw secret; malformed/missing keys fall back to IP.
+- A third throttler `{ name: PUBLIC_API_IP_THROTTLER /* 'publicApiIp' */, ttl: PUBLIC_API_RATE_TTL, limit: PUBLIC_API_RATE_LIMIT * PUBLIC_API_IP_LIMIT_FACTOR /* 10 */, skipIf: (context) => !isApiKeyRoute(context) }` (default IP tracker) caps per-client traffic on API-key routes. Constants live in `api-key.constants.ts`.
+- `@ApiKeyAuth()` keeps `SkipThrottle({ default: true })` only; both public throttlers apply.
+
 - [ ] **Step 9: Swagger header scheme**
 
 In `app.setup.ts` `createOpenApiDocument`, replace the `.addApiKey({...})` call with:
@@ -2170,12 +2239,14 @@ Run: `pnpm --filter backend typecheck && pnpm --filter backend lint` — Expecte
 ### Task 6: Key management endpoints
 
 **Files:**
+
 - Create: `apps/backend/src/modules/api-key/dtos/api-key.dto.ts`
 - Create: `apps/backend/src/modules/api-key/dtos/api-key-create.dto.ts`
 - Create: `apps/backend/src/modules/api-key/controller/api-key.controller.ts`
 - Modify: `apps/backend/src/modules/api-key/api-key.module.ts`
 
 **Interfaces:**
+
 - Consumes: `ApiKeyService.createKey/listKeys/revokeKey` (Task 4); `JwtAuth`, `Principal`, `CurrentAbility`, `ResponseDto`
 - Produces: `GET/POST /api/project/:projectId/api-keys`, `DELETE /api/project/:projectId/api-keys/:apiKeyId` (204); DTOs `ApiKeyDto`, `ApiKeyCreatedDto`, `ApiKeyCreateDto`
 
@@ -2250,7 +2321,18 @@ export class ApiKeyCreateDto {
 - [ ] **Step 2: Controller**
 
 ```ts
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, SerializeOptions } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Post,
+    SerializeOptions,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { Principal } from '../../auth/decorators/Principal.js'
@@ -2306,7 +2388,19 @@ export class ApiKeyController {
 
 Add `controllers: [ApiKeyController]` to `api-key.module.ts`. `@SerializeOptions` on the list endpoint mirrors `ProjectController.getProjects`; check whether `@ApiOkResponse({ type: ApiKeyDto, isArray: true })` is used elsewhere for list endpoints and match it.
 
-- [ ] **Step 3: Verify**
+- [ ] **Step 3: Pin the route access**
+
+In `src/route-access.spec.ts` import `ApiKeyController`, add it to `controllers`, and add to `expectedRoutes`:
+
+```ts
+    'GET /project/:projectId/api-keys': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'POST /project/:projectId/api-keys': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'DELETE /project/:projectId/api-keys/:apiKeyId': { guards: jwt, abilities: [], scopedByPrincipal: true },
+```
+
+Run: `pnpm --filter backend exec vitest run src/route-access.spec.ts` — Expected: PASS.
+
+- [ ] **Step 4: Verify**
 
 Run: `pnpm --filter backend typecheck && pnpm --filter backend lint`
 Run: `pnpm --filter backend exec vitest run --config vitest.config.e2e.ts test/openapi.e2e-spec.ts`
@@ -2317,6 +2411,7 @@ Expected: PASS (unique operationIds, every operation tagged). Do not commit.
 ### Task 7: Public send service and endpoint
 
 **Files:**
+
 - Modify: `apps/backend/src/modules/domain/services/domain.service.ts` (+ spec) — `getDomainByFqdn`
 - Modify: `apps/backend/src/modules/project/services/project.service.ts` (+ spec) — `hasDomain`
 - Create: `apps/backend/src/modules/api-key/exceptions/public-send.exception.ts`
@@ -2326,34 +2421,35 @@ Expected: PASS (unique operationIds, every operation tagged). Do not commit.
 - Modify: `apps/backend/src/modules/api-key/api-key.module.ts`
 
 **Interfaces:**
+
 - Consumes: `MailService.sendMail`, `MailSendError`, `MailMessageSource.API` (Task 2); `ApiKey`, `ApiKeyAuth`, `ApiKeyPrincipal` (Tasks 4–5); `EmailBlockedException`
 - Produces:
-  - `DomainService.getDomainByFqdn(fqdn: string): Promise<Domain | null>`
-  - `ProjectService.hasDomain(projectId: number, domainId: number): Promise<boolean>`
-  - `enum PublicSendErrorCode { FROM_DOMAIN_NOT_ALLOWED, FROM_DOMAIN_NOT_READY, RECIPIENT_BLOCKED, DELIVERY_FAILED }` (string values equal to names)
-  - `class PublicSendException extends HttpException` — body `{ statusCode, error, message, code, mailMessageId? }`
-  - `PublicSendService.send(apiKey: ApiKey, mail: PublicSendDto): Promise<{ mailMessageId: number }>`
-  - `POST /api/v1/send` → 202 `PublicSendResultDto { mailMessageId: number; status: 'sent' }`
+    - `DomainService.getDomainByFqdn(fqdn: string): Promise<Domain | null>`
+    - `ProjectService.hasDomain(projectId: number, domainId: number): Promise<boolean>`
+    - `enum PublicSendErrorCode { FROM_DOMAIN_NOT_ALLOWED, FROM_DOMAIN_NOT_READY, RECIPIENT_BLOCKED, DELIVERY_FAILED }` (string values equal to names)
+    - `class PublicSendException extends HttpException` — body `{ statusCode, error, message, code, mailMessageId? }`
+    - `PublicSendService.send(apiKey: ApiKey, mail: PublicSendDto): Promise<{ mailMessageId: number }>`
+    - `POST /api/v1/send` → 202 `PublicSendResultDto { mailMessageId: number; status: 'sent' }`
 
 - [ ] **Step 1: `getDomainByFqdn` (test first)**
 
 In `domain.service.spec.ts` add (reuse the spec's existing `findOne` mock on the domain model token and its `Domain` fixture — read the spec first to get their names):
 
 ```ts
-    describe('getDomainByFqdn', () => {
-        it('returns the plain domain for a known fqdn', async () => {
-            domainFindOne.mockResolvedValue(domainRow)
+describe('getDomainByFqdn', () => {
+    it('returns the plain domain for a known fqdn', async () => {
+        domainFindOne.mockResolvedValue(domainRow)
 
-            await expect(service.getDomainByFqdn('mail.example.com')).resolves.toEqual(domain)
-            expect(domainFindOne).toHaveBeenCalledWith({ where: { fqdn: 'mail.example.com' } })
-        })
-
-        it('returns null for an unknown fqdn', async () => {
-            domainFindOne.mockResolvedValue(null)
-
-            await expect(service.getDomainByFqdn('nope.example.com')).resolves.toBeNull()
-        })
+        await expect(service.getDomainByFqdn('mail.example.com')).resolves.toEqual(domain)
+        expect(domainFindOne).toHaveBeenCalledWith({ where: { fqdn: 'mail.example.com' } })
     })
+
+    it('returns null for an unknown fqdn', async () => {
+        domainFindOne.mockResolvedValue(null)
+
+        await expect(service.getDomainByFqdn('nope.example.com')).resolves.toBeNull()
+    })
+})
 ```
 
 Implement in `DomainService` (next to `getSendingDomainByFqdn`):
@@ -2373,20 +2469,20 @@ Run: `pnpm --filter backend exec vitest run src/modules/domain/services/domain.s
 In `project.service.spec.ts`, next to `describe('assertDomainInProject')`, add (use the existing `projectDomainModel` mock — add a `count` mock to its `useValue` if absent: `projectDomainCount = vi.fn<(options: object) => Promise<number>>()`):
 
 ```ts
-    describe('hasDomain', () => {
-        it('is true when the domain is assigned to the project', async () => {
-            projectDomainCount.mockResolvedValue(1)
+describe('hasDomain', () => {
+    it('is true when the domain is assigned to the project', async () => {
+        projectDomainCount.mockResolvedValue(1)
 
-            await expect(service.hasDomain(3, 8)).resolves.toBe(true)
-            expect(projectDomainCount).toHaveBeenCalledWith({ where: { projectId: 3, domainId: 8 } })
-        })
-
-        it('is false otherwise', async () => {
-            projectDomainCount.mockResolvedValue(0)
-
-            await expect(service.hasDomain(3, 8)).resolves.toBe(false)
-        })
+        await expect(service.hasDomain(3, 8)).resolves.toBe(true)
+        expect(projectDomainCount).toHaveBeenCalledWith({ where: { projectId: 3, domainId: 8 } })
     })
+
+    it('is false otherwise', async () => {
+        projectDomainCount.mockResolvedValue(0)
+
+        await expect(service.hasDomain(3, 8)).resolves.toBe(false)
+    })
+})
 ```
 
 Implement in `ProjectService`:
@@ -2806,9 +2902,25 @@ Merge the two `@nestjs/common` imports. `api-key.module.ts` final shape:
 export class ApiKeyModule {}
 ```
 
-- [ ] **Step 8: Verify**
+- [ ] **Step 8: Pin the route access**
 
-Run: `pnpm --filter backend exec vitest run src/modules/api-key src/modules/domain src/modules/project`
+In `src/route-access.spec.ts` import `PublicSendController`, add it to `controllers`, add `const apiKeyAuth = ['ThrottlerGuard', 'ApiKeyAuthGuard']` beside `jwt`/`throttled`, and add to `expectedRoutes`:
+
+```ts
+    'POST /v1/send': { guards: apiKeyAuth, abilities: [], scopedByPrincipal: true },
+```
+
+In the `route throttling` describe add:
+
+```ts
+it('moves the public send api off the default budget onto its per-key budget', () => {
+    expect(throttleMetadata('SKIP', PublicSendController, 'sendMail')).toBe(true)
+})
+```
+
+- [ ] **Step 9: Verify**
+
+Run: `pnpm --filter backend exec vitest run src/modules/api-key src/modules/domain src/modules/project src/route-access.spec.ts`
 Run: `pnpm --filter backend typecheck && pnpm --filter backend lint`
 Expected: PASS. Do not commit.
 
@@ -2817,53 +2929,182 @@ Expected: PASS. Do not commit.
 ### Task 8: Message log endpoint
 
 **Files:**
+
+- Modify: `apps/backend/src/modules/mail/mail.constants.ts` — page size constants
 - Create: `apps/backend/src/modules/mail/dtos/mail-message.dto.ts`
+- Create: `apps/backend/src/modules/mail/dtos/mail-message-page.dto.ts`
+- Create: `apps/backend/src/modules/mail/dtos/mail-message-query.dto.ts` (+ `.spec.ts`)
 - Create: `apps/backend/src/modules/mail/controller/mail-message.controller.ts`
 - Modify: `apps/backend/src/modules/mail/services/mail-message.service.ts` (+ spec) — ability-checked wrapper
 - Modify: `apps/backend/src/modules/mail/mail.module.ts`
+- Modify: `apps/backend/src/route-access.spec.ts`
 
 **Interfaces:**
-- Consumes: `MailMessageService.getProjectMessages` (Task 2); `assertProjectReadable`
-- Produces: `MailMessageService.listForProject(projectId: number, query: MailMessageQuery, ability: AppAbility): Promise<MailMessage[]>`; `GET /api/project/:projectId/messages?limit&before&source&status` → `MailMessageDto[]`; constant `MAIL_MESSAGES_MAX_LIMIT = 100`
+
+- Consumes: `MailMessageService.getProjectMessages`, `MailMessageQuery`, `MailMessagePage` (Task 2); `assertProjectReadable`
+- Produces:
+    - `MailMessageService.listForProject(projectId: number, query: MailMessageQuery, ability: AppAbility): Promise<MailMessagePage>`
+    - `GET /api/project/:projectId/messages?page&itemsPerPage&search&source&status` → `MailMessagePageDto { items: MailMessageDto[]; total: number }`
+    - `MAIL_MESSAGE_PAGE_SIZE_DEFAULT = 25`, `MAIL_MESSAGE_PAGE_SIZE_MAX = 100` in `mail.constants.ts`
+
+This mirrors the reworked bounce list (`BounceQueryDto`, `BouncePageDto`, `BounceService.getBounces`). Read those three files first and match them.
 
 - [ ] **Step 1: Failing service tests**
 
 Add to `mail-message.service.spec.ts` (import `createMongoAbility` from `@casl/ability`, `AppAbility`, `NotFoundException`):
 
 ```ts
-    describe('listForProject', () => {
-        const reader = createMongoAbility<AppAbility>([
-            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [3] } } },
-        ])
+describe('listForProject', () => {
+    const reader = createMongoAbility<AppAbility>([
+        { action: 'read', subject: 'Project', conditions: { projectId: { $in: [3] } } },
+    ])
 
-        it('lists messages of a readable project, capping the page size', async () => {
-            await service.listForProject(3, { limit: 500 }, reader)
-
-            expect(findAll).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }))
-        })
-
-        it('hides projects the caller cannot read', async () => {
-            await expect(service.listForProject(4, { limit: 10 }, reader)).rejects.toThrow(NotFoundException)
-            expect(findAll).not.toHaveBeenCalled()
+    it('pages the messages of a readable project', async () => {
+        await expect(service.listForProject(3, { page: 1, itemsPerPage: 25 }, reader)).resolves.toEqual({
+            items: [message],
+            total: 31,
         })
     })
+
+    it('hides projects the caller cannot read', async () => {
+        await expect(service.listForProject(4, { page: 1, itemsPerPage: 25 }, reader)).rejects.toThrow(
+            NotFoundException,
+        )
+        expect(findAndCountAll).not.toHaveBeenCalled()
+    })
+})
 ```
 
-Run — Expected: FAIL. Implement in `MailMessageService`:
+Run — Expected: FAIL. Implement in `MailMessageService` (import `assertProjectReadable` and `AppAbility`):
 
 ```ts
-export const MAIL_MESSAGES_MAX_LIMIT = 100
-
-    async listForProject(projectId: number, query: MailMessageQuery, ability: AppAbility): Promise<MailMessage[]> {
+    async listForProject(projectId: number, query: MailMessageQuery, ability: AppAbility): Promise<MailMessagePage> {
         assertProjectReadable(ability, projectId)
 
-        return this.getProjectMessages(projectId, { ...query, limit: Math.min(query.limit, MAIL_MESSAGES_MAX_LIMIT) })
+        return this.getProjectMessages(projectId, query)
     }
 ```
 
-(place the constant at module level, the method in the class; import `assertProjectReadable` and `AppAbility`). Run — Expected: PASS.
+Run — Expected: PASS.
 
-- [ ] **Step 2: DTO**
+- [ ] **Step 2: Query DTO (test first)**
+
+Append to `mail.constants.ts`:
+
+```ts
+export const MAIL_MESSAGE_PAGE_SIZE_DEFAULT = 25
+
+export const MAIL_MESSAGE_PAGE_SIZE_MAX = 100
+```
+
+`mail-message-query.dto.spec.ts`:
+
+```ts
+import 'reflect-metadata'
+import { plainToInstance } from 'class-transformer'
+import { validate } from 'class-validator'
+import { describe, expect, it } from 'vitest'
+import { MailMessageQueryDto } from './mail-message-query.dto.js'
+import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+
+function toQuery(plain: Record<string, string>): MailMessageQueryDto {
+    return plainToInstance(MailMessageQueryDto, plain, { exposeDefaultValues: true })
+}
+
+async function violations(plain: Record<string, string>): Promise<string[]> {
+    const errors = await validate(toQuery(plain))
+    return [...new Set(errors.map((error) => error.property))]
+}
+
+describe('MailMessageQueryDto', () => {
+    it('defaults to the first page of 25 messages', async () => {
+        await expect(violations({})).resolves.toEqual([])
+        expect(toQuery({})).toMatchObject({ page: 1, itemsPerPage: 25 })
+    })
+
+    it('accepts every supported filter', async () => {
+        await expect(
+            violations({
+                page: '2',
+                itemsPerPage: '100',
+                search: 'reader@',
+                source: MailMessageSource.API,
+                status: MailMessageStatus.BLOCKED,
+            }),
+        ).resolves.toEqual([])
+    })
+
+    it.each([
+        [{ page: '0' }, 'page'],
+        [{ itemsPerPage: '101' }, 'itemsPerPage'],
+        [{ source: 'smtp' }, 'source'],
+        [{ status: 'queued' }, 'status'],
+        [{ search: 'x'.repeat(256) }, 'search'],
+    ])('rejects %j', async (plain, property) => {
+        await expect(violations(plain)).resolves.toContain(property)
+    })
+})
+```
+
+Run: `pnpm --filter backend exec vitest run src/modules/mail/dtos` — Expected: FAIL. Then `mail-message-query.dto.ts`:
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+import { Expose, Type } from 'class-transformer'
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
+import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+import { MAIL_MESSAGE_PAGE_SIZE_DEFAULT, MAIL_MESSAGE_PAGE_SIZE_MAX } from '../mail.constants.js'
+
+export class MailMessageQueryDto {
+    @Expose()
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @ApiProperty({ type: Number, required: false, default: 1, minimum: 1 })
+    page: number = 1
+
+    @Expose()
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(MAIL_MESSAGE_PAGE_SIZE_MAX)
+    @ApiProperty({
+        type: Number,
+        required: false,
+        default: MAIL_MESSAGE_PAGE_SIZE_DEFAULT,
+        minimum: 1,
+        maximum: MAIL_MESSAGE_PAGE_SIZE_MAX,
+    })
+    itemsPerPage: number = MAIL_MESSAGE_PAGE_SIZE_DEFAULT
+
+    @Expose()
+    @IsOptional()
+    @IsString()
+    @MaxLength(255)
+    @ApiProperty({ type: String, required: false })
+    search?: string
+
+    @Expose()
+    @IsOptional()
+    @IsEnum(MailMessageSource)
+    @ApiProperty({ enum: MailMessageSource, enumName: 'MailMessageSource', required: false })
+    source?: MailMessageSource
+
+    @Expose()
+    @IsOptional()
+    @IsEnum(MailMessageStatus)
+    @ApiProperty({ enum: MailMessageStatus, enumName: 'MailMessageStatus', required: false })
+    status?: MailMessageStatus
+}
+```
+
+Run again — Expected: PASS.
+
+- [ ] **Step 3: Response DTOs**
+
+`mail-message.dto.ts`:
 
 ```ts
 import { Expose } from 'class-transformer'
@@ -2905,20 +3146,63 @@ export class MailMessageDto implements Omit<MailMessage, 'projectId' | 'smtpMess
 
     @Expose()
     createdAt!: Date
+
+    static fromMailMessage(message: MailMessage): MailMessageDto {
+        return {
+            mailMessageId: message.mailMessageId,
+            source: message.source,
+            apiKeyId: message.apiKeyId,
+            emailFrom: message.emailFrom,
+            emailTo: message.emailTo,
+            subject: message.subject,
+            status: message.status,
+            error: message.error,
+            sentAt: message.sentAt,
+            createdAt: message.createdAt,
+        }
+    }
 }
 ```
 
-- [ ] **Step 3: Controller**
+`mail-message-page.dto.ts`:
 
 ```ts
-import { Controller, DefaultValuePipe, Get, Param, ParseEnumPipe, ParseIntPipe, Query, SerializeOptions } from '@nestjs/common'
-import { ApiQuery, ApiTags } from '@nestjs/swagger'
+import { ApiProperty } from '@nestjs/swagger'
+import { Expose, Type } from 'class-transformer'
+import { MailMessagePage } from '../interfaces/mail-message.interface.js'
+import { MailMessageDto } from './mail-message.dto.js'
+
+export class MailMessagePageDto {
+    @Expose()
+    @Type(() => MailMessageDto)
+    @ApiProperty({ type: [MailMessageDto] })
+    items!: MailMessageDto[]
+
+    @Expose()
+    @ApiProperty({ type: Number })
+    total!: number
+
+    static fromMailMessagePage(page: MailMessagePage): MailMessagePageDto {
+        return {
+            items: page.items.map((message) => MailMessageDto.fromMailMessage(message)),
+            total: page.total,
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Controller**
+
+```ts
+import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common'
+import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { MailMessageService } from '../services/mail-message.service.js'
-import { MailMessageDto } from '../dtos/mail-message.dto.js'
-import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+import { MailMessagePageDto } from '../dtos/mail-message-page.dto.js'
+import { MailMessageQueryDto } from '../dtos/mail-message-query.dto.js'
 
 @JwtAuth()
 @ApiTags('mail-message')
@@ -2926,32 +3210,43 @@ import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message
 export class MailMessageController {
     constructor(private readonly mailMessageService: MailMessageService) {}
 
-    @ApiQuery({ name: 'limit', required: false, type: Number })
-    @ApiQuery({ name: 'before', required: false, type: Number })
-    @ApiQuery({ name: 'source', required: false, enum: MailMessageSource, enumName: 'MailMessageSource' })
-    @ApiQuery({ name: 'status', required: false, enum: MailMessageStatus, enumName: 'MailMessageStatus' })
-    @SerializeOptions({ type: MailMessageDto })
+    @ResponseDto(MailMessagePageDto)
     @Get()
     async getProjectMessages(
         @Param('projectId', ParseIntPipe) projectId: number,
-        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-        @Query('before', new ParseIntPipe({ optional: true })) before: number | undefined,
-        @Query('source', new ParseEnumPipe(MailMessageSource, { optional: true })) source: MailMessageSource | undefined,
-        @Query('status', new ParseEnumPipe(MailMessageStatus, { optional: true })) status: MailMessageStatus | undefined,
+        @Query() query: MailMessageQueryDto,
         @CurrentAbility() ability: AppAbility,
-    ): Promise<MailMessageDto[]> {
-        return await this.mailMessageService.listForProject(projectId, { limit, before, source, status }, ability)
+    ): Promise<MailMessagePageDto> {
+        const page = await this.mailMessageService.listForProject(
+            projectId,
+            {
+                page: query.page,
+                itemsPerPage: query.itemsPerPage,
+                search: query.search,
+                source: query.source,
+                status: query.status,
+            },
+            ability,
+        )
+
+        return MailMessagePageDto.fromMailMessagePage(page)
     }
 }
 ```
 
-A `limit` below 1 must be rejected: add `if (limit < 1) throw new BadRequestException('limit must be at least 1')` at the top of `listForProject` and a unit test for it.
-
 Add `controllers: [MailMessageController]` to `mail.module.ts`.
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 5: Pin the route access**
 
-Run: `pnpm --filter backend exec vitest run src/modules/mail`
+In `src/route-access.spec.ts` import `MailMessageController`, add it to `controllers`, and add to `expectedRoutes`:
+
+```ts
+    'GET /project/:projectId/messages': { guards: jwt, abilities: [], scopedByPrincipal: true },
+```
+
+- [ ] **Step 6: Verify**
+
+Run: `pnpm --filter backend exec vitest run src/modules/mail src/route-access.spec.ts`
 Run: `pnpm --filter backend typecheck && pnpm --filter backend lint`
 Run: `pnpm --filter backend exec vitest run --config vitest.config.e2e.ts test/openapi.e2e-spec.ts`
 Expected: PASS. Do not commit.
@@ -2961,9 +3256,11 @@ Expected: PASS. Do not commit.
 ### Task 9: Public send e2e suite
 
 **Files:**
+
 - Create: `apps/backend/test/public-send.e2e-spec.ts`
 
 **Interfaces:**
+
 - Consumes: all endpoints from Tasks 6–8; `createTestApp`, `seedUser`, `login`, `configureSendingDomain`, `waitForMessagesTo` helpers; `EmailBlockService.applyBlock`
 
 - [ ] **Step 1: Write the suite**
@@ -3037,12 +3334,16 @@ describe('Public send API (e2e)', () => {
         return response.body as ApiKeyBody
     }
 
-    async function messages(query = ''): Promise<MessageBody[]> {
+    async function messagePage(query = ''): Promise<{ items: MessageBody[]; total: number }> {
         const response = await http()
             .get(`/api/project/${projectId}/messages${query}`)
             .set('Authorization', asOwner())
             .expect(200)
-        return response.body as MessageBody[]
+        return response.body as { items: MessageBody[]; total: number }
+    }
+
+    async function messages(query = ''): Promise<MessageBody[]> {
+        return (await messagePage(query)).items
     }
 
     beforeAll(async () => {
@@ -3079,7 +3380,10 @@ describe('Public send API (e2e)', () => {
         it('returns the full key only on creation', async () => {
             expect(key).toMatch(/^sdm_[0-9A-Za-z]{8}_[A-Za-z0-9_-]{43}$/)
 
-            const list = await http().get(`/api/project/${projectId}/api-keys`).set('Authorization', asOwner()).expect(200)
+            const list = await http()
+                .get(`/api/project/${projectId}/api-keys`)
+                .set('Authorization', asOwner())
+                .expect(200)
             const listed = (list.body as ApiKeyBody[]).find((apiKey) => apiKey.apiKeyId === apiKeyId)!
             expect(listed.prefix).toBe(key.slice(0, 12))
             expect(listed).not.toHaveProperty('key')
@@ -3087,7 +3391,10 @@ describe('Public send API (e2e)', () => {
         })
 
         it('lets readers list but not create or revoke keys', async () => {
-            await http().get(`/api/project/${projectId}/api-keys`).set('Authorization', `Bearer ${readerToken}`).expect(200)
+            await http()
+                .get(`/api/project/${projectId}/api-keys`)
+                .set('Authorization', `Bearer ${readerToken}`)
+                .expect(200)
             await http()
                 .post(`/api/project/${projectId}/api-keys`)
                 .set('Authorization', `Bearer ${readerToken}`)
@@ -3102,8 +3409,13 @@ describe('Public send API (e2e)', () => {
 
     describe('sending', () => {
         it('sends with a header key, logs the message and records key usage', async () => {
-            const response = await send({ from, to: 'reader1@psa-e2e.test', subject: 'Hello', html: '<p>Hi</p>', text: 'Hi' })
-                .expect(202)
+            const response = await send({
+                from,
+                to: 'reader1@psa-e2e.test',
+                subject: 'Hello',
+                html: '<p>Hi</p>',
+                text: 'Hi',
+            }).expect(202)
             const { mailMessageId, status } = response.body as { mailMessageId: number; status: string }
             expect(status).toBe('sent')
 
@@ -3115,8 +3427,13 @@ describe('Public send API (e2e)', () => {
                 expect.objectContaining({ source: 'api', apiKeyId, emailTo: 'reader1@psa-e2e.test', status: 'sent' }),
             )
 
-            const list = await http().get(`/api/project/${projectId}/api-keys`).set('Authorization', asOwner()).expect(200)
-            expect((list.body as ApiKeyBody[]).find((apiKey) => apiKey.apiKeyId === apiKeyId)!.lastUsedAt).not.toBeNull()
+            const list = await http()
+                .get(`/api/project/${projectId}/api-keys`)
+                .set('Authorization', asOwner())
+                .expect(200)
+            expect(
+                (list.body as ApiKeyBody[]).find((apiKey) => apiKey.apiKeyId === apiKeyId)!.lastUsedAt,
+            ).not.toBeNull()
         })
 
         it('accepts the key as a query parameter', async () => {
@@ -3127,13 +3444,21 @@ describe('Public send API (e2e)', () => {
         })
 
         it('accepts a mixed-case from domain', async () => {
-            await send({ from: 'News@Send.PSA-Example.com', to: 'reader3@psa-e2e.test', subject: 'Hi', html: '<p>x</p>' })
-                .expect(202)
+            await send({
+                from: 'News@Send.PSA-Example.com',
+                to: 'reader3@psa-e2e.test',
+                subject: 'Hi',
+                html: '<p>x</p>',
+            }).expect(202)
         })
 
         it('accepts an html body larger than the default json limit', async () => {
-            await send({ from, to: 'reader4@psa-e2e.test', subject: 'Big', html: `<p>${'x'.repeat(200_000)}</p>` })
-                .expect(202)
+            await send({
+                from,
+                to: 'reader4@psa-e2e.test',
+                subject: 'Big',
+                html: `<p>${'x'.repeat(200_000)}</p>`,
+            }).expect(202)
         })
 
         it('rejects missing and malformed keys', async () => {
@@ -3168,7 +3493,9 @@ describe('Public send API (e2e)', () => {
             const body = response.body as { code: string; mailMessageId: number }
             expect(body.code).toBe('RECIPIENT_BLOCKED')
 
-            const logged = (await messages('?status=blocked')).find((message) => message.mailMessageId === body.mailMessageId)
+            const logged = (await messages('?status=blocked')).find(
+                (message) => message.mailMessageId === body.mailMessageId,
+            )
             expect(logged).toBeDefined()
         })
 
@@ -3189,15 +3516,34 @@ describe('Public send API (e2e)', () => {
     })
 
     describe('message log', () => {
-        it('pages with a cursor', async () => {
-            const [first, second] = await messages('?limit=1')
-            expect(second).toBeUndefined()
-            const next = await messages(`?limit=1&before=${first!.mailMessageId}`)
-            expect(next[0]!.mailMessageId).toBeLessThan(first!.mailMessageId)
+        it('pages newest first with a total', async () => {
+            const first = await messagePage('?itemsPerPage=1')
+            const second = await messagePage('?itemsPerPage=1&page=2')
+
+            expect(first.items).toHaveLength(1)
+            expect(first.total).toBeGreaterThan(1)
+            expect(second.total).toBe(first.total)
+            expect(second.items[0]!.mailMessageId).toBeLessThan(first.items[0]!.mailMessageId)
+        })
+
+        it('filters by source and searches the recipient', async () => {
+            const found = await messages('?source=api&search=reader1%40psa')
+
+            expect(found.map((message) => message.emailTo)).toEqual(['reader1@psa-e2e.test'])
+        })
+
+        it('rejects an oversized page', async () => {
+            await http()
+                .get(`/api/project/${projectId}/messages?itemsPerPage=101`)
+                .set('Authorization', asOwner())
+                .expect(400)
         })
 
         it('hides the log of projects the caller cannot read', async () => {
-            await http().get(`/api/project/${otherProjectId}/messages`).set('Authorization', `Bearer ${readerToken}`).expect(404)
+            await http()
+                .get(`/api/project/${otherProjectId}/messages`)
+                .set('Authorization', `Bearer ${readerToken}`)
+                .expect(404)
         })
     })
 
@@ -3212,24 +3558,31 @@ describe('Public send API (e2e)', () => {
             await send({ from, to: 'x@psa-e2e.test', subject: 'x', html: 'x' }, revocable.key!).expect(401)
         })
 
-        it('throttles a key after the configured limit, including invalid secrets of its prefix', async () => {
+        it('throttles a key after the configured limit without letting forged secrets of its prefix drain it', async () => {
             const limited = await createKey('Limited')
             const forged = `${limited.prefix}_${'A'.repeat(43)}`
-            const statuses: number[] = []
-            for (let attempt = 0; attempt <= 60; attempt++) {
-                const response = await send({ from, to: 'x@psa-e2e.test', subject: 'x', html: 'x' }, forged)
-                statuses.push(response.status)
-            }
+            const invalidBody = { from, to: 'not-an-address', subject: 'x', html: 'x' }
 
-            expect(statuses.slice(0, 60)).not.toContain(429)
-            expect(statuses[60]).toBe(429)
-            await send({ from, to: 'x@psa-e2e.test', subject: 'x', html: 'x' }, limited.key!).expect(429)
+            const forgedStatuses: number[] = []
+            for (let attempt = 0; attempt <= 60; attempt++) {
+                forgedStatuses.push((await send(invalidBody, forged)).status)
+            }
+            expect(forgedStatuses.slice(0, 60)).not.toContain(429)
+            expect(forgedStatuses[60]).toBe(429)
+
+            const realStatuses: number[] = []
+            for (let attempt = 0; attempt <= 60; attempt++) {
+                realStatuses.push((await send(invalidBody, limited.key!)).status)
+            }
+            expect(realStatuses.slice(0, 60)).toEqual(Array<number>(60).fill(400))
+            expect(realStatuses[60]).toBe(429)
         })
     })
 })
 ```
 
 Notes for the implementer:
+
 - Check the project delete status code in `project.e2e-spec.ts` (`DELETE /api/project/:id` currently returns 200 — no `@HttpCode`). Adjust if different.
 - The rate-limit test relies on `PUBLIC_API_RATE_LIMIT` defaulting to 60 in the e2e env (`test/support/env.ts` must not override it). It uses forged secrets so it does not depend on SMTP throughput.
 - If the 200 kb body test fails with 413, apply the body-limit change described in Task 7 Step 4.
@@ -3246,36 +3599,1244 @@ Expected: PASS (in particular `schema`, `openapi`, `rate-limit`, `inbound-form*`
 
 ---
 
-### Task 10: API client regeneration, docs, full gate
+### Task 10: API client regeneration
 
 **Files:**
+
 - Modify: `packages/api/assets/openapi.json` (generated)
-- Modify: `README.md`
+- Regenerated: `packages/api/dist/**`
+
+**Interfaces:**
+
+- Produces (names the frontend tasks rely on; verify them in `packages/api/dist/sdk.gen.ts` / `types.gen.ts` and report the exact names if any differ):
+    - `ApiKeyApi.getApiKeys({ path: { projectId } }): Promise<ApiKeyDto[]>`
+    - `ApiKeyApi.createApiKey({ path: { projectId }, body: { name } }): Promise<ApiKeyCreatedDto>`
+    - `ApiKeyApi.revokeApiKey({ path: { projectId, apiKeyId } }): Promise<void>`
+    - `MailMessageApi.getProjectMessages({ path: { projectId }, query }): Promise<MailMessagePageDto>`; `GetProjectMessagesData['query']`
+    - `PublicSendApi.sendMail(...)`
+    - types `ApiKeyDto`, `ApiKeyCreatedDto`, `MailMessageDto`, `MailMessagePageDto`, enums `MailMessageSource` / `MailMessageStatus` (as string-literal unions)
 
 - [ ] **Step 1: Regenerate the client**
 
 Run: `pnpm --filter backend generate && pnpm --filter api build`
-Expected: `packages/api/dist` contains `ApiKeyApi` (`getApiKeys`, `createApiKey`, `revokeApiKey`), `PublicSendApi.sendMail`, `MailMessageApi.getProjectMessages`, and Zod schemas for `PublicSendDto`, `ApiKeyDto`, `ApiKeyCreatedDto`, `MailMessageDto`. Inspect `openapi.json`: `apiKeyId`, `lastUsedAt`, `sentAt` etc. must not be typed `object` (add `@ApiProperty` where they are).
+Expected: the SDK classes and types above exist. Inspect `openapi.json`: `apiKeyId`, `createdByUserId`, `lastUsedAt`, `revokedAt`, `sentAt`, `error` must be nullable primitives, not `object` (add `@ApiProperty` in the DTO where they are, then regenerate). Dates must be transformed to `Date` by the generated transformers (check `transformers.gen.ts` has entries for `ApiKeyDto` and `MailMessageDto`).
 
 - [ ] **Step 2: Frontend still compiles**
 
 Run: `pnpm --filter frontend typecheck`
-Expected: PASS (no frontend code uses the new endpoints; this guards against generated-name collisions).
+Expected: PASS. Do not commit.
 
-- [ ] **Step 3: README**
+---
 
-Read `README.md`. Under "Open todos" replace the "Public send API" bullet with:
+### Task 11: Frontend data layer — API key and message composables
 
-```md
-- [ ] **Public send API UI** The backend (`POST /api/v1/send`, API keys per project, message log) is done. Key management and the message log still need UI, planned after the design rework.
+**Files:**
+
+- Create: `apps/frontend/src/modules/projects/queries/useApiKeysQuery.ts`
+- Create: `apps/frontend/src/modules/projects/queries/useProjectMessagesQuery.ts`
+- Create: `apps/frontend/src/modules/projects/mutations/useApiKeyCreateMutation.ts`
+- Create: `apps/frontend/src/modules/projects/mutations/useApiKeyRevokeMutation.ts`
+- Create: `apps/frontend/src/modules/projects/queries/__tests__/useApiKeysQuery.spec.ts`
+- Create: `apps/frontend/src/modules/projects/queries/__tests__/useProjectMessagesQuery.spec.ts`
+- Create: `apps/frontend/src/modules/projects/mutations/__tests__/useApiKeyMutations.spec.ts`
+- Modify: `apps/frontend/src/__tests__/fixtures.ts` — `apiKey()`, `apiKeyCreated()`, `mailMessage()` fixtures
+
+**Interfaces:**
+
+- Consumes: the SDK from Task 10.
+- Produces:
+    - `useApiKeysQuery(projectId: MaybeRefOrGetter<number>)` → `queryOptions`, key `['projects', projectId, 'apiKeys']`
+    - `type ProjectMessageQuery = NonNullable<GetProjectMessagesData['query']>`
+    - `useProjectMessagesQuery(projectId: MaybeRefOrGetter<number>, query: MaybeRefOrGetter<ProjectMessageQuery> = {})` → `queryOptions`, key `['projects', projectId, 'messages', query]`, `placeholderData: keepPreviousData`
+    - `useApiKeyCreateMutation()` → `mutateAsync({ projectId, name }): Promise<ApiKeyCreatedDto>`; invalidates `['projects', projectId, 'apiKeys']`
+    - `useApiKeyRevokeMutation()` → `mutateAsync({ projectId, apiKeyId }): Promise<void>`; invalidates `['projects', projectId, 'apiKeys']`
+    - fixtures `apiKey(overrides?: Partial<ApiKeyDto>): ApiKeyDto`, `apiKeyCreated(overrides?: Partial<ApiKeyCreatedDto>): ApiKeyCreatedDto`, `mailMessage(overrides?: Partial<MailMessageDto>): MailMessageDto`
+
+Follow `useProjectMembersQuery.ts`, `useBouncesQuery.ts`, `useProjectMemberRemoveMutation.ts` and `useProjectCreateMutation.ts` exactly (read them first).
+
+- [ ] **Step 1: Fixtures**
+
+Read `src/__tests__/fixtures.ts` and add, in its style:
+
+```ts
+export function apiKey(overrides: Partial<ApiKeyDto> = {}): ApiKeyDto {
+    return {
+        apiKeyId: 11,
+        name: 'Newsletter',
+        prefix: 'sdm_a1B2c3D4',
+        createdByUserId: 1,
+        lastUsedAt: null,
+        revokedAt: null,
+        createdAt: new Date('2026-10-01T10:00:00Z'),
+        ...overrides,
+    }
+}
+
+export function apiKeyCreated(overrides: Partial<ApiKeyCreatedDto> = {}): ApiKeyCreatedDto {
+    return {
+        ...apiKey(),
+        key: 'sdm_a1B2c3D4_Zx9-Q8_wV7uT6sR5qP4oN3mL2kJ1iH0gF9eD8cB7aA6',
+        ...overrides,
+    }
+}
+
+export function mailMessage(overrides: Partial<MailMessageDto> = {}): MailMessageDto {
+    return {
+        mailMessageId: 70,
+        source: 'api',
+        apiKeyId: 11,
+        emailFrom: 'news@forms.acme.com',
+        emailTo: 'reader@example.org',
+        subject: 'Welcome aboard',
+        status: 'sent',
+        error: null,
+        sentAt: new Date('2026-10-01T10:00:00Z'),
+        createdAt: new Date('2026-10-01T10:00:00Z'),
+        ...overrides,
+    }
+}
 ```
 
-Add a section before "Open todos":
+The `key` above is 4 + 8 + 1 + 43 chars like a real key; adjust the literal if the generated `source`/`status` types are enums rather than string unions.
+
+- [ ] **Step 2: Failing specs**
+
+`queries/__tests__/useApiKeysQuery.spec.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useQuery } from '@tanstack/vue-query'
+import { ApiKeyApi } from 'api'
+import { useApiKeysQuery } from '../useApiKeysQuery.ts'
+import { withVueQuery } from '@/__tests__/support.ts'
+import { apiKey } from '@/__tests__/fixtures.ts'
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
+
+describe('useApiKeysQuery', () => {
+    it('loads the keys nested under the project key', async () => {
+        const keys = [apiKey()]
+        const listSpy = vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue(keys)
+        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useApiKeysQuery(1)))
+
+        await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
+
+        expect(listSpy).toHaveBeenCalledWith({ path: { projectId: 1 } })
+        expect(queryClient.getQueryData(['projects', 1, 'apiKeys'])).toEqual(keys)
+        unmount()
+    })
+})
+```
+
+`queries/__tests__/useProjectMessagesQuery.spec.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { MailMessageApi } from 'api'
+import { useProjectMessagesQuery, type ProjectMessageQuery } from '../useProjectMessagesQuery.ts'
+import { withVueQuery } from '@/__tests__/support.ts'
+import { mailMessage } from '@/__tests__/fixtures.ts'
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
+
+describe('useProjectMessagesQuery', () => {
+    it('requests the given page and filters for the project', async () => {
+        const page = { items: [mailMessage()], total: 1 }
+        const getSpy = vi.spyOn(MailMessageApi, 'getProjectMessages').mockResolvedValue(page)
+        const query: ProjectMessageQuery = { page: 2, itemsPerPage: 25, status: 'failed' }
+        const { result, unmount } = withVueQuery(() => useQuery(useProjectMessagesQuery(1, query)))
+
+        await vi.waitFor(() => expect(result.data.value).toEqual(page))
+
+        expect(getSpy).toHaveBeenCalledWith({ path: { projectId: 1 }, query })
+        unmount()
+    })
+
+    it('keeps the previous page visible while the next one loads', async () => {
+        const getSpy = vi
+            .spyOn(MailMessageApi, 'getProjectMessages')
+            .mockResolvedValueOnce({ items: [mailMessage()], total: 30 })
+            .mockReturnValueOnce(new Promise(() => undefined))
+        const query = ref<ProjectMessageQuery>({ page: 1, itemsPerPage: 25 })
+        const { result, unmount } = withVueQuery(() => useQuery(useProjectMessagesQuery(1, query)))
+        await vi.waitFor(() => expect(result.data.value?.total).toBe(30))
+
+        query.value = { page: 2, itemsPerPage: 25 }
+
+        await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2))
+        expect(result.data.value?.total).toBe(30)
+        unmount()
+    })
+})
+```
+
+`mutations/__tests__/useApiKeyMutations.spec.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiKeyApi } from 'api'
+import { useApiKeyCreateMutation } from '../useApiKeyCreateMutation.ts'
+import { useApiKeyRevokeMutation } from '../useApiKeyRevokeMutation.ts'
+import { withVueQuery } from '@/__tests__/support.ts'
+import { apiKeyCreated } from '@/__tests__/fixtures.ts'
+
+vi.mock('@/helper/waitAtleast.ts', () => ({
+    waitAtleast: <T>(promise: Promise<T>) => promise,
+}))
+
+afterEach(() => {
+    vi.restoreAllMocks()
+})
+
+describe('useApiKeyCreateMutation', () => {
+    it('creates the key, returns it once and refreshes the key list', async () => {
+        const created = apiKeyCreated()
+        const createSpy = vi.spyOn(ApiKeyApi, 'createApiKey').mockResolvedValue(created)
+        const { result, queryClient, unmount } = withVueQuery(() => useApiKeyCreateMutation())
+        const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+        await expect(result.mutateAsync({ projectId: 1, name: 'Newsletter' })).resolves.toEqual(created)
+
+        expect(createSpy).toHaveBeenCalledWith({ path: { projectId: 1 }, body: { name: 'Newsletter' } })
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects', 1, 'apiKeys'] })
+        unmount()
+    })
+
+    it('does not refresh when creating fails', async () => {
+        vi.spyOn(ApiKeyApi, 'createApiKey').mockRejectedValue(new Error('Forbidden'))
+        const { result, queryClient, unmount } = withVueQuery(() => useApiKeyCreateMutation())
+        const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+        await expect(result.mutateAsync({ projectId: 1, name: 'x' })).rejects.toThrow('Forbidden')
+
+        expect(invalidateSpy).not.toHaveBeenCalled()
+        unmount()
+    })
+})
+
+describe('useApiKeyRevokeMutation', () => {
+    it('revokes the key and refreshes the key list', async () => {
+        const revokeSpy = vi.spyOn(ApiKeyApi, 'revokeApiKey').mockResolvedValue(undefined)
+        const { result, queryClient, unmount } = withVueQuery(() => useApiKeyRevokeMutation())
+        const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+        await result.mutateAsync({ projectId: 1, apiKeyId: 11 })
+
+        expect(revokeSpy).toHaveBeenCalledWith({ path: { projectId: 1, apiKeyId: 11 } })
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects', 1, 'apiKeys'] })
+        unmount()
+    })
+})
+```
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects/queries src/modules/projects/mutations`
+Expected: FAIL — modules not found.
+
+- [ ] **Step 3: Implement**
+
+`useApiKeysQuery.ts`:
+
+```ts
+import { type MaybeRefOrGetter, toValue } from 'vue'
+import { queryOptions } from '@tanstack/vue-query'
+import { ApiKeyApi } from 'api'
+
+export function useApiKeysQuery(projectId: MaybeRefOrGetter<number>) {
+    return queryOptions({
+        queryKey: ['projects', projectId, 'apiKeys'],
+        queryFn: () =>
+            ApiKeyApi.getApiKeys({
+                path: {
+                    projectId: toValue(projectId),
+                },
+            }),
+    })
+}
+```
+
+`useProjectMessagesQuery.ts`:
+
+```ts
+import { type MaybeRefOrGetter, toValue } from 'vue'
+import { keepPreviousData, queryOptions } from '@tanstack/vue-query'
+import { MailMessageApi, type GetProjectMessagesData } from 'api'
+
+export type ProjectMessageQuery = NonNullable<GetProjectMessagesData['query']>
+
+export function useProjectMessagesQuery(
+    projectId: MaybeRefOrGetter<number>,
+    query: MaybeRefOrGetter<ProjectMessageQuery> = {},
+) {
+    return queryOptions({
+        queryKey: ['projects', projectId, 'messages', query],
+        queryFn: () =>
+            MailMessageApi.getProjectMessages({
+                path: { projectId: toValue(projectId) },
+                query: toValue(query),
+            }),
+        placeholderData: keepPreviousData,
+    })
+}
+```
+
+`useApiKeyCreateMutation.ts`:
+
+```ts
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { ApiKeyApi } from 'api'
+import { waitAtleast } from '@/helper/waitAtleast.ts'
+
+export function useApiKeyCreateMutation() {
+    const client = useQueryClient()
+
+    return useMutation({
+        mutationFn: ({ projectId, name }: { projectId: number; name: string }) =>
+            waitAtleast(ApiKeyApi.createApiKey({ path: { projectId }, body: { name } })),
+        onSuccess(_, { projectId }) {
+            return client.invalidateQueries({ queryKey: ['projects', projectId, 'apiKeys'] })
+        },
+    })
+}
+```
+
+`useApiKeyRevokeMutation.ts`:
+
+```ts
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { ApiKeyApi } from 'api'
+
+export function useApiKeyRevokeMutation() {
+    const client = useQueryClient()
+
+    return useMutation({
+        mutationFn: ({ projectId, apiKeyId }: { projectId: number; apiKeyId: number }) =>
+            ApiKeyApi.revokeApiKey({ path: { projectId, apiKeyId } }),
+        onSuccess(_, { projectId }) {
+            return client.invalidateQueries({ queryKey: ['projects', projectId, 'apiKeys'] })
+        },
+    })
+}
+```
+
+The member query key puts the raw ref/getter into the key (`['projects', projectId, 'members']`) — mirror that so the `['projects']` invalidation refreshes these lists too.
+
+- [ ] **Step 4: Run**
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects/queries src/modules/projects/mutations`
+Expected: PASS.
+Run: `pnpm --filter frontend typecheck && pnpm --filter frontend lint` — Expected: no new errors. Do not commit.
+
+---
+
+### Task 12: API keys card on the project page
+
+**Files:**
+
+- Create: `apps/frontend/src/modules/projects/views/details/partials/ProjectApiKeysCard.vue`
+- Create: `apps/frontend/src/modules/projects/views/details/partials/ApiKeyCreateDialog.vue`
+- Create: `apps/frontend/src/modules/projects/views/details/partials/ApiKeyRevealDialog.vue`
+- Create: `apps/frontend/src/modules/projects/views/details/__tests__/ProjectApiKeysCard.spec.ts`
+- Create: `apps/frontend/src/modules/projects/views/details/__tests__/ApiKeyCreateDialog.spec.ts`
+- Modify: `apps/frontend/src/modules/projects/views/details/ProjectDetailView.vue` (+ its spec)
+- Modify: `apps/frontend/src/locales/en.json` — `module.projects.apiKeys.*`
+
+**Interfaces:**
+
+- Consumes: Task 11 composables and fixtures; components `SectionCard`, `ListRow`, `StatusBadge`, `RelativeTime`, `IconButton`, `EmptyState`, `ErrorState`, `ListSkeleton`, `FormDialog`, `CopyField`, `InlineAlert`; composables `useConfirm`, `useNotify`, `useRequiredLabel`; helper `apiErrorMessage`.
+- Produces: `<ProjectApiKeysCard :project="project" :can-update="canUpdate" />` rendered on the project page between Members and General.
+
+**Design (Mail Admin rules applied):**
+
+- Card title "API keys", description "Keys let your apps send mail from this project's sender domains." Count = active keys.
+- Readers see the list; "New API key" (header action, `size="small"`, `mdiPlus`) and the revoke `IconButton` only render when `canUpdate` ("What the user can't do is absent").
+- Row: `ListRow` with `icon` `mdiKeyVariant`, title = key name, subtitle = prefix in mono (`monoTitle` is for the title, so render the subtitle via `#subtitle` with `class="mono"`), `#meta` = `StatusBadge tone="neutral" :label="Revoked"` for revoked keys, otherwise "Last used" + `<RelativeTime>` or "Never used" in `ink-muted`.
+- Revoked keys stay listed (audit trail) with no actions and `lead-tone="none"`; active keys first, then revoked, each newest first.
+- Revoking cannot be undone, so it uses **Confirm** (not Undo): `useConfirm({ title: 'Revoke “{name}”?', body: 'Apps using this key stop sending immediately. This can't be undone.', confirmLabel: 'Revoke key', destructive: true, errorText, action })`, then `notify.success('“{name}” revoked')`.
+- Create flow: `ApiKeyCreateDialog` (FormDialog, width `sm`, one required `name` field, max 100 chars, submit "Create key"). On success it closes and the card opens `ApiKeyRevealDialog` with the created key.
+- `ApiKeyRevealDialog`: shows the key once — `InlineAlert tone="warning"` "Copy this key now. You won't be able to see it again.", `CopyField :value="key" label="API key"`, a short usage hint ("Send it as `Authorization: Bearer <key>` to `POST /api/v1/send`."), and a single primary "Done" button. It is `persistent` (no outside-click close) so the key isn't lost by accident; closing clears the key from memory. FormDialog's footer is fixed to Cancel + submit, so build this one on `VDialog` + `VCard` with the same width class and header/footer markup as `FormDialog.vue` (read it and copy its structure and classes; reuse its `dialog-sm` width).
+- Empty state: `EmptyState` icon `mdiKeyOutline`, title "No API keys yet", text "Create a key to send mail from your own app." (for readers without update: same title, text "Ask someone with update access to create one.").
+
+- [ ] **Step 1: i18n keys**
+
+Add under `module.projects` (sibling of `members`), matching the plural format used elsewhere:
+
+```json
+"apiKeys": {
+    "title": "API keys",
+    "description": "Keys let your apps send mail from this project's sender domains.",
+    "add": "New API key",
+    "thing": "API keys",
+    "prefix": "Key {prefix}…",
+    "lastUsed": "Last used",
+    "neverUsed": "Never used",
+    "revoked": "Revoked",
+    "revokeLabel": "Revoke {name}",
+    "confirmTitle": "Revoke “{name}”?",
+    "confirmBody": "Apps using this key stop sending immediately. This can't be undone.",
+    "confirm": "Revoke key",
+    "revokedDone": "“{name}” revoked",
+    "revokeError": "Couldn't revoke “{name}”",
+    "empty": {
+        "title": "No API keys yet",
+        "text": "Create a key to send mail from your own app.",
+        "textReadOnly": "Ask someone with update access to create one."
+    },
+    "dialog": {
+        "title": "New API key",
+        "intro": "Name the key after the app that will use it.",
+        "name": "Name",
+        "nameRequired": "Enter a name",
+        "submit": "Create key",
+        "error": "Couldn't create the key"
+    },
+    "reveal": {
+        "title": "Copy your API key",
+        "warning": "Copy this key now. You won't be able to see it again.",
+        "field": "API key",
+        "usage": "Send it as Authorization: Bearer <key> to POST /api/v1/send.",
+        "done": "Done"
+    },
+    "created": "“{name}” created"
+}
+```
+
+Check whether `cta` already has a "Done" key and reuse it instead of `reveal.done` if so. Check vue-i18n escaping for `<key>` and `{`/`}`/`@`/`|` in messages (the usage string has `<`/`>` only, which are fine; avoid literal `{`).
+
+- [ ] **Step 2: Failing card spec**
+
+`__tests__/ProjectApiKeysCard.spec.ts` (mirror `ProjectMembersCard.spec.ts` / `ProjectDangerZone.spec.ts` / `ProjectDomainsCard.spec.ts` — read them first):
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiKeyApi } from 'api'
+import ProjectApiKeysCard from '../partials/ProjectApiKeysCard.vue'
+import { findButton, mountInApp, overlayButton, overlayText } from '@/__tests__/support.ts'
+import { apiKey, apiKeyCreated, projectDetail } from '@/__tests__/fixtures.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
+
+vi.mock('@/helper/waitAtleast.ts', () => ({
+    waitAtleast: <T>(promise: Promise<T>) => promise,
+}))
+vi.stubGlobal('visualViewport', null)
+
+const notifications = useNotificationHost()
+
+afterEach(() => {
+    vi.restoreAllMocks()
+    notifications.dismiss()
+    document.body.innerHTML = ''
+})
+
+describe('ProjectApiKeysCard', () => {
+    it('lists active keys before revoked ones with their prefix and usage', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([
+            apiKey({
+                apiKeyId: 12,
+                name: 'Old shop',
+                prefix: 'sdm_OLDOLDOL',
+                revokedAt: new Date('2026-10-02T10:00:00Z'),
+            }),
+            apiKey({ apiKeyId: 11, name: 'Newsletter', lastUsedAt: null }),
+        ])
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: true })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
+        const text = wrapper.text()
+        expect(text.indexOf('Newsletter')).toBeLessThan(text.indexOf('Old shop'))
+        expect(text).toContain('sdm_a1B2c3D4')
+        expect(text).toContain('Never used')
+        expect(text).toContain('Revoked')
+        expect(wrapper.find('button[aria-label="Revoke Old shop"]').exists()).toBe(false)
+    })
+
+    it('hides create and revoke for read-only members', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([apiKey()])
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: false })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
+        expect(findButton(wrapper, 'New API key')).toBeUndefined()
+        expect(wrapper.find('button[aria-label="Revoke Newsletter"]').exists()).toBe(false)
+    })
+
+    it('revokes a key after confirmation', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([apiKey()])
+        const revokeSpy = vi.spyOn(ApiKeyApi, 'revokeApiKey').mockResolvedValue(undefined)
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: true })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
+
+        await wrapper.get('button[aria-label="Revoke Newsletter"]').trigger('click')
+        await vi.waitFor(() => expect(overlayText()).toContain('Revoke “Newsletter”?'))
+        overlayButton('Revoke key').click()
+
+        await vi.waitFor(() => expect(revokeSpy).toHaveBeenCalledWith({ path: { projectId: 1, apiKeyId: 11 } }))
+        await vi.waitFor(() => expect(notifications.current.value?.text).toBe('“Newsletter” revoked'))
+    })
+
+    it('keeps the key when revoking is cancelled', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([apiKey()])
+        const revokeSpy = vi.spyOn(ApiKeyApi, 'revokeApiKey').mockResolvedValue(undefined)
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: true })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
+
+        await wrapper.get('button[aria-label="Revoke Newsletter"]').trigger('click')
+        await vi.waitFor(() => expect(overlayText()).toContain('Revoke “Newsletter”?'))
+        overlayButton('Cancel').click()
+
+        await vi.waitFor(() => expect(document.body.querySelector('.confirm-dialog')).toBeNull())
+        expect(revokeSpy).not.toHaveBeenCalled()
+    })
+
+    it('creates a key and shows it exactly once', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([])
+        const created = apiKeyCreated()
+        vi.spyOn(ApiKeyApi, 'createApiKey').mockResolvedValue(created)
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: true })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No API keys yet'))
+
+        await findButton(wrapper, 'New API key')!.trigger('click')
+        await vi.waitFor(() => expect(overlayText()).toContain('Name the key'))
+        await setOverlayInput('name', 'Newsletter')
+        submitOverlayForm()
+
+        await vi.waitFor(() => expect(overlayText()).toContain("You won't be able to see it again."))
+        expect(overlayText()).toContain(created.key)
+        overlayButton('Done').click()
+        await vi.waitFor(() => expect(overlayText()).not.toContain(created.key))
+    })
+
+    it('explains an empty list', async () => {
+        vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([])
+        const wrapper = mountInApp(ProjectApiKeysCard, { project: projectDetail(), canUpdate: false })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No API keys yet'))
+        expect(wrapper.text()).toContain('Ask someone with update access to create one.')
+    })
+})
+```
+
+Add `setOverlayInput`, `submitOverlayForm` to the support import. `CopyField` may mask or clamp long values — if `overlayText()` does not contain the full key, assert on the `CopyField` value instead (read `CopyField.vue` and its spec for how its value is exposed) and do not pass `secret`.
+
+`__tests__/ApiKeyCreateDialog.spec.ts` (mirror the dialog specs using `mountDialog`):
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiKeyApi } from 'api'
+import ApiKeyCreateDialog from '../partials/ApiKeyCreateDialog.vue'
+import { mountDialog, overlayText, setOverlayInput, submitOverlayForm } from '@/__tests__/support.ts'
+import { apiKeyCreated, projectDetail } from '@/__tests__/fixtures.ts'
+
+vi.mock('@/helper/waitAtleast.ts', () => ({
+    waitAtleast: <T>(promise: Promise<T>) => promise,
+}))
+vi.stubGlobal('visualViewport', null)
+
+afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+})
+
+describe('ApiKeyCreateDialog', () => {
+    it('requires a name', async () => {
+        const createSpy = vi.spyOn(ApiKeyApi, 'createApiKey')
+        const { wrapper } = mountDialog(ApiKeyCreateDialog, { project: projectDetail() })
+        await vi.waitFor(() => expect(overlayText()).toContain('New API key'))
+
+        submitOverlayForm()
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Enter a name'))
+        expect(createSpy).not.toHaveBeenCalled()
+        wrapper.unmount()
+    })
+
+    it('emits the created key and closes', async () => {
+        const created = apiKeyCreated()
+        vi.spyOn(ApiKeyApi, 'createApiKey').mockResolvedValue(created)
+        const { wrapper, open } = mountDialog(ApiKeyCreateDialog, { project: projectDetail() })
+        await vi.waitFor(() => expect(overlayText()).toContain('New API key'))
+
+        await setOverlayInput('name', '  Newsletter  ')
+        submitOverlayForm()
+
+        await vi.waitFor(() => expect(open.value).toBe(false))
+        expect(ApiKeyApi.createApiKey).toHaveBeenCalledWith({ path: { projectId: 1 }, body: { name: 'Newsletter' } })
+        expect(wrapper.findComponent(ApiKeyCreateDialog).emitted('created')).toEqual([[created]])
+    })
+
+    it('shows the server error inside the dialog', async () => {
+        vi.spyOn(ApiKeyApi, 'createApiKey').mockRejectedValue({ message: 'Missing project permission' })
+        const { open } = mountDialog(ApiKeyCreateDialog, { project: projectDetail() })
+        await vi.waitFor(() => expect(overlayText()).toContain('New API key'))
+
+        await setOverlayInput('name', 'Newsletter')
+        submitOverlayForm()
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Missing project permission'))
+        expect(open.value).toBe(true)
+    })
+})
+```
+
+Adjust to the exact `mountDialog` contract (read `support.ts`) — e.g. how emitted events are reached.
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects/views/details` — Expected: FAIL (components missing).
+
+- [ ] **Step 3: `ApiKeyCreateDialog.vue`**
+
+```vue
+<template>
+    <FormDialog
+        v-model="model"
+        width="sm"
+        :title="t('module.projects.apiKeys.dialog.title')"
+        :submit-label="t('module.projects.apiKeys.dialog.submit')"
+        :pending="isPending"
+        :error="errorMessage"
+        :dirty="name.trim() !== ''"
+        @submit="onSubmit"
+    >
+        <p>{{ t('module.projects.apiKeys.dialog.intro') }}</p>
+        <VTextField
+            v-model="name"
+            name="name"
+            :label="requiredLabel(t('module.projects.apiKeys.dialog.name'))"
+            :error-messages="fieldError"
+            maxlength="100"
+            aria-required="true"
+        />
+    </FormDialog>
+</template>
+
+<script setup lang="ts">
+    import { ref, watch } from 'vue'
+    import { useI18n } from 'vue-i18n'
+    import type { ApiKeyCreatedDto, ProjectDetailDto } from 'api'
+    import FormDialog from '@/components/FormDialog.vue'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
+    import { useApiKeyCreateMutation } from '@/modules/projects/mutations/useApiKeyCreateMutation.ts'
+
+    const props = defineProps<{ project: ProjectDetailDto }>()
+    const emit = defineEmits<{ created: [apiKey: ApiKeyCreatedDto] }>()
+    const model = defineModel<boolean>({ required: true })
+
+    const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
+    const { mutateAsync, isPending } = useApiKeyCreateMutation()
+
+    const name = ref('')
+    const fieldError = ref<string | undefined>()
+    const errorMessage = ref<string | null>(null)
+
+    watch(
+        model,
+        (open) => {
+            if (open) {
+                name.value = ''
+                fieldError.value = undefined
+                errorMessage.value = null
+            }
+        },
+        { immediate: true },
+    )
+
+    async function onSubmit() {
+        fieldError.value = undefined
+        errorMessage.value = null
+        const trimmed = name.value.trim()
+        if (!trimmed) {
+            fieldError.value = t('module.projects.apiKeys.dialog.nameRequired')
+            return
+        }
+        try {
+            const created = await mutateAsync({ projectId: props.project.projectId, name: trimmed })
+            model.value = false
+            emit('created', created)
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.projects.apiKeys.dialog.error'))
+        }
+    }
+</script>
+```
+
+Check the exact import paths of `useRequiredLabel` and `apiErrorMessage` (`src/composables/`, `src/helper/`) and the dialog-field conventions in `AssignDomainDialog.vue`.
+
+- [ ] **Step 4: `ApiKeyRevealDialog.vue`**
+
+Props/model: `defineProps<{ apiKey: ApiKeyCreatedDto | null }>()`, `const model = defineModel<boolean>({ required: true })`, emits nothing. Template, built from `FormDialog.vue`'s markup (copy its `VDialog` attributes — `persistent`, fullscreen on xs, width class for `sm` — and its card header/body/footer classes):
+
+```vue
+<template>
+    <VDialog v-model="model" persistent :fullscreen="xs" :class="/* same width class FormDialog uses for sm */">
+        <VCard v-if="apiKey">
+            <!-- header: same title element/classes as FormDialog -->
+            {{ t('module.projects.apiKeys.reveal.title') }}
+            <!-- body -->
+            <InlineAlert tone="warning" :text="t('module.projects.apiKeys.reveal.warning')" />
+            <CopyField :value="apiKey.key" :label="t('module.projects.apiKeys.reveal.field')" />
+            <p class="text-ink-muted">{{ t('module.projects.apiKeys.reveal.usage') }}</p>
+            <!-- footer: single primary button -->
+            <VBtn
+                color="primary"
+                variant="flat"
+                :text="t('module.projects.apiKeys.reveal.done')"
+                @click="model = false"
+            />
+        </VCard>
+    </VDialog>
+</template>
+```
+
+The HTML comments above are placeholders for this plan only — the final file has none (repo rule: no comments). Use `useDisplay().xs`. Match how FormDialog styles its primary button (the "one yellow button per view" rule).
+
+- [ ] **Step 5: `ProjectApiKeysCard.vue`**
+
+```vue
+<template>
+    <SectionCard
+        :title="t('module.projects.apiKeys.title')"
+        :description="t('module.projects.apiKeys.description')"
+        :count="activeCount"
+        :refetching="isFetching && !isPending"
+        flush
+    >
+        <template v-if="canUpdate" #actions>
+            <VBtn
+                size="small"
+                :prepend-icon="mdiPlus"
+                :text="t('module.projects.apiKeys.add')"
+                @click="createOpen = true"
+            />
+        </template>
+        <ListSkeleton v-if="isPending" :rows="2" />
+        <ErrorState v-else-if="isError" :thing="t('module.projects.apiKeys.thing')" :error="error" @retry="refetch()" />
+        <EmptyState
+            v-else-if="sortedKeys.length === 0"
+            :icon="mdiKeyOutline"
+            :title="t('module.projects.apiKeys.empty.title')"
+            :text="
+                canUpdate ? t('module.projects.apiKeys.empty.text') : t('module.projects.apiKeys.empty.textReadOnly')
+            "
+        />
+        <VExpandTransition v-else group>
+            <ListRow
+                v-for="key in sortedKeys"
+                :key="key.apiKeyId"
+                :title="key.name"
+                :icon="mdiKeyVariant"
+                :lead-tone="key.revokedAt ? 'none' : 'neutral'"
+            >
+                <template #subtitle>
+                    <span class="mono">{{ key.prefix }}</span>
+                </template>
+                <template #meta>
+                    <StatusBadge v-if="key.revokedAt" tone="neutral" :label="t('module.projects.apiKeys.revoked')" />
+                    <span v-else-if="key.lastUsedAt" class="text-ink-muted">
+                        {{ t('module.projects.apiKeys.lastUsed') }} <RelativeTime :value="key.lastUsedAt" />
+                    </span>
+                    <span v-else class="text-ink-muted">{{ t('module.projects.apiKeys.neverUsed') }}</span>
+                </template>
+                <template v-if="canUpdate && !key.revokedAt" #actions>
+                    <IconButton
+                        :icon="mdiKeyRemove"
+                        :label="t('module.projects.apiKeys.revokeLabel', { name: key.name })"
+                        danger
+                        @click="revoke(key)"
+                    />
+                </template>
+            </ListRow>
+        </VExpandTransition>
+    </SectionCard>
+    <ApiKeyCreateDialog v-if="canUpdate" v-model="createOpen" :project="project" @created="onCreated" />
+    <ApiKeyRevealDialog v-model="revealOpen" :api-key="createdKey" />
+</template>
+
+<script setup lang="ts">
+    import { computed, ref, watch } from 'vue'
+    import { useQuery } from '@tanstack/vue-query'
+    import { useI18n } from 'vue-i18n'
+    import { mdiKeyOutline, mdiKeyRemove, mdiKeyVariant, mdiPlus } from '@mdi/js'
+    import type { ApiKeyCreatedDto, ApiKeyDto, ProjectDetailDto } from 'api'
+    import EmptyState from '@/components/EmptyState.vue'
+    import ErrorState from '@/components/ErrorState.vue'
+    import IconButton from '@/components/IconButton.vue'
+    import ListRow from '@/components/ListRow.vue'
+    import RelativeTime from '@/components/RelativeTime.vue'
+    import SectionCard from '@/components/SectionCard.vue'
+    import StatusBadge from '@/components/StatusBadge.vue'
+    import ListSkeleton from '@/components/skeletons/ListSkeleton.vue'
+    import { useConfirm } from '@/composables/useConfirm.ts'
+    import { useNotify } from '@/composables/useNotify.ts'
+    import { useApiKeysQuery } from '@/modules/projects/queries/useApiKeysQuery.ts'
+    import { useApiKeyRevokeMutation } from '@/modules/projects/mutations/useApiKeyRevokeMutation.ts'
+    import ApiKeyCreateDialog from '@/modules/projects/views/details/partials/ApiKeyCreateDialog.vue'
+    import ApiKeyRevealDialog from '@/modules/projects/views/details/partials/ApiKeyRevealDialog.vue'
+
+    const props = defineProps<{ project: ProjectDetailDto; canUpdate: boolean }>()
+
+    const { t } = useI18n()
+    const confirm = useConfirm()
+    const notify = useNotify()
+
+    const {
+        data: keys,
+        isPending,
+        isFetching,
+        isError,
+        error,
+        refetch,
+    } = useQuery(useApiKeysQuery(() => props.project.projectId))
+    const { mutateAsync: revokeRequest } = useApiKeyRevokeMutation()
+
+    const createOpen = ref(false)
+    const revealOpen = ref(false)
+    const createdKey = ref<ApiKeyCreatedDto | null>(null)
+
+    const sortedKeys = computed(() =>
+        [...(keys.value ?? [])].sort(
+            (a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null) || b.apiKeyId - a.apiKeyId,
+        ),
+    )
+    const activeCount = computed(() => sortedKeys.value.filter((key) => !key.revokedAt).length)
+
+    watch(revealOpen, (open) => {
+        if (!open) {
+            createdKey.value = null
+        }
+    })
+
+    function onCreated(created: ApiKeyCreatedDto) {
+        createdKey.value = created
+        revealOpen.value = true
+        notify.success(t('module.projects.apiKeys.created', { name: created.name }))
+    }
+
+    async function revoke(key: ApiKeyDto) {
+        const confirmed = await confirm({
+            title: t('module.projects.apiKeys.confirmTitle', { name: key.name }),
+            body: t('module.projects.apiKeys.confirmBody'),
+            confirmLabel: t('module.projects.apiKeys.confirm'),
+            destructive: true,
+            errorText: t('module.projects.apiKeys.revokeError', { name: key.name }),
+            action: () => revokeRequest({ projectId: props.project.projectId, apiKeyId: key.apiKeyId }),
+        })
+        if (confirmed) {
+            notify.success(t('module.projects.apiKeys.revokedDone', { name: key.name }))
+        }
+    }
+</script>
+```
+
+Check that `mdiKeyRemove`, `mdiKeyVariant`, `mdiKeyOutline` exist in `@mdi/js` (they do in current versions; otherwise pick the nearest key icon). If the snackbar for "created" competes with the reveal dialog visually, keep it — it confirms creation per the handoff ("Creating … confirms with a snackbar"). Check whether a utility class for muted text exists (search `main.scss` for `ink-muted`) and use it; if none, use the class the members card uses for secondary text.
+
+- [ ] **Step 6: Place the card on the project page**
+
+In `ProjectDetailView.vue`, after `<ProjectMembersCard … />` and before `<ProjectGeneralCard … />`:
+
+```vue
+<ProjectApiKeysCard :project="project" :can-update="canUpdate" />
+```
+
+Import it. In `ProjectDetailView.spec.ts` add a stub/mock for `ApiKeyApi.getApiKeys` wherever the view is mounted (read how the spec mocks other card queries), and add:
+
+```ts
+it('shows the API keys card to every project reader', async () => {
+    // mount as in the existing tests with read-only rules
+    // expect the "API keys" section heading to be present
+})
+```
+
+written out in the spec's existing style (no comments in the final code).
+
+- [ ] **Step 7: Run**
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects`
+Expected: PASS.
+Run: `pnpm --filter frontend typecheck && pnpm --filter frontend lint` — Expected: no new errors. Do not commit.
+
+---
+
+### Task 13: Project message log page
+
+**Files:**
+
+- Create: `apps/frontend/src/modules/projects/views/messages/ProjectMessagesView.vue`
+- Create: `apps/frontend/src/modules/projects/views/messages/partials/MessageTable.vue`
+- Create: `apps/frontend/src/modules/projects/views/messages/__tests__/ProjectMessagesView.spec.ts`
+- Modify: `apps/frontend/src/router/RouteNames.ts`, `apps/frontend/src/router/index.ts`, `apps/frontend/src/router/__tests__/routes.spec.ts`
+- Modify: `apps/frontend/src/modules/projects/views/details/ProjectDetailView.vue` (+ spec) — header link
+- Modify: `apps/frontend/src/locales/en.json` — `module.projects.messages.*`
+
+**Interfaces:**
+
+- Consumes: `useProjectMessagesQuery`, `ProjectMessageQuery`, `mailMessage()` fixture (Task 11); `useProjectQuery` (for the page title/breadcrumb); `BounceTable.vue` as the template for the table.
+- Produces: route `RouteNames.PROJECT_MESSAGES = 'projects::messages'` at `/projects/:projectId/messages`, `meta: { section: 'projects' }`.
+
+**Design:**
+
+- PageHeader: title "Sent mail", breadcrumbs `Projects › {project name}` (second crumb links to the project), description "Every mail this project sent, from forms and the API."
+- One table card built exactly like `BounceTable.vue` (copy its structure, toolbar, skeleton, error, footer paging and classes): search (recipient or subject, debounced 300 ms), two `VChipGroup`s — source (All / API / Forms) and status (All / Sent / Failed / Blocked) — and the count `{count} messages`.
+- Columns: Recipient (`emailTo`, mono), Subject (subject; when `error` is set, the error text below it in muted small text), Source (`TagLabel` "API" / "Form"), Status (`StatusBadge`: sent → success "Sent", failed → error "Failed", blocked → warning "Blocked", pending → pending "Sending"), Sent (`RelativeTime` of `createdAt`). Not sortable (the API orders newest first).
+- Empty: `EmptyState` icon `mdiEmailOutline`, "No mail sent yet", "Mail from this project's forms and API keys shows up here." Filtered empty: same as bounces' noMatch with "Clear filters".
+- Project page header gets a "Sent mail" text button (`#actions` slot of `PageHeader`, `variant="text"`, `:prepend-icon="mdiEmailFastOutline"`, `:to` the new route) visible to every reader.
+
+- [ ] **Step 1: i18n keys**
+
+Under `module.projects`:
+
+```json
+"messages": {
+    "title": "Sent mail",
+    "description": "Every mail this project sent, from forms and the API.",
+    "open": "Sent mail",
+    "thing": "sent mail",
+    "loading": "Loading sent mail",
+    "search": "Search recipient or subject",
+    "count": "No messages | 1 message | {count} messages",
+    "range": "{from}–{to} of {total}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "sources": { "all": "All sources", "api": "API", "inbound_form": "Forms" },
+    "statuses": { "all": "All statuses", "sent": "Sent", "failed": "Failed", "blocked": "Blocked", "pending": "Sending" },
+    "sourceTag": { "api": "API", "inbound_form": "Form" },
+    "columns": { "recipient": "Recipient", "subject": "Subject", "source": "Source", "status": "Status", "sent": "Sent" },
+    "empty": { "title": "No mail sent yet", "text": "Mail from this project's forms and API keys shows up here." },
+    "noMatch": { "title": "No messages match “{search}”", "titleFilter": "No messages match these filters", "text": "Try another search or clear the filters.", "clear": "Clear filters" }
+}
+```
+
+- [ ] **Step 2: Route (test first)**
+
+Read `src/router/__tests__/routes.spec.ts` and add the new route to its per-route `meta.section`/`meta.ability` expectations (`section: 'projects'`, no `ability`). Add `PROJECT_MESSAGES = 'projects::messages',` to `RouteNames` (after `PROJECT_DETAILS`) and in `router/index.ts`, right after the project details route:
+
+```ts
+        {
+            path: '/projects/:projectId/messages',
+            name: RouteNames.PROJECT_MESSAGES,
+            component: ProjectMessagesView,
+            meta: { section: 'projects' },
+        },
+```
+
+with a static import like the other views. `createTestRouter()` in `src/__tests__/support.ts` stubs every `RouteNames` entry — check it picks the new one up automatically.
+
+- [ ] **Step 3: Failing view spec**
+
+`views/messages/__tests__/ProjectMessagesView.spec.ts` (mirror `BounceListView.spec.ts` — read it for how it fakes `useRoute` and mounts):
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MailMessageApi, ProjectApi } from 'api'
+import ProjectMessagesView from '../ProjectMessagesView.vue'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
+import { mailMessage, projectDetail } from '@/__tests__/fixtures.ts'
+
+const route = vi.hoisted(() => ({ params: { projectId: '1' }, name: 'projects::messages', query: {} }))
+vi.mock('vue-router', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('vue-router')>()),
+    useRoute: () => route,
+}))
+vi.stubGlobal('visualViewport', null)
+
+afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+})
+
+function mockProject() {
+    vi.spyOn(ProjectApi, 'getProject').mockResolvedValue(projectDetail())
+}
+
+describe('ProjectMessagesView', () => {
+    it('lists sent mail with status, source and recipient', async () => {
+        mockProject()
+        vi.spyOn(MailMessageApi, 'getProjectMessages').mockResolvedValue({
+            items: [
+                mailMessage(),
+                mailMessage({
+                    mailMessageId: 71,
+                    source: 'inbound_form',
+                    apiKeyId: null,
+                    emailTo: 'owner@acme.com',
+                    status: 'failed',
+                    error: 'connect ECONNREFUSED',
+                }),
+            ],
+            total: 2,
+        })
+        const wrapper = mountInApp(ProjectMessagesView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('reader@example.org'))
+        const text = wrapper.text()
+        expect(text).toContain('Acme Website')
+        expect(text).toContain('Sent')
+        expect(text).toContain('Failed')
+        expect(text).toContain('connect ECONNREFUSED')
+        expect(text).toContain('API')
+        expect(text).toContain('Form')
+        expect(text).toContain('2 messages')
+    })
+
+    it('requests the first page of the project log', async () => {
+        mockProject()
+        const getSpy = vi.spyOn(MailMessageApi, 'getProjectMessages').mockResolvedValue({ items: [], total: 0 })
+        mountInApp(ProjectMessagesView)
+
+        await vi.waitFor(() =>
+            expect(getSpy).toHaveBeenCalledWith({
+                path: { projectId: 1 },
+                query: { page: 1, itemsPerPage: 25, search: undefined, source: undefined, status: undefined },
+            }),
+        )
+    })
+
+    it('filters by status', async () => {
+        mockProject()
+        const getSpy = vi
+            .spyOn(MailMessageApi, 'getProjectMessages')
+            .mockResolvedValue({ items: [mailMessage()], total: 1 })
+        const wrapper = mountInApp(ProjectMessagesView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('reader@example.org'))
+
+        await findButton(wrapper, 'Failed')!.trigger('click')
+
+        await vi.waitFor(() =>
+            expect(getSpy).toHaveBeenLastCalledWith(
+                expect.objectContaining({ query: expect.objectContaining({ status: 'failed', page: 1 }) as object }),
+            ),
+        )
+    })
+
+    it('explains an empty log', async () => {
+        mockProject()
+        vi.spyOn(MailMessageApi, 'getProjectMessages').mockResolvedValue({ items: [], total: 0 })
+        const wrapper = mountInApp(ProjectMessagesView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No mail sent yet'))
+    })
+})
+```
+
+`findButton` matches `button|a` by exact text; `VChip`s with `filter` may render differently — check how `BounceListView.spec.ts` clicks a type chip and do the same. Adjust `ProjectApi.getProject` to the real SDK method name used by `useProjectQuery`.
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects/views/messages` — Expected: FAIL.
+
+- [ ] **Step 4: Implement the view and table**
+
+`ProjectMessagesView.vue`:
+
+```vue
+<template>
+    <PageHeader
+        :title="t('module.projects.messages.title')"
+        :description="t('module.projects.messages.description')"
+        :breadcrumbs="breadcrumbs"
+    />
+    <MessageTable :project-id="projectId" />
+</template>
+
+<script setup lang="ts">
+    import { computed } from 'vue'
+    import { useRoute } from 'vue-router'
+    import { useQuery } from '@tanstack/vue-query'
+    import { useI18n } from 'vue-i18n'
+    import PageHeader from '@/components/PageHeader.vue'
+    import type { Breadcrumb } from '@/components/breadcrumb.ts'
+    import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
+    import MessageTable from '@/modules/projects/views/messages/partials/MessageTable.vue'
+    import { RouteNames } from '@/router/RouteNames.ts'
+
+    const { t } = useI18n()
+    const route = useRoute()
+
+    const projectId = computed(() => Number(route.params.projectId))
+    const { data: project } = useQuery(useProjectQuery(projectId))
+
+    const breadcrumbs = computed<Breadcrumb[]>(() => [
+        { title: t('nav.projects'), to: { name: RouteNames.PROJECT_LIST } },
+        {
+            title: project.value?.name ?? '…',
+            to: { name: RouteNames.PROJECT_DETAILS, params: { projectId: projectId.value } },
+        },
+    ])
+</script>
+```
+
+A project the user cannot read returns 404 from both endpoints; `MessageTable`'s `ErrorState` handles it — pass `:kind="apiErrorStatus(error) === 404 ? 'notFound' : 'load'"` like `ProjectDetailView` does.
+
+`partials/MessageTable.vue`: copy `BounceTable.vue`'s template and script, then change:
+
+- props: `defineProps<{ projectId: number }>()`
+- state: `search`, `debouncedSearch`, `source = ref<'all' | 'api' | 'inbound_form'>('all')`, `status = ref<'all' | 'sent' | 'failed' | 'blocked'>('all')`, `page = ref(1)`; no `sortBy`
+- query:
+    ```ts
+    const query = computed<ProjectMessageQuery>(() => ({
+        page: page.value,
+        itemsPerPage: ITEMS_PER_PAGE,
+        search: debouncedSearch.value?.trim() || undefined,
+        source: source.value === 'all' ? undefined : source.value,
+        status: status.value === 'all' ? undefined : status.value,
+    }))
+    const { data, isPending, isFetching, isError, error, refetch } = useQuery(
+        useProjectMessagesQuery(() => props.projectId, query),
+    )
+    ```
+- two chip groups (source, status) with options built from `module.projects.messages.sources.*` / `statuses.*`
+- headers: recipient (`emailTo`), subject, source, status, sent (`createdAt`, `nowrap`), all `sortable: false`; `item-value="mailMessageId"`; drop `must-sort` / `v-model:sort-by`
+- cells:
+    ```vue
+    <template #[`item.emailTo`]="{ item }">
+        <span class="mono">{{ item.emailTo }}</span>
+    </template>
+    <template #[`item.subject`]="{ item }">
+        <span>{{ item.subject }}</span>
+        <span v-if="item.error" class="message-table__error">{{ item.error }}</span>
+    </template>
+    <template #[`item.source`]="{ item }">
+        <TagLabel :label="t(`module.projects.messages.sourceTag.${item.source}`)" />
+    </template>
+    <template #[`item.status`]="{ item }">
+        <StatusBadge :tone="STATUS_TONES[item.status]" :label="t(`module.projects.messages.statuses.${item.status}`)" />
+    </template>
+    <template #[`item.createdAt`]="{ item }"><RelativeTime :value="item.createdAt" /></template>
+    ```
+    with
+    ```ts
+    const STATUS_TONES: Record<MailMessageDto['status'], StatusTone> = {
+        sent: 'success',
+        failed: 'error',
+        blocked: 'warning',
+        pending: 'pending',
+    }
+    ```
+    and `.message-table__error { display: block; color: rgb(var(--v-theme-ink-muted)); font-size: …; }` using the same token-based styling approach as `BounceTable.vue`'s scoped styles (no raw hex values).
+- `watch([debouncedSearch, source, status], () => { page.value = 1 })`; `clearFilters` resets all three.
+- empty/noMatch states and `range`/paging footer as in `BounceTable.vue` with the `module.projects.messages.*` keys.
+
+If copying leaves `BounceTable.vue` and `MessageTable.vue` with a large verbatim shared block (toolbar + footer paging), do not extract a shared component in this task; note it as a concern in the report for the final review.
+
+- [ ] **Step 5: Link from the project page (test first)**
+
+In `ProjectDetailView.spec.ts` add a test that the header shows a "Sent mail" link to `/projects/1/messages` (read how the spec resolves `RouterLink` hrefs with `createTestRouter`). Then in `ProjectDetailView.vue` add to `PageHeader`:
+
+```vue
+<template v-if="project" #actions>
+    <VBtn
+        variant="text"
+        :prepend-icon="mdiEmailFastOutline"
+        :text="t('module.projects.messages.open')"
+        :to="{ name: RouteNames.PROJECT_MESSAGES, params: { projectId } }"
+    />
+</template>
+```
+
+- [ ] **Step 6: Run**
+
+Run: `pnpm --filter frontend exec vitest run src/modules/projects src/router`
+Expected: PASS.
+Run: `pnpm --filter frontend typecheck && pnpm --filter frontend lint` — Expected: no new errors. Do not commit.
+
+---
+
+### Task 14: Playwright end-to-end flow
+
+**Files:**
+
+- Create: `apps/frontend/e2e/08-api-keys.spec.ts`
+
+**Interfaces:**
+
+- Consumes: `e2e/support/fixtures.ts` (`admin`, `login`, `navigation`, `card`, `dialog`, `input`, `projectName`, `senderDomain`, `requireEnv`); state from earlier specs (04 creates the project "Acme Website" with sender domain `forms.acme-e2e.com`; check 05/06 for what else exists).
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { expect, test } from '@playwright/test'
+import {
+    admin,
+    card,
+    dialog,
+    input,
+    login,
+    navigation,
+    projectName,
+    requireEnv,
+    senderDomain,
+} from './support/fixtures.ts'
+
+const recipient = 'api-reader@acme-e2e.com'
+
+test('an administrator creates an API key, sends mail with it and sees it in the log', async ({ page, request }) => {
+    await login(page, admin)
+    await navigation(page).getByRole('link', { name: 'Projects' }).click()
+    await page.getByRole('link', { name: projectName }).click()
+
+    const keys = card(page, 'API keys')
+    await expect(keys.getByText('No API keys yet')).toBeVisible()
+    await keys.getByRole('button', { name: 'New API key' }).click()
+    const create = dialog(page)
+    await input(create, 'name').fill('E2E shop')
+    await create.getByRole('button', { name: 'Create key' }).click()
+
+    const reveal = dialog(page)
+    await expect(reveal.getByText("You won't be able to see it again.")).toBeVisible()
+    const key = (await reveal.getByText(/^sdm_[0-9A-Za-z]{8}_/).textContent())!.trim()
+    await reveal.getByRole('button', { name: 'Done' }).click()
+    await expect(keys.getByText('E2E shop')).toBeVisible()
+    await expect(keys.getByText('Never used')).toBeVisible()
+
+    const response = await request.post(`${requireEnv('E2E_API_URL')}/api/v1/send`, {
+        headers: { Authorization: `Bearer ${key}` },
+        data: { from: `shop@${senderDomain}`, to: recipient, subject: 'Order confirmed', html: '<p>Thanks!</p>' },
+    })
+    expect(response.status()).toBe(202)
+
+    await page.getByRole('link', { name: 'Sent mail' }).click()
+    await expect(page).toHaveURL(/\/projects\/\d+\/messages$/)
+    await expect(page.getByText(recipient)).toBeVisible()
+    await expect(page.getByText('Order confirmed')).toBeVisible()
+
+    await page.goBack()
+    await keys.getByRole('button', { name: 'Revoke E2E shop' }).click()
+    await dialog(page).getByRole('button', { name: 'Revoke key' }).click()
+    await expect(keys.getByText('Revoked')).toBeVisible()
+
+    const rejected = await request.post(`${requireEnv('E2E_API_URL')}/api/v1/send`, {
+        headers: { Authorization: `Bearer ${key}` },
+        data: { from: `shop@${senderDomain}`, to: recipient, subject: 'x', html: 'x' },
+    })
+    expect(rejected.status()).toBe(401)
+})
+```
+
+Check: whether `E2E_API_URL` already includes `/api`; how `CopyField` renders the value (if it is clamped or in an `<input>`, read the key from there instead of `getByText`); the exact `card()` matching (`^title`); whether "Sent mail" is a link or button role (`VBtn :to` renders an `<a>`).
+
+- [ ] **Step 2: Run**
+
+Run: `pnpm --filter frontend exec playwright test e2e/08-api-keys.spec.ts` (check `package.json` for the e2e script name; the suite's global setup starts containers and needs Docker; earlier numbered specs may have to run first for the shared state — if so, run the whole suite: `pnpm --filter frontend test:e2e` or the script that exists).
+Expected: PASS. Do not commit.
+
+---
+
+### Task 15: Docs and full gate
+
+**Files:**
+
+- Modify: `README.md`
+
+- [ ] **Step 1: README**
+
+Read `README.md`. Remove the "Public send API" bullet from "Open todos" (it is done). Add a section before "Open todos":
 
 ````md
 ## Public send API
 
-Create an API key on a project (`POST /api/project/:projectId/api-keys`); the full key is returned once. Send with it from any domain assigned to that project:
+Create an API key on a project page (API keys → New API key); the full key is shown once. Send with it from any sender domain assigned to that project:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/send \
@@ -3284,14 +4845,16 @@ curl -X POST http://localhost:8000/api/v1/send \
   -d '{"from":"news@mail.example.com","to":"reader@example.org","subject":"Hello","html":"<p>Hi</p>"}'
 ```
 
-The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. Responses: `202 { mailMessageId, status }`; errors carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`). Each key is limited to `PUBLIC_API_RATE_LIMIT` requests per `PUBLIC_API_RATE_TTL` ms. Every sent mail (API and inbound forms) is listed at `GET /api/project/:projectId/messages`.
+The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. Responses: `202 { mailMessageId, status }`; errors carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`). Each key is limited to `PUBLIC_API_RATE_LIMIT` requests per `PUBLIC_API_RATE_TTL` ms. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page.
 ````
 
-- [ ] **Step 4: Full gate**
+If README documents env keys elsewhere, add `PUBLIC_API_RATE_LIMIT` / `PUBLIC_API_RATE_TTL` there too.
+
+- [ ] **Step 2: Full gate**
 
 Run: `pnpm format:fix && pnpm check`
-Expected: lint, typecheck, unit tests and format all PASS across workspaces. Then re-run `pnpm --filter backend test:e2e` if any backend file changed during formatting fixes.
+Expected: lint, typecheck, unit tests and format all PASS across workspaces. Then `pnpm --filter backend test:e2e`.
 
-- [ ] **Step 5: Hand off**
+- [ ] **Step 3: Hand off**
 
-Report to the user: files changed, test results (unit + e2e counts), and that nothing was committed. Do not commit.
+Report files changed and test results (unit, backend e2e, Playwright). Do not commit.

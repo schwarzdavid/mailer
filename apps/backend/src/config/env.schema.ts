@@ -49,6 +49,9 @@ export const envSchema = z
         IMAP_PASSWORD: z.string().optional(),
 
         OPENAPI_PATH: z.string().optional(),
+
+        PUBLIC_API_RATE_LIMIT: z.coerce.number().int().positive().default(60),
+        PUBLIC_API_RATE_TTL: z.coerce.number().int().positive().default(60_000),
     })
     .superRefine((env, ctx) => {
         if (!env.IMAP_HOST) {

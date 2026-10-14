@@ -78,6 +78,7 @@ function describeType(attribute: ModelAttributeColumnOptions): { sql: string; en
         .toSql()
         .toUpperCase()
         .replace(/^VARCHAR\b/, 'CHARACTER VARYING')
+        .replace(/^CHAR\b/, 'CHARACTER')
     return { sql, enumValues }
 }
 

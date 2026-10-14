@@ -7,9 +7,18 @@ import {
 import { ConfigService } from '@nestjs/config'
 import { HttpAdapterHost, Reflector } from '@nestjs/core'
 import type { ExpressAdapter } from '@nestjs/platform-express'
+import express, { type NextFunction, type Request, type Response } from 'express'
 import type { Env } from '../config/env.schema.js'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { SequelizeExceptionFilter } from '../filters/sequelize-exception.filter.js'
+import { MAX_BODY_LENGTH } from '../modules/api-key/dtos/public-send.dto.js'
+
+const PUBLIC_SEND_PATH = '/api/v1/send'
+const PUBLIC_SEND_BODY_FIELDS = 2
+const MAX_UTF8_BYTES_PER_CHAR = 4
+const JSON_ENVELOPE_BYTES = 64 * 1024
+const PUBLIC_SEND_JSON_LIMIT_BYTES =
+    PUBLIC_SEND_BODY_FIELDS * MAX_BODY_LENGTH * MAX_UTF8_BYTES_PER_CHAR + JSON_ENVELOPE_BYTES
 
 export const validationPipeOptions: ValidationPipeOptions = {
     transform: true,
@@ -22,6 +31,7 @@ export const validationPipeOptions: ValidationPipeOptions = {
 
 export function configureApp(app: INestApplication): void {
     applyTrustProxy(app)
+    applyPublicSendJsonLimit(app)
     app.enableShutdownHooks()
     app.enableCors()
     app.setGlobalPrefix('api')
@@ -35,6 +45,14 @@ export function configureApp(app: INestApplication): void {
     )
 }
 
+function applyPublicSendJsonLimit(app: INestApplication): void {
+    const parseJson = express.json({ limit: PUBLIC_SEND_JSON_LIMIT_BYTES })
+
+    app.use(PUBLIC_SEND_PATH, function publicSendJsonParser(request: Request, response: Response, next: NextFunction) {
+        parseJson(request, response, next)
+    })
+}
+
 function applyTrustProxy(app: INestApplication): void {
     const trustProxy = app.get<ConfigService<Env, true>>(ConfigService).get('TRUST_PROXY', { infer: true })
     app.get<HttpAdapterHost<ExpressAdapter>>(HttpAdapterHost).httpAdapter.set('trust proxy', trustProxy)
@@ -46,11 +64,8 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
         .setDescription('Simple Mail SaaS')
         .setVersion(process.env.npm_package_version ?? '0.0.0')
         .addBearerAuth()
-        .addApiKey({
-            type: 'apiKey',
-            name: 'key',
-            in: 'query',
-        })
+        .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'sdm_…' }, 'api-key')
+        .addApiKey({ type: 'apiKey', name: 'key', in: 'query' }, 'api-key-query')
         .addServer('http://localhost:8000', 'Dev Server')
         .addServer('https://schwarzdavid.email', 'Production Server')
         .setContact('David Schwarz', 'https://schwarzdavid.at', 'hi@schwarzdavid.at')

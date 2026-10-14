@@ -489,6 +489,21 @@ describe('DomainService', () => {
         })
     })
 
+    describe('getDomainByFqdn', () => {
+        it('returns the plain domain for a known fqdn', async () => {
+            findOne.mockResolvedValue(domainRow(persistedDomain) as unknown as DomainModel)
+
+            await expect(service.getDomainByFqdn('example.com')).resolves.toEqual(persistedDomain)
+            expect(findOne).toHaveBeenCalledWith({ where: { fqdn: 'example.com' } })
+        })
+
+        it('returns null for an unknown fqdn', async () => {
+            findOne.mockResolvedValue(null)
+
+            await expect(service.getDomainByFqdn('nope.example.com')).resolves.toBeNull()
+        })
+    })
+
     describe('getSendingDomainByFqdn', () => {
         it('returns the domain with its active dkim as a plain object', async () => {
             const activeDkim: DomainDkim = {

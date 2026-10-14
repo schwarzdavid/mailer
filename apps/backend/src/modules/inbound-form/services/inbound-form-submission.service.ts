@@ -12,6 +12,8 @@ import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-
 import { InboundFormTemplateService } from './inbound-form-template.service.js'
 import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
 import { MailService } from '../../mail/services/mail.service.js'
+import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
+import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
 import { InboundFormSubmissionStatus } from '../interfaces/inbound-form-submission.interface.js'
 import { InboundFormDeliveryStatus } from '../interfaces/inbound-form-delivery.interface.js'
 import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
@@ -33,6 +35,7 @@ interface PendingDelivery {
     delivery: InboundFormDeliveryModel
     receiver: InboundFormReceiver
     template: InboundFormTemplate
+    projectId: number
 }
 
 @Injectable()
@@ -130,10 +133,11 @@ export class InboundFormSubmissionService {
                         status: InboundFormDeliveryStatus.PENDING,
                         error: null,
                         sentAt: null,
+                        mailMessageId: null,
                     },
                     { returning: true, transaction },
                 )
-                createdDeliveries.push({ delivery, receiver, template })
+                createdDeliveries.push({ delivery, receiver, template, projectId: form.projectId })
             }
 
             return { submissionRow: createdSubmission, pendingDeliveries: createdDeliveries }
@@ -159,7 +163,7 @@ export class InboundFormSubmissionService {
     }
 
     private async processDelivery(
-        { delivery, receiver, template }: PendingDelivery,
+        { delivery, receiver, template, projectId }: PendingDelivery,
         data: Record<string, unknown>,
     ): Promise<void> {
         try {
@@ -167,23 +171,31 @@ export class InboundFormSubmissionService {
             const replyTo =
                 receiver.emailReplyTo !== null ? this.resolveAddress(receiver.emailReplyTo, data) : undefined
 
-            await this.mailService.sendMail({
-                from: receiver.emailFrom,
-                to: emailTo,
-                replyTo,
-                subject: this.templateRendererService.renderSubject(template.subject, data),
-                html: this.templateRendererService.render(template.template, data),
-            })
+            const { mailMessageId } = await this.mailService.sendMail(
+                {
+                    from: receiver.emailFrom,
+                    to: emailTo,
+                    replyTo,
+                    subject: this.templateRendererService.renderSubject(template.subject, data),
+                    html: this.templateRendererService.render(template.template, data),
+                },
+                { projectId, source: MailMessageSource.INBOUND_FORM },
+            )
 
             await delivery.update({
                 status: InboundFormDeliveryStatus.SENT,
                 emailTo,
                 sentAt: new Date(),
+                mailMessageId,
             })
         } catch (error) {
             const message = errorMessage(error)
             this.logger.error(`Delivery ${delivery.inboundFormDeliveryId} failed: ${message}`)
-            await delivery.update({ status: InboundFormDeliveryStatus.FAILED, error: message })
+            await delivery.update({
+                status: InboundFormDeliveryStatus.FAILED,
+                error: message,
+                mailMessageId: error instanceof MailSendError ? error.mailMessageId : null,
+            })
         }
     }
 

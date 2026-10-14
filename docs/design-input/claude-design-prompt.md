@@ -9,6 +9,7 @@ Paste everything below the line into Claude Design. Attach the screenshots from 
 I'm redesigning the admin panel of a self-hosted **transactional mail service**. The attached screenshots show every screen as it exists today. `ui-inventory.md` describes the screens, flows, states, and known problems in detail. Please read it before designing.
 
 **What the product does.** An operator installs the service on their own server. In it they:
+
 1. Verify **sender domains** by publishing DNS records (SPF, DKIM, DMARC) and re-checking them.
 2. Group work into **projects**.
 3. Create **inbound forms** inside a project. Each form is a public HTTP endpoint (`/api/public/form/<slug>`) that a website's contact form posts to. A form defines its **fields** (key, label, type, validation), its **security** (honeypot, Google reCAPTCHA), and its **receivers**. Each receiver sends one email per submission, from a sender address to a fixed inbox or to a submitted field such as `{{email}}`.
@@ -57,17 +58,17 @@ Work in this order and check in with me after step 2:
 
 1. **Design system foundation:** color tokens (brand, neutral, surface, semantic success/warning/error/info, including on-colors), type scale, spacing scale, radii, elevation/shadows, breakpoints, and icon style. Present them as named tokens so they can map 1:1 onto a Vuetify theme.
 2. **Component sheet** with all variants and states (default, hover, focus, disabled, loading, error):
-   - buttons (primary / secondary / text / destructive / icon)
-   - text field, select, combobox, number input, checkbox, switch
-   - status chips (valid/invalid, active/inactive, permanent/transient, role, permission)
-   - cards and section headers
-   - list rows and table rows
-   - dialog (form, confirm, destructive confirm)
-   - snackbar/toast
-   - empty state, error state, loading skeletons
-   - page header with breadcrumbs and actions
-   - DNS record display with copy
-   - navigation (desktop + mobile)
+    - buttons (primary / secondary / text / destructive / icon)
+    - text field, select, combobox, number input, checkbox, switch
+    - status chips (valid/invalid, active/inactive, permanent/transient, role, permission)
+    - cards and section headers
+    - list rows and table rows
+    - dialog (form, confirm, destructive confirm)
+    - snackbar/toast
+    - empty state, error state, loading skeletons
+    - page header with breadcrumbs and actions
+    - DNS record display with copy
+    - navigation (desktop + mobile)
 3. **Core flow screens**, desktop and mobile: Dashboard → Projects list → Project detail → Inbound form detail (fields, security, receivers) → Template editor, including their dialogs and empty/loading/error states.
 4. **Remaining screens:** Login, Onboarding (3 steps), Domains list + detail + add dialog, Bounces (both tabs), Settings, Users list + detail + dialogs, and the limited-permission view.
 5. **A short handoff note** listing the token set, every component and where it's used, and anything you changed about structure or behavior compared with today.

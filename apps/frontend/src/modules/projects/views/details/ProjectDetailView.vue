@@ -6,6 +6,14 @@
         <template v-if="project" #meta>
             <span v-for="part in metaParts" :key="part">{{ part }}</span>
         </template>
+        <template v-if="project" #actions>
+            <VBtn
+                variant="text"
+                :prepend-icon="mdiEmailFastOutline"
+                :text="t('module.projects.messages.open')"
+                :to="{ name: RouteNames.PROJECT_MESSAGES, params: { projectId } }"
+            />
+        </template>
     </PageHeader>
 
     <ErrorState
@@ -36,6 +44,7 @@
         <ProjectFormsCard :project="project" :can-update="canUpdate" />
         <ProjectDomainsCard v-if="canReadDomains" :project="project" :can-update="canUpdate" />
         <ProjectMembersCard v-if="canManageMembers" :project="project" />
+        <ProjectApiKeysCard :project="project" :can-update="canUpdate" />
         <ProjectGeneralCard :project="project" :can-update="canUpdate" />
         <ProjectDangerZone v-if="canDelete" :project="project" :form-count="forms?.length ?? 0" />
     </div>
@@ -48,6 +57,7 @@
     import { useRoute } from 'vue-router'
     import { useAbility } from '@casl/vue'
     import { subject } from '@casl/ability'
+    import { mdiEmailFastOutline } from '@mdi/js'
     import ErrorState from '@/components/ErrorState.vue'
     import InlineAlert from '@/components/InlineAlert.vue'
     import PageHeader from '@/components/PageHeader.vue'
@@ -57,6 +67,7 @@
     import { useInboundFormsQuery } from '@/modules/inbound-forms/queries/useInboundFormsQuery.ts'
     import { useProjectCountParts } from '@/modules/projects/helpers/useProjectCounts.ts'
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
+    import ProjectApiKeysCard from '@/modules/projects/views/details/partials/ProjectApiKeysCard.vue'
     import ProjectDangerZone from '@/modules/projects/views/details/partials/ProjectDangerZone.vue'
     import ProjectDomainsCard from '@/modules/projects/views/details/partials/ProjectDomainsCard.vue'
     import ProjectFormsCard from '@/modules/projects/views/details/partials/ProjectFormsCard.vue'

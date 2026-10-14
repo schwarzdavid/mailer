@@ -17,6 +17,13 @@ import { BounceModule } from './modules/bounce/bounce.module.js'
 import { SettingsModule } from './modules/settings/settings.module.js'
 import { SetupModule } from './modules/setup/setup.module.js'
 import { PermissionModule } from './modules/permission/permission.module.js'
+import { ApiKeyModule } from './modules/api-key/api-key.module.js'
+import { isApiKeyRoute, publicApiThrottleTracker } from './modules/api-key/helpers/extract-api-key.js'
+import {
+    PUBLIC_API_IP_LIMIT_FACTOR,
+    PUBLIC_API_IP_THROTTLER,
+    PUBLIC_API_THROTTLER,
+} from './modules/api-key/api-key.constants.js'
 import { Env, envSchema } from './config/env.schema.js'
 import { createRedisClientOptions } from './factories/redis.options.js'
 import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
@@ -64,13 +71,29 @@ import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/f
         }),
         ThrottlerModule.forRootAsync({
             imports: [ThrottlerStorageModule],
-            inject: [FailOpenThrottlerStorage],
-            useFactory(storage: FailOpenThrottlerStorage) {
+            inject: [FailOpenThrottlerStorage, ConfigService],
+            useFactory(storage: FailOpenThrottlerStorage, configService: ConfigService<Env, true>) {
                 return {
                     throttlers: [
                         {
                             ttl: 60_000,
                             limit: 10,
+                            skipIf: isApiKeyRoute,
+                        },
+                        {
+                            name: PUBLIC_API_THROTTLER,
+                            ttl: configService.get('PUBLIC_API_RATE_TTL', { infer: true }),
+                            limit: configService.get('PUBLIC_API_RATE_LIMIT', { infer: true }),
+                            getTracker: publicApiThrottleTracker,
+                            skipIf: (context) => !isApiKeyRoute(context),
+                        },
+                        {
+                            name: PUBLIC_API_IP_THROTTLER,
+                            ttl: configService.get('PUBLIC_API_RATE_TTL', { infer: true }),
+                            limit:
+                                configService.get('PUBLIC_API_RATE_LIMIT', { infer: true }) *
+                                PUBLIC_API_IP_LIMIT_FACTOR,
+                            skipIf: (context) => !isApiKeyRoute(context),
                         },
                     ],
                     storage,
@@ -88,6 +111,7 @@ import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/f
         SettingsModule,
         SetupModule,
         PermissionModule,
+        ApiKeyModule,
     ],
 })
 export class AppModule {}

@@ -15,7 +15,9 @@ import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
 import { InboundFormTemplateService } from './inbound-form-template.service.js'
 import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
-import { MailService } from '../../mail/services/mail.service.js'
+import { MailService, SentMail } from '../../mail/services/mail.service.js'
+import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
+import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
 import { INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 import { InboundFormFull } from '../interfaces/inbound-form.interface.js'
 import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface.js'
@@ -182,7 +184,7 @@ describe('InboundFormSubmissionService', () => {
         })
         checkSubmission = vi.fn<typeof checkSubmission>().mockResolvedValue(SecurityCheckResult.PASSED)
         getPublished = vi.fn<typeof getPublished>().mockResolvedValue(publishedTemplate)
-        sendMail = vi.fn<typeof sendMail>().mockResolvedValue(undefined)
+        sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 501, smtpMessageId: '<m@x>' })
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
@@ -282,14 +284,20 @@ describe('InboundFormSubmissionService', () => {
             }),
             expect.anything(),
         )
-        expect(sendMail).toHaveBeenCalledWith({
-            from: 'noreply@mail.example.com',
-            to: 'owner@business.com',
-            replyTo: 'max@example.com',
-            subject: 'Message from Max',
-            html: '<p>Max wrote in</p>',
-        })
-        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'max@example.com', replyTo: undefined }))
+        expect(sendMail).toHaveBeenCalledWith(
+            {
+                from: 'noreply@mail.example.com',
+                to: 'owner@business.com',
+                replyTo: 'max@example.com',
+                subject: 'Message from Max',
+                html: '<p>Max wrote in</p>',
+            },
+            { projectId: formFull.projectId, source: MailMessageSource.INBOUND_FORM },
+        )
+        expect(sendMail).toHaveBeenCalledWith(
+            expect.objectContaining({ to: 'max@example.com', replyTo: undefined }),
+            expect.anything(),
+        )
         expect(deliveryCreate).toHaveBeenCalledWith(
             expect.objectContaining({
                 status: InboundFormDeliveryStatus.PENDING,
@@ -297,13 +305,48 @@ describe('InboundFormSubmissionService', () => {
                 emailTo: '{{email}}',
                 error: null,
                 sentAt: null,
+                mailMessageId: null,
             }),
             expect.anything(),
         )
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT, emailTo: 'owner@business.com' }),
+                expect.objectContaining({
+                    status: InboundFormDeliveryStatus.SENT,
+                    emailTo: 'owner@business.com',
+                    mailMessageId: 501,
+                }),
             ),
+        )
+    })
+
+    it('links a failed delivery to the logged message of the failed attempt', async () => {
+        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
+        sendMail.mockRejectedValue(new MailSendError(502, new Error('SMTP down')))
+
+        await service.submitForm('contact', submission, {}, {})
+
+        await vi.waitFor(() =>
+            expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
+                status: InboundFormDeliveryStatus.FAILED,
+                error: 'SMTP down',
+                mailMessageId: 502,
+            }),
+        )
+    })
+
+    it('leaves the delivery unlinked when it fails before reaching the mail service', async () => {
+        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
+        sendMail.mockRejectedValue(new Error('SMTP down'))
+
+        await service.submitForm('contact', submission, {}, {})
+
+        await vi.waitFor(() =>
+            expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
+                status: InboundFormDeliveryStatus.FAILED,
+                error: 'SMTP down',
+                mailMessageId: null,
+            }),
         )
     })
 
@@ -353,7 +396,7 @@ describe('InboundFormSubmissionService', () => {
         await service.submitForm('contact', submission, {}, {})
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
 
-        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'max@example.com' }))
+        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'max@example.com' }), expect.anything())
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
                 expect.objectContaining({ status: InboundFormDeliveryStatus.FAILED }),
@@ -496,8 +539,8 @@ describe('InboundFormSubmissionService', () => {
         let finishSending: () => void = () => undefined
         sendMail.mockImplementation(
             () =>
-                new Promise<void>((resolve) => {
-                    finishSending = resolve
+                new Promise<SentMail>((resolve) => {
+                    finishSending = () => resolve({ mailMessageId: 501, smtpMessageId: '<m@x>' })
                 }),
         )
 
@@ -572,6 +615,7 @@ describe('InboundFormSubmissionService', () => {
                     subject: "Message from O'Brien & Co",
                     html: '<p>O&#x27;Brien &amp; Co wrote in</p>',
                 }),
+                expect.anything(),
             ),
         )
     })

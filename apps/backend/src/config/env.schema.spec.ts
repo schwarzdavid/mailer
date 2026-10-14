@@ -24,7 +24,19 @@ describe('envSchema', () => {
             SMTP_PASSWORD: '',
             IMAP_PORT: 993,
             IMAP_SECURE: true,
+            PUBLIC_API_RATE_LIMIT: 60,
+            PUBLIC_API_RATE_TTL: 60000,
         })
+    })
+
+    it('coerces the public api rate limit settings', () => {
+        const env = envSchema.parse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '5', PUBLIC_API_RATE_TTL: '1000' })
+
+        expect(env).toMatchObject({ PUBLIC_API_RATE_LIMIT: 5, PUBLIC_API_RATE_TTL: 1000 })
+    })
+
+    it('rejects a non-positive public api rate limit', () => {
+        expect(envSchema.safeParse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '0' }).success).toBe(false)
     })
 
     it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'SMTP_HOST', 'SMTP_PORT'])('requires %s', (key) => {

@@ -181,6 +181,10 @@ export class ProjectService {
         }
     }
 
+    async hasDomain(projectId: number, domainId: number): Promise<boolean> {
+        return (await this.projectDomainModel.count({ where: { projectId, domainId } })) > 0
+    }
+
     async assertProjectExists(projectId: number): Promise<void> {
         await this.loadProject(projectId)
     }

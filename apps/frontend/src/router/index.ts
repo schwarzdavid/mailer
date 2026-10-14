@@ -13,6 +13,7 @@ import { queryClient } from '@/plugins/tanstack.ts'
 import DomainDetailView from '@/modules/domains/views/details/DomainDetailView.vue'
 import ProjectListView from '@/modules/projects/views/list/ProjectListView.vue'
 import ProjectDetailView from '@/modules/projects/views/details/ProjectDetailView.vue'
+import ProjectMessagesView from '@/modules/projects/views/messages/ProjectMessagesView.vue'
 import InboundFormDetailView from '@/modules/inbound-forms/views/details/InboundFormDetailView.vue'
 import InboundFormTemplateView from '@/modules/inbound-forms/views/template/InboundFormTemplateView.vue'
 import BounceListView from '@/modules/bounces/views/list/BounceListView.vue'
@@ -88,6 +89,12 @@ export const router = createRouter({
                     path: '/projects/:projectId',
                     name: RouteNames.PROJECT_DETAILS,
                     component: ProjectDetailView,
+                    meta: { section: 'projects' },
+                },
+                {
+                    path: '/projects/:projectId/messages',
+                    name: RouteNames.PROJECT_MESSAGES,
+                    component: ProjectMessagesView,
                     meta: { section: 'projects' },
                 },
                 {

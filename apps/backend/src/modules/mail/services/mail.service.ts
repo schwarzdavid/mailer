@@ -1,11 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Transporter } from 'nodemailer'
+import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
 import { MAIL_TRANSPORTER } from '../mail.constants.js'
 import { DomainService } from '../../domain/services/domain.service.js'
 import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { EmailBlockService } from '../../bounce/services/email-block.service.js'
 import { BounceService } from '../../bounce/services/bounce.service.js'
 import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
+import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { MailMessageService } from './mail-message.service.js'
+import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
+import { MailSendError } from '../exceptions/mail-send.error.js'
 
 export interface SendMail {
     from: string
@@ -13,6 +18,22 @@ export interface SendMail {
     replyTo?: string
     subject: string
     html: string
+    text?: string
+}
+
+export interface SendMailContext {
+    projectId: number | null
+    source: MailMessageSource
+    apiKeyId?: number
+}
+
+export interface SentMail {
+    mailMessageId: number
+    smtpMessageId: string
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
 }
 
 @Injectable()
@@ -20,14 +41,41 @@ export class MailService {
     private readonly logger = new Logger(MailService.name)
 
     constructor(
-        @Inject(MAIL_TRANSPORTER) private readonly transporter: Transporter,
+        @Inject(MAIL_TRANSPORTER) private readonly transporter: Transporter<SMTPTransport.SentMessageInfo>,
         private readonly domainService: DomainService,
         private readonly secretEncryptionService: SecretEncryptionService,
         private readonly emailBlockService: EmailBlockService,
         private readonly bounceService: BounceService,
+        private readonly mailMessageService: MailMessageService,
     ) {}
 
-    async sendMail(mail: SendMail): Promise<void> {
+    async sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail> {
+        const { mailMessageId } = await this.mailMessageService.recordPending({
+            projectId: context.projectId,
+            source: context.source,
+            apiKeyId: context.apiKeyId ?? null,
+            emailFrom: mail.from,
+            emailTo: mail.to,
+            subject: mail.subject,
+        })
+
+        let smtpMessageId: string
+        try {
+            smtpMessageId = await this.deliver(mail)
+        } catch (error) {
+            const status = error instanceof EmailBlockedException ? MailMessageStatus.BLOCKED : MailMessageStatus.FAILED
+            await this.updateLog(mailMessageId, () =>
+                this.mailMessageService.markUnsent(mailMessageId, status, errorMessage(error)),
+            )
+            throw new MailSendError(mailMessageId, error)
+        }
+
+        await this.updateLog(mailMessageId, () => this.mailMessageService.markSent(mailMessageId, smtpMessageId))
+
+        return { mailMessageId, smtpMessageId }
+    }
+
+    private async deliver(mail: SendMail): Promise<string> {
         await this.emailBlockService.assertNotBlocked(mail.to)
 
         const [localPart, fqdn] = mail.from.split('@')
@@ -43,13 +91,15 @@ export class MailService {
         const privateKey = await this.secretEncryptionService.decrypt(domain.activeDkim.privateKey)
         const sendingDomain = await this.domainService.getConfiguredSendingDomain()
 
+        let info: SMTPTransport.SentMessageInfo
         try {
-            await this.transporter.sendMail({
+            info = await this.transporter.sendMail({
                 from: mail.from,
                 to: mail.to,
                 replyTo: mail.replyTo,
                 subject: mail.subject,
                 html: mail.html,
+                text: mail.text,
                 envelope: sendingDomain ? { from: `bounce@${sendingDomain.fqdn}`, to: mail.to } : undefined,
                 dkim: {
                     domainName: domain.fqdn,
@@ -63,6 +113,15 @@ export class MailService {
         }
 
         this.logger.log(`Sent mail from ${mail.from} to ${mail.to}`)
+        return info.messageId
+    }
+
+    private async updateLog(mailMessageId: number, update: () => Promise<void>): Promise<void> {
+        try {
+            await update()
+        } catch (error) {
+            this.logger.error(`Failed to update mail message ${mailMessageId}: ${errorMessage(error)}`)
+        }
     }
 
     private async recordRejection(emailAddress: string, error: unknown): Promise<void> {

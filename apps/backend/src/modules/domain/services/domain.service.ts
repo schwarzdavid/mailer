@@ -199,6 +199,12 @@ export class DomainService {
         }
     }
 
+    async getDomainByFqdn(fqdn: string): Promise<Domain | null> {
+        const domain = await this.domainModel.findOne({ where: { fqdn } })
+
+        return domain ? domain.get({ plain: true }) : null
+    }
+
     async getSendingDomainByFqdn(fqdn: string): Promise<DomainWithActiveDkim | null> {
         const domain = await this.domainModel.findOne({
             where: { fqdn },

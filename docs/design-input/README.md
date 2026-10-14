@@ -16,18 +16,18 @@ Material for the redesign in Claude Design (claude.ai/design). Captured 2026-10-
 
 Desktop is 1440px wide; mobile is 390px at 2× scale. Full-page captures, except dialogs and menus, which show the viewport.
 
-| Prefix | Area | Files (`screens/desktop/`) |
-|---|---|---|
-| `01–03` | Onboarding wizard | account step (empty, validation errors), sending domain, DNS records |
-| `05` | Login | empty, validation errors, wrong credentials |
-| `10` | Dashboard | placeholder page |
-| `20–28` | Projects | list (empty, populated with "Recently deleted"), add dialog (and validation), detail (full, sparse, loading = blank), delete dialog, add-member dialog, add-form dialog |
-| `30–34` | Domains | list (empty, populated, row menu, loading), delete dialog, add dialog with apex-domain warning, detail, detail loading |
-| `40–43` | Bounces | bounces and blocked tabs, each empty and populated |
-| `50–55` | Inbound forms | form detail (full, empty), field dialog (add, edit number), reCAPTCHA dialog, receiver dialog, template editor, versions menu |
-| `60` | Settings | sending domain form and infrastructure DNS records |
-| `70–73` | Users | list, add dialog, delete dialog, user detail |
-| `80–81` | Limited user | projects list and project detail as a user with restricted permissions |
+| Prefix  | Area              | Files (`screens/desktop/`)                                                                                                                                              |
+| ------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01–03` | Onboarding wizard | account step (empty, validation errors), sending domain, DNS records                                                                                                    |
+| `05`    | Login             | empty, validation errors, wrong credentials                                                                                                                             |
+| `10`    | Dashboard         | placeholder page                                                                                                                                                        |
+| `20–28` | Projects          | list (empty, populated with "Recently deleted"), add dialog (and validation), detail (full, sparse, loading = blank), delete dialog, add-member dialog, add-form dialog |
+| `30–34` | Domains           | list (empty, populated, row menu, loading), delete dialog, add dialog with apex-domain warning, detail, detail loading                                                  |
+| `40–43` | Bounces           | bounces and blocked tabs, each empty and populated                                                                                                                      |
+| `50–55` | Inbound forms     | form detail (full, empty), field dialog (add, edit number), reCAPTCHA dialog, receiver dialog, template editor, versions menu                                           |
+| `60`    | Settings          | sending domain form and infrastructure DNS records                                                                                                                      |
+| `70–73` | Users             | list, add dialog, delete dialog, user detail                                                                                                                            |
+| `80–81` | Limited user      | projects list and project detail as a user with restricted permissions                                                                                                  |
 
 `screens/mobile/` has the main pages at phone width: login, dashboard, projects list, project detail, form detail, template editor, domains list and detail, bounces, settings, users list and detail.
 

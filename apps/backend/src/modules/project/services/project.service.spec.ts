@@ -149,6 +149,7 @@ describe('ProjectService', () => {
     let projectDomainFindOrCreate: Mock<
         (options: { where: { projectId: number; domainId: number } }) => Promise<[object, boolean]>
     >
+    let projectDomainCount: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let projectDomainDestroy: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let formCount: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let getDomainById: Mock<DomainService['getDomainById']>
@@ -167,6 +168,7 @@ describe('ProjectService', () => {
         projectCreate = vi.fn<typeof projectCreate>()
         projectDomainFindOne = vi.fn<typeof projectDomainFindOne>()
         projectDomainFindOrCreate = vi.fn<typeof projectDomainFindOrCreate>().mockResolvedValue([{}, true])
+        projectDomainCount = vi.fn<typeof projectDomainCount>().mockResolvedValue(0)
         projectDomainDestroy = vi.fn<typeof projectDomainDestroy>().mockResolvedValue(0)
         formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
@@ -192,6 +194,7 @@ describe('ProjectService', () => {
                         findOne: projectDomainFindOne,
                         findOrCreate: projectDomainFindOrCreate,
                         destroy: projectDomainDestroy,
+                        count: projectDomainCount,
                     },
                 },
                 { provide: getModelToken(InboundFormModel), useValue: { count: formCount } },
@@ -630,6 +633,21 @@ describe('ProjectService', () => {
             await expect(service.assertDomainInProject(1, 3)).rejects.toThrow(
                 new BadRequestException('Domain does not belong to the project'),
             )
+        })
+    })
+
+    describe('hasDomain', () => {
+        it('is true when the domain is assigned to the project', async () => {
+            projectDomainCount.mockResolvedValue(1)
+
+            await expect(service.hasDomain(3, 8)).resolves.toBe(true)
+            expect(projectDomainCount).toHaveBeenCalledWith({ where: { projectId: 3, domainId: 8 } })
+        })
+
+        it('is false otherwise', async () => {
+            projectDomainCount.mockResolvedValue(0)
+
+            await expect(service.hasDomain(3, 8)).resolves.toBe(false)
         })
     })
 

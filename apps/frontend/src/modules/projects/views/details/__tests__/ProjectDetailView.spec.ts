@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DomainApi, InboundFormApi, ProjectApi } from 'api'
+import { ApiKeyApi, DomainApi, InboundFormApi, ProjectApi } from 'api'
 import ProjectDetailView from '../ProjectDetailView.vue'
-import { findButton, mountView } from '@/__tests__/support.ts'
-import { formListItem, projectDetail } from '@/__tests__/fixtures.ts'
+import { createTestRouter, findButton, mountView } from '@/__tests__/support.ts'
+import { apiKey, formListItem, projectDetail } from '@/__tests__/fixtures.ts'
+import { RouteNames } from '@/router/RouteNames.ts'
 
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()
@@ -17,6 +18,7 @@ function mockProjectApis() {
     vi.spyOn(ProjectApi, 'getProjectImplicitAccess').mockResolvedValue({ superAdminCount: 1, allProjectsUserCount: 0 })
     vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([formListItem()])
     vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
+    vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([apiKey()])
 }
 
 afterEach(() => {
@@ -31,7 +33,7 @@ describe('ProjectDetailView', () => {
         await vi.waitFor(() => expect(wrapper.get('h1').text()).toBe('Acme Website'))
         await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
         const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
-        expect(titles).toEqual(['Inbound forms', 'Sender domains', 'Members', 'General', 'Delete project'])
+        expect(titles).toEqual(['Inbound forms', 'Sender domains', 'Members', 'API keys', 'General', 'Delete project'])
         expect(wrapper.get('.page-header__meta').text()).toContain('1 form')
         expect(wrapper.get('.page-header__meta').text()).toContain('No sender domain')
         expect(wrapper.text()).toContain('Projects')
@@ -50,6 +52,34 @@ describe('ProjectDetailView', () => {
         expect(findButton(wrapper, 'Save')).toBeUndefined()
         expect(wrapper.text()).not.toContain('Delete project')
         expect(wrapper.text()).not.toContain('Members')
+    })
+
+    it('shows the API keys card to every project reader', async () => {
+        mockProjectApis()
+        const wrapper = mountView(ProjectDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
+        const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
+        expect(titles).toContain('API keys')
+        expect(findButton(wrapper, 'New API key')).toBeUndefined()
+    })
+
+    it('links every project reader to the sent mail', async () => {
+        mockProjectApis()
+        const router = createTestRouter()
+        router.addRoute({
+            path: '/projects/:projectId/messages',
+            name: RouteNames.PROJECT_MESSAGES,
+            component: { render: () => null },
+        })
+        const wrapper = mountView(ProjectDetailView, { global: { plugins: [router] } }, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(wrapper.get('h1').text()).toContain('Acme Website'))
+        expect(findButton(wrapper, 'Sent mail')?.attributes('href')).toBe('/projects/1/messages')
     })
 
     it('shows the not-found state for a missing project', async () => {

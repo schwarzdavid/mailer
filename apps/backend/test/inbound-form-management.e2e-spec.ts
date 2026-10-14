@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
 import { configureSendingDomain } from './support/sending-domain.js'
@@ -525,6 +525,12 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(deliveries.map((delivery) => delivery.emailTo).sort()).toEqual(
                 ['grace@ifm-submitter.test', ownerAddress].sort(),
             )
+            await vi.waitFor(async () => {
+                const linked = await deliveryModel().findAll({
+                    where: { inboundFormSubmissionId: submission!.inboundFormSubmissionId },
+                })
+                expect(linked.every((delivery) => delivery.mailMessageId !== null)).toBe(true)
+            })
             expect(await fetchMessagesTo(mailhogUrl, inactiveAddress)).toEqual([])
             expect(await fetchMessagesTo(mailhogUrl, unpublishedAddress)).toEqual([])
         })

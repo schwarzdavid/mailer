@@ -6,6 +6,7 @@ export enum RouteNames {
     DOMAIN_DETAILS = 'domains::details',
     PROJECT_LIST = 'projects::list',
     PROJECT_DETAILS = 'projects::details',
+    PROJECT_MESSAGES = 'projects::messages',
     INBOUND_FORM_DETAILS = 'inboundForms::details',
     INBOUND_FORM_TEMPLATE = 'inboundForms::template',
     BOUNCE_LIST = 'bounces::list',

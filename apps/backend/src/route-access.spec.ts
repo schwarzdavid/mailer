@@ -10,11 +10,14 @@ import {
 import { describe, expect, it } from 'vitest'
 import { PUBLIC_KEY } from './modules/auth/decorators/Public.js'
 import { ABILITY_KEY, type AbilityRequirement } from './modules/permission/decorators/RequireAbility.js'
+import { ApiKeyController } from './modules/api-key/controller/api-key.controller.js'
 import { AuthController } from './modules/auth/controller/auth.controller.js'
 import { BounceController } from './modules/bounce/controller/bounce.controller.js'
 import { DomainController } from './modules/domain/controller/domain.controller.js'
 import { InboundFormController } from './modules/inbound-form/controller/inbound-form.controller.js'
+import { MailMessageController } from './modules/mail/controller/mail-message.controller.js'
 import { PublicInboundFormController } from './modules/inbound-form/controller/public-inbound-form.controller.js'
+import { PublicSendController } from './modules/api-key/controller/public-send.controller.js'
 import { RoleController } from './modules/permission/controller/role.controller.js'
 import { ProjectController } from './modules/project/controller/project.controller.js'
 import { SettingsController } from './modules/settings/controller/settings.controller.js'
@@ -34,11 +37,14 @@ interface RouteAccess {
 }
 
 const controllers: Type[] = [
+    ApiKeyController,
     AuthController,
     BounceController,
     DomainController,
     InboundFormController,
+    MailMessageController,
     PublicInboundFormController,
+    PublicSendController,
     RoleController,
     ProjectController,
     SettingsController,
@@ -95,11 +101,18 @@ function collectRoutes(): Record<string, RouteAccess> {
 
 const jwt = ['JwtAuthGuard', 'PoliciesGuard']
 const throttled = ['ThrottlerGuard']
+const apiKeyAuth = ['ThrottlerGuard', 'ApiKeyAuthGuard']
 
 const expectedRoutes: Record<string, RouteAccess> = {
     'POST /auth/login': { guards: ['ThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
     'GET /auth/user': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/ability': { guards: jwt, abilities: [], scopedByPrincipal: true },
+
+    'GET /project/:projectId/messages': { guards: jwt, abilities: [], scopedByPrincipal: true },
+
+    'GET /project/:projectId/api-keys': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'POST /project/:projectId/api-keys': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'DELETE /project/:projectId/api-keys/:apiKeyId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
     'GET /bounce': { guards: jwt, abilities: ['read:Bounce'], scopedByPrincipal: false },
     'GET /bounce/blocked': { guards: jwt, abilities: ['read:Bounce'], scopedByPrincipal: false },
@@ -146,6 +159,8 @@ const expectedRoutes: Record<string, RouteAccess> = {
     },
 
     'POST /public/form/:slug': { guards: throttled, abilities: [], scopedByPrincipal: false },
+
+    'POST /v1/send': { guards: apiKeyAuth, abilities: [], scopedByPrincipal: true },
 
     'GET /role': { guards: jwt, abilities: ['read:Role'], scopedByPrincipal: false },
 
@@ -232,6 +247,10 @@ describe('route throttling', () => {
 
     it('exempts the setup status probe the router polls on every navigation', () => {
         expect(throttleMetadata('SKIP', SetupController, 'getStatus')).toBe(true)
+    })
+
+    it('moves the public send api off the default budget onto its per-key budget', () => {
+        expect(throttleMetadata('SKIP', PublicSendController, 'sendMail')).toBe(true)
     })
 
     it('keeps throttling the first-user registration', () => {

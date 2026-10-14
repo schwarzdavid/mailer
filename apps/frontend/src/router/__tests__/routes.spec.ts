@@ -175,6 +175,13 @@ describe('router', () => {
             expect(landed).toBe(RouteNames.PROJECT_DETAILS)
         })
 
+        it('opens the sent mail of a project without a separate permission', async () => {
+            const { router: fresh, landed } = await navigate({}, '/projects/4/messages')
+
+            expect(landed).toBe(RouteNames.PROJECT_MESSAGES)
+            expect(fresh.currentRoute.value.meta.ability).toBeUndefined()
+        })
+
         it('shows unknown URLs inside the shell', async () => {
             const { landed } = await navigate({}, '/does/not/exist')
 
@@ -202,6 +209,7 @@ describe('router', () => {
             ['/', 'dashboard'],
             ['/projects', 'projects'],
             ['/projects/4', 'projects'],
+            ['/projects/4/messages', 'projects'],
             ['/forms/9', 'projects'],
             ['/forms/9/receivers/2/template', 'projects'],
         ])('highlights the right section for %s', async (path, section) => {

@@ -19,6 +19,7 @@ import {
 import { InboundFormSubmissionModel } from './inbound-form-submission.model.js'
 import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
 import { InboundFormTemplateModel } from './inbound-form-template.model.js'
+import { MailMessageModel } from '../../mail/models/mail-message.model.js'
 
 @Table({
     tableName: 'inbound_form_delivery',
@@ -68,6 +69,11 @@ export class InboundFormDeliveryModel
     @Column(DataType.DATE)
     declare sentAt: Date | null
 
+    @ForeignKey(() => MailMessageModel)
+    @AllowNull
+    @Column(DataType.INTEGER)
+    declare mailMessageId: number | null
+
     @CreatedAt
     declare createdAt: Date
 
@@ -91,4 +97,10 @@ export class InboundFormDeliveryModel
         onUpdate: 'CASCADE',
     })
     template: InboundFormTemplateModel | null = null
+
+    @BelongsTo(() => MailMessageModel, {
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+    })
+    mailMessage: MailMessageModel | null = null
 }

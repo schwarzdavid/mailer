@@ -115,11 +115,23 @@ Don't set `TRUST_PROXY=true` unless the backend can only be reached through the 
 
 Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, requests are let through without rate limiting and a warning is logged.
 
+## Public send API
+
+Create an API key on a project page (API keys → New API key); the full key is shown once. Send with it from any sender domain assigned to that project:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/send \
+  -H "Authorization: Bearer sdm_xxxxxxxx_…" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"news@mail.example.com","to":"reader@example.org","subject":"Hello","html":"<p>Hi</p>"}'
+```
+
+The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. Responses: `202 { mailMessageId, status }`. Domain errors (403, 422, 502) carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`); authentication (401), validation (400), rate limit (429) and payload size (413) errors use the standard Nest error shape without a `code`. `html` and `text` may each hold up to 1,000,000 characters, and the send endpoint accepts JSON bodies up to roughly 8 MB to fit them; every other endpoint keeps the default 100 kB JSON limit. Each key is limited to `PUBLIC_API_RATE_LIMIT` requests (default 60) per `PUBLIC_API_RATE_TTL` ms (default 60000). On top of that, each client IP is capped at 10 × `PUBLIC_API_RATE_LIMIT` requests per window across all keys. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page.
+
 ## Open todos
 
 - [ ] **Dashboard** The dashboard is still an empty placeholder.
 - [ ] **UI** The current UI is only as meant as a proof of concept and needs to be improved/rewritten.
-- [ ] **Public send API** Let customers send email through an API-key-authenticated endpoint. The mail module is already built for this.
 - [ ] **Role editor** The schema supports custom roles, but only the three seeded roles exist so far. There are no endpoints or UI to create, edit or delete roles.
 - [ ] **Encrypt security secrets** reCAPTCHA secrets on inbound forms are stored in plain text. They should be encrypted like DKIM keys.
 - [ ] **Bounce improvements:**

@@ -36,28 +36,31 @@ is recorded in one central message log per project.
    `text`. No cc/bcc, attachments, custom headers, or templates.
 6. **Key transport:** accepted from `Authorization: Bearer <key>` **or** the `key` query
    parameter. Header wins if both are present. Only a hash is stored.
-7. **UI deferred:** a design rework is in progress in a separate effort. All frontend
-   work for this feature (key management, message log) is out of scope here and will be
-   planned in detail after the rework lands. This spec delivers backend + the
-   regenerated `api` client only.
+7. **UI after the design rework:** UI was first deferred until the "Mail Admin" design
+   rework landed. It has now landed, so key management and the message log are built
+   with its shared components (see **Frontend**).
+8. **Message log paging (revised 2026-10-14):** offset paging with a total
+   (`page`, `itemsPerPage`, `search`, `source`, `status` → `{ items, total }`), the same
+   shape as the reworked bounce list, so the UI can reuse `VDataTableServer`. This
+   replaces the earlier cursor design.
 
 ## Backend
 
-### Data model — migration `014-create-api-keys-and-mail-messages.ts`
+### Data model — migration `015-create-api-keys-and-mail-messages.ts`
 
 **`api_keys`** (new module `apps/backend/src/modules/api-key/`)
 
-| Column | Type | Notes |
-|---|---|---|
-| `apiKeyId` | serial PK | |
-| `projectId` | int FK → `projects`, `ON DELETE CASCADE` | |
-| `name` | varchar(100) | human label |
-| `prefix` | varchar(16), unique | e.g. `sdm_a1b2c3d4`, shown in lists and used for lookup |
-| `secretHash` | char(64) | hex SHA-256 of the full key |
-| `createdByUserId` | int FK → `users`, `ON DELETE SET NULL`, nullable | |
-| `lastUsedAt` | timestamptz, nullable | |
-| `revokedAt` | timestamptz, nullable | soft revoke |
-| `createdAt` / `updatedAt` | timestamptz | |
+| Column                    | Type                                             | Notes                                                   |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------- |
+| `apiKeyId`                | serial PK                                        |                                                         |
+| `projectId`               | int FK → `projects`, `ON DELETE CASCADE`         |                                                         |
+| `name`                    | varchar(100)                                     | human label                                             |
+| `prefix`                  | varchar(16), unique                              | e.g. `sdm_a1b2c3d4`, shown in lists and used for lookup |
+| `secretHash`              | char(64)                                         | hex SHA-256 of the full key                             |
+| `createdByUserId`         | int FK → `users`, `ON DELETE SET NULL`, nullable |                                                         |
+| `lastUsedAt`              | timestamptz, nullable                            |                                                         |
+| `revokedAt`               | timestamptz, nullable                            | soft revoke                                             |
+| `createdAt` / `updatedAt` | timestamptz                                      |                                                         |
 
 Key format: `sdm_<8 random base62 chars>_<32 random bytes, base64url>`. The `prefix`
 column holds `sdm_<8 chars>`. SHA-256 (not bcrypt) is sufficient because the secret is
@@ -65,20 +68,20 @@ high-entropy random data, not a user-chosen password.
 
 **`mail_messages`** (owned by the `mail` module)
 
-| Column | Type | Notes |
-|---|---|---|
-| `mailMessageId` | serial PK | |
-| `projectId` | int FK → `projects`, `ON DELETE SET NULL`, nullable | |
-| `source` | enum `api` \| `inbound_form` | |
-| `apiKeyId` | int FK → `api_keys`, `ON DELETE SET NULL`, nullable | set for `api` |
-| `emailFrom` | varchar(320) | |
-| `emailTo` | varchar(320) | |
-| `subject` | varchar(998) | |
-| `status` | enum `pending` \| `sent` \| `failed` \| `blocked` | |
-| `error` | text, nullable | |
-| `smtpMessageId` | varchar(998), nullable | nodemailer `info.messageId`, for future bounce correlation |
-| `sentAt` | timestamptz, nullable | |
-| `createdAt` / `updatedAt` | timestamptz | |
+| Column                    | Type                                                | Notes                                                      |
+| ------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| `mailMessageId`           | serial PK                                           |                                                            |
+| `projectId`               | int FK → `projects`, `ON DELETE SET NULL`, nullable |                                                            |
+| `source`                  | enum `api` \| `inbound_form`                        |                                                            |
+| `apiKeyId`                | int FK → `api_keys`, `ON DELETE SET NULL`, nullable | set for `api`                                              |
+| `emailFrom`               | varchar(320)                                        |                                                            |
+| `emailTo`                 | varchar(320)                                        |                                                            |
+| `subject`                 | varchar(998)                                        |                                                            |
+| `status`                  | enum `pending` \| `sent` \| `failed` \| `blocked`   |                                                            |
+| `error`                   | text, nullable                                      |                                                            |
+| `smtpMessageId`           | varchar(998), nullable                              | nodemailer `info.messageId`, for future bounce correlation |
+| `sentAt`                  | timestamptz, nullable                               |                                                            |
+| `createdAt` / `updatedAt` | timestamptz                                         |                                                            |
 
 Indexes: `(projectId, mailMessageId DESC)`, `(smtpMessageId)`.
 
@@ -89,22 +92,22 @@ Indexes: `(projectId, mailMessageId DESC)`, `(smtpMessageId)`.
 
 - `SendMail` gains optional `text?: string`, passed through to nodemailer.
 - New context parameter:
-  ```ts
-  interface SendMailContext {
-      projectId: number | null
-      source: MailMessageSource
-      apiKeyId?: number
-  }
-  sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail>
-  interface SentMail { mailMessageId: number; smtpMessageId: string }
-  ```
+    ```ts
+    interface SendMailContext {
+        projectId: number | null
+        source: MailMessageSource
+        apiKeyId?: number
+    }
+    sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail>
+    interface SentMail { mailMessageId: number; smtpMessageId: string }
+    ```
 - Flow:
-  1. Insert `mail_messages` row with `status: pending`.
-  2. `assertNotBlocked` throws `EmailBlockedException` → update row to `blocked`
-     (error = message), rethrow.
-  3. Domain / DKIM resolution errors → row `failed`, rethrow.
-  4. Transport error → existing `recordRejection`, row `failed` with error, rethrow.
-  5. Success → row `sent`, `smtpMessageId`, `sentAt`; return `SentMail`.
+    1. Insert `mail_messages` row with `status: pending`.
+    2. `assertNotBlocked` throws `EmailBlockedException` → update row to `blocked`
+       (error = message), rethrow.
+    3. Domain / DKIM resolution errors → row `failed`, rethrow.
+    4. Transport error → existing `recordRejection`, row `failed` with error, rethrow.
+    5. Success → row `sent`, `smtpMessageId`, `sentAt`; return `SentMail`.
 - Failures to update the log row are logged and never mask the original outcome.
 - Row writes go through a new `MailMessageService` (`mail/services/`), which also serves
   list queries. Model + interface live in `mail/models/` and `mail/interfaces/`.
@@ -125,22 +128,23 @@ attaches it to the thrown error via a `MailSendError` wrapper carrying `mailMess
   `secretHash`), `mappers/api-key.mapper.ts` (strips `secretHash` — single chokepoint, as
   `user.mapper.ts`).
 - `services/api-key.service.ts`:
-  - `createKey(projectId, name, principal, ability)` → `{ apiKey, key }`; asserts
-    `assertProjectUpdatable`.
-  - `listKeys(projectId, ability)`; asserts `assertProjectReadable`.
-  - `revokeKey(projectId, apiKeyId, ability)`; asserts updatable; idempotent.
-  - `authenticate(rawKey)` → `ApiKey | null`: parse format, look up by prefix, constant-
-    time compare (`crypto.timingSafeEqual`) of hashes, reject revoked keys and keys whose
-    project is soft-deleted.
-  - `touchLastUsed(apiKeyId)`: fire-and-forget, gated by a Redis key
-    `api-key:last-used:<id>` with 60 s TTL so at most one write per minute per key.
+    - `createKey(projectId, name, principal, ability)` → `{ apiKey, key }`; asserts
+      `assertProjectUpdatable`.
+    - `listKeys(projectId, ability)`; asserts `assertProjectReadable`.
+    - `revokeKey(projectId, apiKeyId, ability)`; asserts updatable; idempotent.
+    - `authenticate(rawKey)` → `ApiKey | null`: parse format, look up by prefix, constant-
+      time compare (`crypto.timingSafeEqual`) of hashes, reject revoked keys and keys whose
+      project is soft-deleted.
+    - `touchLastUsed(apiKeyId)`: fire-and-forget, gated by a Redis key
+      `api-key:last-used:<id>` with 60 s TTL so at most one write per minute per key.
 - `guards/api-key-auth.guard.ts`: extracts the key (Bearer header first, then `key`
   query), calls `authenticate`, attaches the key to `request.apiKey`, 401 otherwise.
 - `decorators/api-key-principal.decorator.ts`: `@ApiKeyPrincipal()` returns
   `request.apiKey` (401 if absent).
-- `decorators/api-key-auth.decorator.ts`: `@ApiKeyAuth()` composes `@Public()` (so the
-  JWT guard skips), `UseGuards(ThrottlerGuard, ApiKeyAuthGuard)` and the Swagger
-  security requirements.
+- `decorators/api-key-auth.decorator.ts`: `@ApiKeyAuth()` composes
+  `UseGuards(ThrottlerGuard, ApiKeyAuthGuard)`, `SkipThrottle({ default: true })`, a
+  route marker for the `publicApi` throttler and the Swagger security requirements.
+  No `@Public()`: JWT auth only applies through `@JwtAuth()`, so there is nothing to opt out of.
 
 ### HTTP API — public send (`PublicSendController`, tag `public-send`)
 
@@ -152,6 +156,7 @@ Request `PublicSendDto`: `from` (`IsEmail`), `to` (`IsEmail`), `replyTo?` (`IsEm
 Response `202` `PublicSendResultDto`: `{ mailMessageId, status: 'sent' }`.
 
 `PublicSendService.send(apiKey, dto)`:
+
 1. Split `from`; resolve the domain by FQDN; require it to be assigned to
    `apiKey.projectId` → else 403 `FROM_DOMAIN_NOT_ALLOWED`.
 2. Require a verified sending domain with active DKIM → else 422
@@ -159,19 +164,27 @@ Response `202` `PublicSendResultDto`: `{ mailMessageId, status: 'sent' }`.
 3. `mailService.sendMail(..., { projectId, source: 'api', apiKeyId })`.
 4. Map errors:
 
-| Case | HTTP | Log row |
-|---|---|---|
-| Missing / malformed / unknown / revoked key | 401 | none |
-| `from` domain not in project | 403 `FROM_DOMAIN_NOT_ALLOWED` | none |
-| Domain not verified / no DKIM | 422 `FROM_DOMAIN_NOT_READY` | none |
-| Recipient blocked | 422 `RECIPIENT_BLOCKED` | `blocked` |
-| SMTP / relay failure | 502 `DELIVERY_FAILED` + `mailMessageId` | `failed` |
-| Rate limit exceeded | 429 | none |
+| Case                                        | HTTP                                    | Log row   |
+| ------------------------------------------- | --------------------------------------- | --------- |
+| Missing / malformed / unknown / revoked key | 401                                     | none      |
+| `from` domain not in project                | 403 `FROM_DOMAIN_NOT_ALLOWED`           | none      |
+| Domain not verified / no DKIM               | 422 `FROM_DOMAIN_NOT_READY`             | none      |
+| Recipient blocked                           | 422 `RECIPIENT_BLOCKED`                 | `blocked` |
+| SMTP / relay failure                        | 502 `DELIVERY_FAILED` + `mailMessageId` | `failed`  |
+| Rate limit exceeded                         | 429                                     | none      |
 
 Error bodies use Nest's standard shape with an added `code` field.
 
-Rate limiting: `@Throttle` with a tracker returning `api-key:<prefix>` (taken from the raw
-key before authentication, so invalid keys are throttled too), limits from env.
+Rate limiting (revised 2026-10-14 after review): there are two named throttlers, active only on
+API-key routes. The default throttler is skipped there.
+
+- `publicApi` buckets by a SHA-256 hash of the raw key, computed before authentication, or by
+  client IP when the key is malformed or missing. Forged secrets that share a real key's visible
+  prefix land in their own buckets and can't drain the real key's budget.
+- `publicApiIp` caps each client IP at `PUBLIC_API_RATE_LIMIT × 10` per window, so rotating
+  fake keys can't evade the limit.
+
+Both use `PUBLIC_API_RATE_TTL`.
 
 ### HTTP API — management (`ApiKeyController`, `@JwtAuth`, tag `api-key`)
 
@@ -183,8 +196,9 @@ key before authentication, so invalid keys are throttled too), limits from env.
 
 ### HTTP API — message log (`MailMessageController`, `@JwtAuth`, tag `mail-message`)
 
-- `GET /api/project/:projectId/messages?limit=50&before=<mailMessageId>&source=&status=`
-  → `MailMessageDto[]`, newest first, `limit` max 100. Asserts `assertProjectReadable`.
+- `GET /api/project/:projectId/messages?page=1&itemsPerPage=25&search=&source=&status=`
+  → `MailMessagePageDto { items: MailMessageDto[]; total }`, newest first,
+  `itemsPerPage` max 100, `search` matches recipient or subject. Asserts `assertProjectReadable`.
 
 ### Swagger
 
@@ -193,14 +207,36 @@ header (`type: http`, `scheme: bearer`, `bearerFormat: 'sdm_…'`, name `api-key
 `POST /v1/send` declares them. The `v1` segment is the public API's versioning
 anchor; internal routes stay unversioned.
 
+## Frontend (added 2026-10-14, after the design rework)
+
+Built with the Mail Admin shared components and rules from `docs/handoff.md`.
+
+- **API keys card** on the project page, between Members and General. Every project
+  reader sees the list. Each row shows the name, prefix (mono), "Last used <relative time>"
+  or "Never used", and a neutral "Revoked" badge. Active keys come first. "New API key" in
+  the card header and the per-row revoke action only render with project `update`.
+- **Create:** a FormDialog with a required name, then a persistent reveal dialog. It shows
+  the full key once in a CopyField with a warning and a usage hint, and has a single "Done"
+  button. The key is dropped from memory when the dialog closes. Creating confirms with a
+  snackbar.
+- **Revoke:** cannot be undone, so it uses ConfirmDialog (destructive) rather than the
+  8-second Undo, then shows a snackbar.
+- **Sent mail page** at `/projects/:projectId/messages` (`section: projects`, breadcrumbs
+  Projects › project). It is a table card modelled on the bounce table: search on recipient
+  or subject, source and status filter chips, offset paging with a total, and the columns
+  recipient, subject (with the error underneath when failed), source tag, status badge and
+  sent time. The project page header links to it ("Sent mail").
+- Tests: composable specs, card, dialog and view specs (Vitest/jsdom), and one Playwright
+  flow (create key → send via API → see it in Sent mail → revoke → 401).
+
 ## Configuration
 
 Added to `envSchema` (with defaults) and `.env.example`:
 
-| Key | Default | Purpose |
-|---|---|---|
-| `PUBLIC_API_RATE_LIMIT` | `60` | requests per window per key |
-| `PUBLIC_API_RATE_TTL` | `60000` | window in ms |
+| Key                     | Default | Purpose                     |
+| ----------------------- | ------- | --------------------------- |
+| `PUBLIC_API_RATE_LIMIT` | `60`    | requests per window per key |
+| `PUBLIC_API_RATE_TTL`   | `60000` | window in ms                |
 
 ## New dependencies
 
@@ -209,6 +245,7 @@ None.
 ## Testing
 
 Backend unit (`*.spec.ts`, typed `vi.fn<Service['method']>()` doubles):
+
 - `ApiKeyService`: key format, hash-only storage, authenticate (valid, wrong secret,
   unknown prefix, revoked, deleted project), revoke idempotency, ability checks,
   `touchLastUsed` throttling.
@@ -222,6 +259,7 @@ Backend unit (`*.spec.ts`, typed `vi.fn<Service['method']>()` doubles):
 - `env.schema.spec.ts`: new keys and defaults.
 
 Backend e2e (`test/public-send.e2e-spec.ts`):
+
 - create key via management endpoint → send via header → 202, `sent` row visible via
   messages endpoint; `lastUsedAt` set.
 - send via `?key=` → 202.
@@ -237,12 +275,10 @@ then `pnpm check`.
 
 ## Documentation
 
-README: add a "Public send API" section with a curl example; update the open todo to
-note the backend is done and the UI is pending the design rework.
+README: add a "Public send API" section with a curl example, and tick off the open todo.
 
 ## Out of scope
 
-- All frontend / UI work (deferred until after the design rework).
 - Queueing, retries, scheduled sends.
 - Multiple recipients, cc/bcc, attachments, custom headers, templates via API.
 - Storing message bodies.

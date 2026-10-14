@@ -345,6 +345,81 @@
                         "delete": "Delete forms and the project"
                     }
                 }
+            },
+            "apiKeys": {
+                "title": "API keys",
+                "description": "Keys let your apps send mail from this project's sender domains.",
+                "add": "New API key",
+                "thing": "API keys",
+                "prefix": "Key {prefix}…",
+                "lastUsed": "Last used {time}",
+                "neverUsed": "Never used",
+                "revoked": "Revoked",
+                "revokeLabel": "Revoke {name}",
+                "confirmTitle": "Revoke “{name}”?",
+                "confirmBody": "Apps using this key stop sending immediately. This can't be undone.",
+                "confirm": "Revoke key",
+                "revokedDone": "“{name}” revoked",
+                "revokeError": "Couldn't revoke “{name}”",
+                "created": "“{name}” created",
+                "empty": {
+                    "title": "No API keys yet",
+                    "text": "Create a key to send mail from your own app.",
+                    "textReadOnly": "Ask someone with update access to create one."
+                },
+                "dialog": {
+                    "title": "New API key",
+                    "intro": "Name the key after the app that will use it.",
+                    "name": "Name",
+                    "nameRequired": "Enter a name",
+                    "submit": "Create key",
+                    "error": "Couldn't create the key"
+                },
+                "reveal": {
+                    "title": "Copy your API key",
+                    "warning": "Copy this key now. You won't be able to see it again.",
+                    "field": "API key",
+                    "usage": "Send it as {header} to {endpoint}.",
+                    "done": "Done"
+                }
+            },
+            "messages": {
+                "title": "Sent mail",
+                "description": "Every mail this project sent, from forms and the API.",
+                "open": "Sent mail",
+                "thing": "sent mail",
+                "loading": "Loading sent mail",
+                "search": "Search recipient or subject",
+                "count": "No messages | 1 message | {count} messages",
+                "range": "{from}–{to} of {total}",
+                "previous": "Previous page",
+                "next": "Next page",
+                "sources": { "all": "All sources", "api": "API", "inbound_form": "Forms" },
+                "statuses": {
+                    "all": "All statuses",
+                    "sent": "Sent",
+                    "failed": "Failed",
+                    "blocked": "Blocked",
+                    "pending": "Sending"
+                },
+                "sourceTag": { "api": "API", "inbound_form": "Form" },
+                "columns": {
+                    "recipient": "Recipient",
+                    "subject": "Subject",
+                    "source": "Source",
+                    "status": "Status",
+                    "sent": "Sent"
+                },
+                "empty": {
+                    "title": "No mail sent yet",
+                    "text": "Mail from this project's forms and API keys shows up here."
+                },
+                "noMatch": {
+                    "title": "No messages match “{search}”",
+                    "titleFilter": "No messages match these filters",
+                    "text": "Try another search or clear the filters.",
+                    "clear": "Clear filters"
+                }
             }
         },
         "domains": {
