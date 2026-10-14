@@ -1,110 +1,133 @@
 <template>
-    <VCard :title="t('module.inboundForms.details.general.title')">
-        <form @submit.prevent="onSubmit">
-            <VCardItem>
-                <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
-                <VTextField name="name" :label="t('field.name')" v-model="name" :error-messages="errors.name" />
-                <VTextField name="slug" :label="t('field.slug')" v-model="slug" :error-messages="errors.slug" />
-                <VTextField :label="t('field.project')" :model-value="project?.name" readonly />
-                <VSelect
-                    name="domainId"
-                    :label="t('field.domain')"
-                    v-model="domainId"
-                    :items="project?.domains ?? []"
-                    item-title="fqdn"
-                    item-value="domainId"
-                    clearable
-                    :error-messages="errors.domainId"
-                />
-                <VSwitch name="isActive" :label="t('module.inboundForms.status.active')" v-model="isActive" />
-                <VTextField :label="t('module.inboundForms.details.endpoint')" :model-value="endpointUrl" readonly>
-                    <template #append-inner>
-                        <VBtn
-                            variant="text"
-                            size="small"
-                            :text="copied ? t('cta.copy.success') : t('cta.copy.default')"
-                            @click="copyEndpoint"
-                        />
-                    </template>
-                </VTextField>
-            </VCardItem>
-            <VCardActions>
-                <VSpacer />
-                <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="isPending" type="submit" />
-            </VCardActions>
+    <SectionCard :title="t('module.inboundForms.details.general.title')">
+        <form v-if="canUpdate" :id="formId" class="form-grid" novalidate @submit.prevent="onSubmit">
+            <InlineAlert v-if="errorMessage" tone="error" :title="t('dialog.saveFailed')" :text="errorMessage" />
+            <VTextField
+                v-model="name"
+                name="name"
+                :label="requiredLabel(t('field.name'))"
+                :error-messages="errors.name"
+                aria-required="true"
+            />
+            <VTextField
+                v-model="slug"
+                name="slug"
+                class="mono-field"
+                :label="requiredLabel(t('field.slug'))"
+                :prefix="SLUG_PREFIX"
+                :hint="t('module.inboundForms.details.general.slugHint')"
+                persistent-hint
+                :error-messages="errors.slug"
+                aria-required="true"
+            />
+            <VSelect
+                v-model="domainId"
+                name="domainId"
+                :label="t('module.inboundForms.field.senderDomain')"
+                :items="project?.domains ?? []"
+                item-title="fqdn"
+                item-value="domainId"
+                clearable
+                :hint="t('module.inboundForms.add.domainHint', { project: project?.name ?? '' })"
+                persistent-hint
+                :error-messages="errors.domainId"
+            />
         </form>
-    </VCard>
+        <div v-else class="form-grid">
+            <ReadonlyValue :label="t('field.name')" :value="form.name" />
+            <ReadonlyValue :label="t('field.slug')" :value="form.slug" mono />
+            <ReadonlyValue :label="t('module.inboundForms.field.senderDomain')" :value="domainName" mono />
+        </div>
+        <template v-if="canUpdate" #footer>
+            <SaveFooter :form="formId" :dirty="meta.dirty" :pending="isPending" @discard="discard" />
+        </template>
+    </SectionCard>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from 'vue'
+    import { computed, ref, useId, watch } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
-    import { useQuery } from '@tanstack/vue-query'
-    import type { InboundFormDetailDto } from 'api'
-    import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
-    import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
-    import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import type { InboundFormDetailDto, ProjectDetailDto } from 'api'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import ReadonlyValue from '@/components/ReadonlyValue.vue'
+    import SaveFooter from '@/components/SaveFooter.vue'
+    import SectionCard from '@/components/SectionCard.vue'
+    import { useDirtyGuard } from '@/composables/useDirtyGuard.ts'
+    import { useNotify } from '@/composables/useNotify.ts'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
+    import { SLUG_PATTERN, SLUG_PREFIX } from '@/modules/inbound-forms/helpers/slug.ts'
+    import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
 
-    const props = defineProps<{ form: InboundFormDetailDto }>()
+    const props = withDefaults(
+        defineProps<{ form: InboundFormDetailDto; project?: ProjectDetailDto; canUpdate: boolean }>(),
+        { project: undefined },
+    )
 
     const { t } = useI18n()
-    const { data: project } = useQuery(useProjectQuery(() => props.form.projectId))
+    const requiredLabel = useRequiredLabel()
+    const notify = useNotify()
+    const formId = useId()
     const { mutateAsync, isPending } = useInboundFormUpdateMutation()
-    const copied = ref(false)
     const errorMessage = ref<string | null>(null)
 
-    const endpointUrl = computed(() => formEndpointUrl(props.form.slug))
+    const domainName = computed(
+        () => props.project?.domains.find((domain) => domain.domainId === props.form.domainId)?.fqdn ?? null,
+    )
 
-    const { defineField, handleSubmit, errors } = useForm({
+    function initialValues(form: InboundFormDetailDto) {
+        return { name: form.name, slug: form.slug, domainId: form.domainId }
+    }
+
+    const { defineField, handleSubmit, errors, meta, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                name: z.string().min(1).max(255),
+                name: z.string().trim().min(1).max(255),
                 slug: z
                     .string()
                     .min(1)
                     .max(255)
-                    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+                    .regex(SLUG_PATTERN, { error: () => t('module.inboundForms.validation.slug') }),
                 domainId: z.number().nullable().optional(),
-                isActive: z.boolean(),
             }),
         ),
-        initialValues: {
-            name: props.form.name,
-            slug: props.form.slug,
-            domainId: props.form.domainId,
-            isActive: props.form.isActive,
-        },
+        initialValues: initialValues(props.form),
     })
 
     const [name] = defineField('name')
     const [slug] = defineField('slug')
     const [domainId] = defineField('domainId')
-    const [isActive] = defineField('isActive')
 
-    async function copyEndpoint() {
-        await navigator.clipboard.writeText(endpointUrl.value)
-        copied.value = true
-        setTimeout(() => (copied.value = false), 2000)
+    useDirtyGuard(() => meta.value.dirty)
+
+    watch(
+        () => props.form,
+        (form) => {
+            if (!meta.value.dirty) {
+                resetForm({ values: initialValues(form) })
+            }
+        },
+    )
+
+    function discard() {
+        errorMessage.value = null
+        resetForm({ values: initialValues(props.form) })
     }
 
     const onSubmit = handleSubmit(async (values) => {
         errorMessage.value = null
         try {
-            await mutateAsync({
+            const updated = await mutateAsync({
                 inboundFormId: props.form.inboundFormId,
-                update: {
-                    name: values.name,
-                    slug: values.slug,
-                    domainId: values.domainId ?? null,
-                    isActive: values.isActive,
-                },
+                update: { name: values.name, slug: values.slug, domainId: values.domainId ?? null },
             })
+            resetForm({ values: initialValues(updated) })
+            notify.success(t('module.inboundForms.details.general.saved'))
         } catch (error) {
-            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.details.general.error'))
+            errorMessage.value = apiErrorMessage(error, t('dialog.tryAgain'))
         }
     })
 </script>

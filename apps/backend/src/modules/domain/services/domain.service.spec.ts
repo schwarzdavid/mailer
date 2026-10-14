@@ -19,6 +19,11 @@ import {
 import { SettingsModel } from '../../settings/models/settings.model.js'
 import { Settings } from '../../settings/interfaces/settings.interface.js'
 import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { ProjectDomainModel } from '../../project/models/project-domain.model.js'
+import { Project, ProjectDomain } from '../../project/interfaces/project.interface.js'
+import { createMongoAbility } from '@casl/ability'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 type DomainRow = Domain & { get(options: { plain: true }): Domain }
 
@@ -37,6 +42,8 @@ describe('DomainService', () => {
     let deleteRecordsForDomain: Mock<DomainDnsService['deleteRecordsForDomain']>
     let settingsFindOne: Mock<() => Promise<Settings | null>>
     let formCount: Mock<(options: { where: { domainId: number } }) => Promise<number>>
+    let projectDomainFindAll: Mock<(options: object) => Promise<Pick<ProjectDomain, 'projectId'>[]>>
+    let projectFindAll: Mock<(options: object) => Promise<Pick<Project, 'projectId' | 'name'>[]>>
 
     const persistedDomain: Domain = {
         domainId: 3,
@@ -78,6 +85,7 @@ describe('DomainService', () => {
         sendingDomainId: 10,
         serverIpv4: '203.0.113.10',
         serverIpv6: null,
+        setupFinishedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     }
@@ -98,6 +106,8 @@ describe('DomainService', () => {
         deleteRecordsForDomain = vi.fn<typeof deleteRecordsForDomain>().mockResolvedValue(undefined)
         settingsFindOne = vi.fn<typeof settingsFindOne>().mockResolvedValue(null)
         formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
+        projectDomainFindAll = vi.fn<typeof projectDomainFindAll>().mockResolvedValue([])
+        projectFindAll = vi.fn<typeof projectFindAll>().mockResolvedValue([])
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -110,6 +120,8 @@ describe('DomainService', () => {
                 { provide: getModelToken(DomainModel), useValue: { create, findAll, findByPk, findOne, destroy } },
                 { provide: getModelToken(SettingsModel), useValue: { findOne: settingsFindOne } },
                 { provide: getModelToken(InboundFormModel), useValue: { count: formCount } },
+                { provide: getModelToken(ProjectModel), useValue: { findAll: projectFindAll } },
+                { provide: getModelToken(ProjectDomainModel), useValue: { findAll: projectDomainFindAll } },
             ],
         }).compile()
 
@@ -357,6 +369,63 @@ describe('DomainService', () => {
         })
     })
 
+    describe('getDomainWithProjects', () => {
+        const manageAll = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
+
+        it('returns the domain with the non-deleted projects it is assigned to', async () => {
+            projectDomainFindAll.mockResolvedValue([{ projectId: 4 }, { projectId: 9 }])
+            projectFindAll.mockResolvedValue([
+                { projectId: 4, name: 'Acme' },
+                { projectId: 9, name: 'Beta' },
+            ])
+
+            const result = await service.getDomainWithProjects(3, manageAll)
+
+            expect(projectDomainFindAll).toHaveBeenCalledWith({ attributes: ['projectId'], where: { domainId: 3 } })
+            expect(projectFindAll).toHaveBeenCalledWith({
+                attributes: ['projectId', 'name'],
+                where: { projectId: { [Op.in]: [4, 9] } },
+                order: [['name', 'ASC']],
+            })
+            expect(result).toEqual({
+                ...persistedDomain,
+                projects: [
+                    { projectId: 4, name: 'Acme' },
+                    { projectId: 9, name: 'Beta' },
+                ],
+            })
+        })
+
+        it('skips the project lookup for an unassigned domain', async () => {
+            const result = await service.getDomainWithProjects(3, manageAll)
+
+            expect(projectFindAll).not.toHaveBeenCalled()
+            expect(result.projects).toEqual([])
+        })
+
+        it('only lists projects the caller can read', async () => {
+            const memberAbility = createMongoAbility<AppAbility>([
+                { action: 'read', subject: 'Domain' },
+                { action: 'read', subject: 'Project', conditions: { projectId: { $in: [9] } } },
+            ])
+            projectDomainFindAll.mockResolvedValue([{ projectId: 4 }, { projectId: 9 }])
+            projectFindAll.mockResolvedValue([
+                { projectId: 4, name: 'Acme' },
+                { projectId: 9, name: 'Beta' },
+            ])
+
+            const result = await service.getDomainWithProjects(3, memberAbility)
+
+            expect(result.projects).toEqual([{ projectId: 9, name: 'Beta' }])
+        })
+
+        it('rejects an unknown domain with 404', async () => {
+            findByPk.mockResolvedValue(null)
+
+            await expect(service.getDomainWithProjects(99, manageAll)).rejects.toBeInstanceOf(NotFoundException)
+        })
+    })
+
     describe('deleteUnusedDomain', () => {
         it('destroys an unused customer domain', async () => {
             settingsFindOne.mockResolvedValue(settings)
@@ -381,6 +450,33 @@ describe('DomainService', () => {
             await expect(service.deleteUnusedDomain(3)).rejects.toBeInstanceOf(ConflictException)
 
             expect(destroy).not.toHaveBeenCalled()
+        })
+
+        it('refuses to delete a domain assigned to a non-deleted project', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            projectDomainFindAll.mockResolvedValue([{ projectId: 4 }, { projectId: 9 }])
+            projectFindAll.mockResolvedValue([
+                { projectId: 4, name: 'Acme' },
+                { projectId: 9, name: 'Beta' },
+            ])
+
+            await expect(service.deleteUnusedDomain(3)).rejects.toThrow(
+                new ConflictException(
+                    'The domain is still assigned to 2 project(s). Remove it from every project before deleting it.',
+                ),
+            )
+
+            expect(destroy).not.toHaveBeenCalled()
+        })
+
+        it('deletes a domain whose only assignments belong to deleted projects without forms', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            projectDomainFindAll.mockResolvedValue([{ projectId: 4 }])
+            projectFindAll.mockResolvedValue([])
+
+            await service.deleteUnusedDomain(3)
+
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 3 } })
         })
 
         it('refuses to delete a domain referenced by inbound forms', async () => {

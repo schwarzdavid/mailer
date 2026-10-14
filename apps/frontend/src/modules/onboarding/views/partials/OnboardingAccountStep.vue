@@ -1,41 +1,62 @@
 <template>
-    <div>
-        <p class="mb-6">{{ t('module.onboarding.steps.account.intro') }}</p>
-        <form novalidate @submit.prevent="onSubmit">
-            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
+    <SectionCard :title="t('module.setup.account.title')" :description="t('module.setup.account.description')">
+        <form id="setup-account" class="form-grid form-grid--2" novalidate @submit.prevent="onSubmit">
+            <InlineAlert
+                v-if="errorMessage"
+                class="span-2"
+                tone="error"
+                :title="t('module.setup.account.error')"
+                :text="errorMessage"
+            />
             <VTextField
                 v-model="firstName"
                 name="firstName"
-                :label="t('field.firstName')"
+                :label="requiredLabel(t('field.firstName'))"
                 :error-messages="errors.firstName"
                 autocomplete="given-name"
+                aria-required="true"
             />
             <VTextField
                 v-model="lastName"
                 name="lastName"
-                :label="t('field.lastName')"
+                :label="requiredLabel(t('field.lastName'))"
                 :error-messages="errors.lastName"
                 autocomplete="family-name"
+                aria-required="true"
             />
             <VTextField
                 v-model="email"
-                :label="t('field.email')"
+                class="span-2"
+                name="email"
                 type="email"
+                :label="requiredLabel(t('field.email'))"
                 :error-messages="errors.email"
                 autocomplete="email"
+                aria-required="true"
             />
-            <VTextField
+            <PasswordField
                 v-model="password"
-                :label="t('field.password')"
-                type="password"
+                class="span-2"
+                name="password"
+                :label="requiredLabel(t('field.password'))"
+                :hint="t('field.passwordHint')"
+                persistent-hint
                 :error-messages="errors.password"
                 autocomplete="new-password"
+                aria-required="true"
             />
-            <div class="d-flex justify-end">
-                <VBtn type="submit" :text="t('cta.continue')" :loading="isPending" />
-            </div>
         </form>
-    </div>
+        <template #footer>
+            <VBtn
+                variant="flat"
+                color="primary"
+                type="submit"
+                form="setup-account"
+                :text="t('module.setup.account.submit')"
+                :loading="isPending"
+            />
+        </template>
+    </SectionCard>
 </template>
 
 <script lang="ts" setup>
@@ -45,14 +66,17 @@
     import { z } from 'zod'
     import { zRegisterUserDto } from 'api'
     import { useI18n } from 'vue-i18n'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import PasswordField from '@/components/PasswordField.vue'
+    import SectionCard from '@/components/SectionCard.vue'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useRegisterMutation } from '@/modules/onboarding/mutations/useRegisterMutation.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
-    const emit = defineEmits<{
-        completed: []
-    }>()
+    const emit = defineEmits<{ completed: [] }>()
 
     const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
     const { mutateAsync, isPending } = useRegisterMutation()
     const errorMessage = ref<string | null>(null)
 
@@ -75,7 +99,7 @@
         try {
             await mutateAsync(values)
         } catch (error) {
-            errorMessage.value = apiErrorMessage(error, t('module.onboarding.steps.account.error'))
+            errorMessage.value = apiErrorMessage(error, t('dialog.tryAgain'))
             return
         }
         emit('completed')

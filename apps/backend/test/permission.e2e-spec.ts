@@ -15,6 +15,9 @@ describe('Permissions (e2e)', () => {
     let memberUserId: number
     let otherUserId: number
     let projectId: number
+    let hiddenProjectId: number
+    let visibleFormId: number
+    let hiddenFormId: number
     let domainId: number
     let adminRoleId: number
     let superAdminRoleId: number
@@ -122,13 +125,59 @@ describe('Permissions (e2e)', () => {
             .expect(403)
     })
 
+    it('reserves the implicit access summary for project editors', async () => {
+        const response = await http().get(`/api/project/${projectId}/implicit-access`).set('Authorization', asMember())
+
+        expect(response.status).toBe(403)
+    })
+
+    it('lists inbound forms across projects only where the caller can read', async () => {
+        const hidden = await http()
+            .post('/api/project')
+            .set('Authorization', asSuper())
+            .send({ name: 'Perm Hidden Project' })
+            .expect(201)
+        hiddenProjectId = (hidden.body as { projectId: number }).projectId
+
+        const visibleForm = await http()
+            .post('/api/inbound-form')
+            .set('Authorization', asSuper())
+            .send({ name: 'Perm Visible', slug: 'perm-visible-form', domainId: null, projectId })
+            .expect(201)
+        visibleFormId = (visibleForm.body as { inboundFormId: number }).inboundFormId
+        const hiddenForm = await http()
+            .post('/api/inbound-form')
+            .set('Authorization', asSuper())
+            .send({ name: 'Perm Hidden', slug: 'perm-hidden-form', domainId: null, projectId: hiddenProjectId })
+            .expect(201)
+        hiddenFormId = (hiddenForm.body as { inboundFormId: number }).inboundFormId
+
+        const memberForms = await http().get('/api/inbound-form').set('Authorization', asMember()).expect(200)
+        const memberBody = memberForms.body as { inboundFormId: number; projectId: number; receivers: unknown[] }[]
+        expect(memberBody.map((form) => form.inboundFormId)).toEqual([visibleFormId])
+        expect(memberBody[0]).toMatchObject({ projectId, receivers: [] })
+
+        const superForms = await http().get('/api/inbound-form').set('Authorization', asSuper()).expect(200)
+        expect((superForms.body as { inboundFormId: number }[]).map((form) => form.inboundFormId)).toEqual(
+            expect.arrayContaining([visibleFormId, hiddenFormId]),
+        )
+
+        await http()
+            .get('/api/inbound-form')
+            .query({ projectId: hiddenProjectId })
+            .set('Authorization', asMember())
+            .expect(404)
+    })
+
     it('coerces the projectId query param for inbound forms', async () => {
         const memberForms = await http()
             .get('/api/inbound-form')
             .query({ projectId })
             .set('Authorization', asMember())
             .expect(200)
-        expect(memberForms.body).toEqual([])
+        expect((memberForms.body as { inboundFormId: number }[]).map((form) => form.inboundFormId)).toEqual([
+            visibleFormId,
+        ])
     })
 
     it('applies membership upgrades immediately', async () => {
@@ -144,6 +193,16 @@ describe('Permissions (e2e)', () => {
             .send({ name: 'Perm Project Renamed' })
             .expect(200)
         expect(renamed.status).toBe(200)
+
+        const access = await http()
+            .get(`/api/project/${projectId}/implicit-access`)
+            .set('Authorization', asMember())
+            .expect(200)
+        expect(access.body).toEqual({
+            superAdminCount: expect.any(Number) as number,
+            allProjectsUserCount: expect.any(Number) as number,
+        })
+        await http().get(`/api/project/${hiddenProjectId}/implicit-access`).set('Authorization', asMember()).expect(404)
     })
 
     it('requires the domains.read grant for domain assignment', async () => {
@@ -172,6 +231,27 @@ describe('Permissions (e2e)', () => {
             .send({ domainId })
             .expect(201)
         expect(allowed.status).toBe(201)
+    })
+
+    it('only names the projects of a domain the caller can read', async () => {
+        await http()
+            .post(`/api/project/${hiddenProjectId}/domains`)
+            .set('Authorization', asSuper())
+            .send({ domainId })
+            .expect(201)
+
+        const asMemberDetail = await http().get(`/api/domain/${domainId}`).set('Authorization', asMember()).expect(200)
+        expect((asMemberDetail.body as { projects: unknown[] }).projects).toEqual([
+            { projectId, name: 'Perm Project Renamed' },
+        ])
+
+        const asSuperDetail = await http().get(`/api/domain/${domainId}`).set('Authorization', asSuper()).expect(200)
+        expect((asSuperDetail.body as { projects: { projectId: number }[] }).projects).toEqual(
+            expect.arrayContaining([
+                { projectId, name: 'Perm Project Renamed' },
+                { projectId: hiddenProjectId, name: 'Perm Hidden Project' },
+            ]),
+        )
     })
 
     it('lets project editors manage members', async () => {

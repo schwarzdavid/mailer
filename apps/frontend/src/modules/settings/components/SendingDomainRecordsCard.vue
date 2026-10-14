@@ -1,54 +1,55 @@
 <template>
-    <VCard prepend-icon="mdi-magnify-scan">
-        <template #title>
-            <span class="text-body-large">{{ t('module.settings.sendingDomain.records.title') }}</span>
-        </template>
-        <template #append>
-            <span class="d-block pe-4 text-medium-emphasis" v-if="sendingDomain.lastCheckedAt">{{
-                t('module.settings.sendingDomain.records.lastChecked', { date: lastCheckedDate })
-            }}</span>
-            <VBtn
-                prepend-icon="mdi-refresh"
-                size="default"
-                :text="t('cta.refresh')"
-                @click="mutateAsync()"
-                :loading="isPending"
+    <DnsRecordsCard
+        :records="sendingDomain.records"
+        :checked-at="sendingDomain.lastCheckedAt"
+        :checking="isPending"
+        :can-check="canCheck"
+        :title="title"
+        :description="t('module.settings.records.instruction')"
+        @check="check"
+    >
+        <template v-if="allValid" #alert>
+            <InlineAlert
+                tone="success"
+                :title="t('module.settings.records.allValid.title', { count: sendingDomain.records.length })"
+                :text="t('module.settings.records.allValid.text', { fqdn: sendingDomain.fqdn })"
             />
         </template>
-        <VCardText>
-            <p class="text-body-large">{{ t('module.settings.sendingDomain.records.intro') }}</p>
-            <template v-for="(record, index) in orderedRecords" :key="`${record.use}-${record.host}`">
-                <VDivider v-if="index > 0" class="my-4" />
-                <strong>{{ t(`module.settings.sendingDomain.records.${record.use}.title`) }}</strong>
-                <p class="mt-0">{{ t(`module.settings.sendingDomain.records.${record.use}.description`) }}</p>
-                <DomainDnsRecord :record="record" />
-            </template>
-        </VCardText>
-    </VCard>
+    </DnsRecordsCard>
 </template>
 
 <script lang="ts" setup>
     import { computed } from 'vue'
     import { useI18n } from 'vue-i18n'
-    import { useDateFormat } from '@vueuse/core'
     import type { SendingDomainDto } from 'api'
-    import DomainDnsRecord from '@/modules/domains/components/DomainDnsRecord.vue'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import DnsRecordsCard from '@/components/dns/DnsRecordsCard.vue'
+    import { useNotify } from '@/composables/useNotify.ts'
     import { useSendingDomainRefreshMutation } from '@/modules/settings/mutations/useSendingDomainRefreshMutation.ts'
 
-    const props = defineProps<{
-        sendingDomain: SendingDomainDto
-    }>()
-
-    const RECORD_ORDER = ['a', 'aaaa', 'mx', 'spf', 'dkim', 'dmarc', 'ptr']
+    const props = withDefaults(defineProps<{ sendingDomain: SendingDomainDto; canCheck?: boolean; title?: string }>(), {
+        canCheck: true,
+        title: undefined,
+    })
 
     const { t } = useI18n()
+    const notify = useNotify()
     const { mutateAsync, isPending } = useSendingDomainRefreshMutation()
 
-    const orderedRecords = computed(() =>
-        [...props.sendingDomain.records].sort(
-            (left, right) => RECORD_ORDER.indexOf(left.use) - RECORD_ORDER.indexOf(right.use),
-        ),
-    )
+    const allValid = computed(() => props.sendingDomain.records.every((record) => record.status === 'valid'))
 
-    const lastCheckedDate = useDateFormat(() => props.sendingDomain.lastCheckedAt!, 'DD.MM.YYYY HH:mm:ss')
+    async function check() {
+        const before = props.sendingDomain.records.filter((record) => record.status === 'valid').length
+        try {
+            const result = await mutateAsync()
+            const after = result.records.filter((record) => record.status === 'valid').length
+            if (after === before && after < result.records.length) {
+                notify.info(t('module.settings.records.unchanged'))
+            }
+        } catch {
+            notify.error(t('module.settings.records.checkFailed', { fqdn: props.sendingDomain.fqdn }), {
+                retry: () => void check(),
+            })
+        }
+    }
 </script>

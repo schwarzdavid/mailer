@@ -6,7 +6,7 @@ import { UserService } from '../services/user.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
 import { Role } from '../../permission/interfaces/role.interface.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
-import { UserDetail, UserWithRole } from '../interfaces/user.interface.js'
+import { UserDetail, UserListEntry, UserWithRole } from '../interfaces/user.interface.js'
 
 const role: Role = {
     roleId: 3,
@@ -27,6 +27,8 @@ const user: UserWithRole = {
     updatedAt: new Date(),
 }
 
+const listEntry: UserListEntry = { ...user, membershipCount: 2 }
+
 const detail: UserDetail = { ...user, permissions: ['domains.read'], memberships: [] }
 
 const principal: UserWithRole = { ...user, userId: 1 }
@@ -42,7 +44,7 @@ describe('UserController', () => {
     let replaceUserPermissions: Mock<UserService['replaceUserPermissions']>
 
     beforeEach(async () => {
-        getUsers = vi.fn<typeof getUsers>().mockResolvedValue([user])
+        getUsers = vi.fn<typeof getUsers>().mockResolvedValue([listEntry])
         createManagedUser = vi.fn<typeof createManagedUser>().mockResolvedValue(user)
         getUserById = vi.fn<typeof getUserById>().mockResolvedValue(detail)
         updateUser = vi.fn<typeof updateUser>().mockResolvedValue(user)
@@ -72,8 +74,8 @@ describe('UserController', () => {
         controller = module.get(UserController)
     })
 
-    it('lists users', async () => {
-        await expect(controller.getUsers()).resolves.toEqual([user])
+    it('lists users with their membership count', async () => {
+        await expect(controller.getUsers()).resolves.toEqual([listEntry])
     })
 
     it('creates a user through the managed flow', async () => {

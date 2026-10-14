@@ -183,7 +183,7 @@ describe('DomainController (e2e)', () => {
             return (response.body as { domainId: number }).domainId
         }
 
-        it('deletes an unused domain together with its DNS records, DKIM keys and project assignments', async () => {
+        it('deletes a domain only held by a deleted project together with its records, keys and assignments', async () => {
             const domainId = await createDomain('delete-me.org')
             const project = await http()
                 .post('/api/project')
@@ -197,7 +197,12 @@ describe('DomainController (e2e)', () => {
                 .send({ domainId })
                 .expect(201)
 
+            const assigned = await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`)
+            expect(assigned.status).toBe(409)
+
+            await http().delete(`/api/project/${projectId}`).set('Authorization', `Bearer ${token}`).expect(200)
             await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`).expect(200)
+            await http().post(`/api/project/${projectId}/restore`).set('Authorization', `Bearer ${token}`).expect(201)
 
             await http().get(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`).expect(404)
             const dnsModel = app.get<typeof DomainDnsModel>(getModelToken(DomainDnsModel))

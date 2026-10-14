@@ -1,45 +1,74 @@
 <template>
-    <VDialog max-width="600" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)">
-        <VCard :title="receiver ? t('cta.edit') : t('module.inboundForms.details.receivers.add')">
-            <form @submit.prevent="onSubmit">
-                <VCardItem>
-                    <VAlert v-if="error" type="error" class="mb-4" :text="error" />
-                    <VTextField
-                        name="emailFrom"
-                        :label="t('module.inboundForms.details.receivers.from')"
-                        :hint="domainFqdn ? `@${domainFqdn}` : undefined"
-                        v-model="emailFrom"
-                        :error-messages="errors.emailFrom"
-                    />
-                    <VCombobox
-                        name="emailReceiver"
-                        :label="t('module.inboundForms.details.receivers.to')"
-                        :hint="
-                            t('module.inboundForms.details.receivers.recipientHint', {
-                                placeholder: placeholderExample,
-                            })
-                        "
-                        :items="placeholderItems"
-                        v-model="emailReceiver"
-                        :error-messages="errors.emailReceiver"
-                    />
-                    <VCombobox
-                        name="emailReplyTo"
-                        :label="t('module.inboundForms.details.receivers.replyTo')"
-                        :items="placeholderItems"
-                        clearable
-                        v-model="emailReplyTo"
-                    />
-                    <VSwitch name="isActive" :label="t('module.inboundForms.status.active')" v-model="isActive" />
-                </VCardItem>
-                <VCardActions>
-                    <VSpacer />
-                    <VBtn color="error" :text="t('cta.abort')" @click="emit('update:modelValue', false)" />
-                    <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="saving" type="submit" />
-                </VCardActions>
-            </form>
-        </VCard>
-    </VDialog>
+    <FormDialog
+        v-model="model"
+        :title="
+            receiver
+                ? t('module.inboundForms.details.receivers.dialog.editTitle')
+                : t('module.inboundForms.details.receivers.add')
+        "
+        :submit-label="receiver ? t('cta.save') : t('module.inboundForms.details.receivers.add')"
+        :pending="saving"
+        :error="error"
+        :dirty="meta.dirty"
+        @submit="onSubmit"
+    >
+        <VTextField
+            v-model="emailFrom"
+            name="emailFrom"
+            class="mono-field"
+            :label="requiredLabel(t('module.inboundForms.details.receivers.from'))"
+            :hint="
+                domainFqdn
+                    ? t('module.inboundForms.details.receivers.dialog.senderHint', { domain: domainFqdn })
+                    : t('module.inboundForms.details.receivers.dialog.noDomain')
+            "
+            persistent-hint
+            :error-messages="errors.emailFrom"
+            aria-required="true"
+        />
+        <VCombobox
+            v-model="emailReceiver"
+            name="emailReceiver"
+            class="mono-field"
+            :label="requiredLabel(t('module.inboundForms.details.receivers.to'))"
+            :items="placeholderItems"
+            item-title="value"
+            item-value="value"
+            :return-object="false"
+            :hint="t('module.inboundForms.details.receivers.dialog.recipientHint', { placeholder: placeholderExample })"
+            persistent-hint
+            :error-messages="errors.emailReceiver"
+            aria-required="true"
+        >
+            <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps" :subtitle="item.label" />
+            </template>
+        </VCombobox>
+        <VCombobox
+            v-model="emailReplyTo"
+            name="emailReplyTo"
+            class="mono-field"
+            :label="t('module.inboundForms.details.receivers.replyTo')"
+            :items="placeholderItems"
+            item-title="value"
+            item-value="value"
+            :return-object="false"
+            clearable
+            :placeholder="t('module.inboundForms.details.receivers.dialog.none')"
+            :hint="t('module.inboundForms.details.receivers.dialog.recipientHint', { placeholder: placeholderExample })"
+            persistent-hint
+        >
+            <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps" :subtitle="item.label" />
+            </template>
+        </VCombobox>
+        <VSwitch
+            v-model="isActive"
+            name="isActive"
+            :label="t('status.active')"
+            :messages="t('module.inboundForms.details.receivers.dialog.activeHint')"
+        />
+    </FormDialog>
 </template>
 
 <script setup lang="ts">
@@ -49,31 +78,39 @@
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
+    import FormDialog from '@/components/FormDialog.vue'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
-    const props = defineProps<{
-        modelValue: boolean
-        receiver: InboundFormReceiverDto | null
-        emailFieldKeys: string[]
-        domainFqdn: string | null
-        saving: boolean
-        error?: string | null
-    }>()
+    const props = withDefaults(
+        defineProps<{
+            receiver: InboundFormReceiverDto | null
+            emailFields: { key: string; label: string }[]
+            domainFqdn: string | null
+            saving: boolean
+            error?: string | null
+        }>(),
+        { error: null },
+    )
+    const model = defineModel<boolean>({ required: true })
 
-    const emit = defineEmits<{
-        'update:modelValue': [value: boolean]
-        save: [receiver: InboundFormReceiverCreateDto]
-    }>()
+    const emit = defineEmits<{ save: [receiver: InboundFormReceiverCreateDto] }>()
 
     const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
 
-    const placeholderItems = computed(() => props.emailFieldKeys.map((key) => `{{${key}}}`))
-    const placeholderExample = computed(() => placeholderItems.value[0] ?? '{{email}}')
+    const placeholderItems = computed(() =>
+        props.emailFields.map((field) => ({ value: `{{${field.key}}}`, label: field.label })),
+    )
+    const placeholderExample = computed(() => placeholderItems.value[0]?.value ?? '{{email}}')
 
-    const { defineField, handleSubmit, errors, resetForm, setFieldValue } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, setFieldValue } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                emailFrom: z.email(),
-                emailReceiver: z.string().min(1),
+                emailFrom: z.email().refine((value) => !props.domainFqdn || value.endsWith(`@${props.domainFqdn}`), {
+                    error: () =>
+                        t('module.inboundForms.details.receivers.dialog.senderDomain', { domain: props.domainFqdn }),
+                }),
+                emailReceiver: z.string().trim().min(1),
                 emailReplyTo: z.string().nullable().optional(),
                 isActive: z.boolean(),
             }),
@@ -85,8 +122,21 @@
     const [emailReplyTo] = defineField('emailReplyTo')
     const [isActive] = defineField('isActive')
 
+    function defaultSender(fqdn: string | null): string {
+        return fqdn ? `noreply@${fqdn}` : ''
+    }
+
     watch(
-        () => props.modelValue,
+        () => props.domainFqdn,
+        (fqdn) => {
+            if (model.value && !props.receiver && fqdn && !emailFrom.value) {
+                setFieldValue('emailFrom', defaultSender(fqdn), false)
+            }
+        },
+    )
+
+    watch(
+        model,
         (open) => {
             if (!open) {
                 return
@@ -100,20 +150,8 @@
                 },
             })
         },
+        { immediate: true },
     )
-
-    watch(
-        () => props.domainFqdn,
-        (fqdn) => {
-            if (props.modelValue && !props.receiver && fqdn && !emailFrom.value) {
-                setFieldValue('emailFrom', defaultSender(fqdn), false)
-            }
-        },
-    )
-
-    function defaultSender(fqdn: string | null): string {
-        return fqdn ? `noreply@${fqdn}` : ''
-    }
 
     const onSubmit = handleSubmit((values) => {
         emit('save', {

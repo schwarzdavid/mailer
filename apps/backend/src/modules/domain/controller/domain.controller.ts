@@ -3,11 +3,13 @@ import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 import { DomainCreateDto } from '../dtos/domain-create.dto.js'
-import { DomainDto } from '../dtos/domain.dto.js'
+import { DomainDetailDto, DomainDto } from '../dtos/domain.dto.js'
 import { DomainService } from '../services/domain.service.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { DomainDnsDto } from '../dtos/domain-dns.dto.js'
 import { DomainDnsService } from '../services/domain-dns.service.js'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 @JwtAuth()
 @ApiTags('domain')
@@ -43,14 +45,18 @@ export class DomainController {
     }
 
     @RequireAbility({ action: 'read', subject: 'Domain' })
-    @ResponseDto(DomainDto)
+    @ResponseDto(DomainDetailDto)
     @Get(':domainId')
-    async getDomain(@Param('domainId', ParseIntPipe) domainId: number): Promise<DomainDto> {
-        const domain = await this.domainService.getDomainById(domainId)
+    async getDomain(
+        @Param('domainId', ParseIntPipe) domainId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<DomainDetailDto> {
+        const domain = await this.domainService.getDomainWithProjects(domainId, ability)
 
         return {
             ...domain,
             dns: DomainDnsDto.fromArray(domain.dnsRecords),
+            projects: domain.projects.map(({ projectId, name }) => ({ projectId, name })),
         }
     }
 

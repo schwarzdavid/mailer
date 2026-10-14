@@ -19,4 +19,15 @@ export class BounceDto implements Omit<Bounce, 'messageId' | 'createdAt' | 'upda
 
     @Expose()
     receivedAt!: Date
+
+    static fromBounce(bounce: Bounce): BounceDto {
+        return {
+            bounceId: bounce.bounceId,
+            emailAddress: bounce.emailAddress,
+            type: bounce.type,
+            statusCode: bounce.statusCode,
+            reason: bounce.reason,
+            receivedAt: bounce.receivedAt,
+        }
+    }
 }

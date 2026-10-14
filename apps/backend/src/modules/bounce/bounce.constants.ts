@@ -4,3 +4,7 @@ export const TRANSIENT_WINDOW_DAYS = 7
 export const BOUNCE_POLL_LOCK_KEY = 815_001
 export const BOUNCE_POLL_INTERVAL_MS = 60_000
 export const DAY_MS = 24 * 60 * 60 * 1000
+export const BOUNCE_SORT_FIELDS = ['receivedAt', 'type'] as const
+export const SORT_ORDERS = ['asc', 'desc'] as const
+export const BOUNCE_PAGE_SIZE_DEFAULT = 25
+export const BOUNCE_PAGE_SIZE_MAX = 100

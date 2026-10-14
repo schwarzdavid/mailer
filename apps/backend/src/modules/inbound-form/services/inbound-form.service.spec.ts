@@ -5,7 +5,7 @@ import { Sequelize } from 'sequelize-typescript'
 import { Op, UniqueConstraintError } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { InboundFormService } from './inbound-form.service.js'
+import { FORM_LIST_ORDER, InboundFormService } from './inbound-form.service.js'
 import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 import { InboundFormModel } from '../models/inbound-form.model.js'
 import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
@@ -14,6 +14,7 @@ import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.
 import { DomainService } from '../../domain/services/domain.service.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
 import { ProjectService } from '../../project/services/project.service.js'
+import { ProjectModel } from '../../project/models/project.model.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
@@ -258,28 +259,42 @@ describe('InboundFormService', () => {
     })
 
     describe('getForms', () => {
-        it('returns every form as plain object', async () => {
+        const listQuery = (where: unknown) => ({
+            where,
+            include: [InboundFormReceiverModel, { model: ProjectModel, attributes: [], required: true }],
+            order: FORM_LIST_ORDER,
+        })
+
+        it('returns every form with its receivers as plain object', async () => {
             formFindAll.mockResolvedValue([formRow() as unknown as InboundFormModel])
 
             const result = await service.getForms(principal, manageAll)
 
             expect(formFindAll).toHaveBeenCalledOnce()
             expect(result).toEqual([formFull])
+            expect(result[0]?.inboundFormReceivers).toEqual([receiver])
         })
 
         it('filters by project when a projectId is given', async () => {
             await service.getForms(principal, manageAll, 5)
 
-            expect(formFindAll).toHaveBeenCalledWith({ where: { projectId: 5 } })
+            expect(getProjectIdsFor).not.toHaveBeenCalled()
+            expect(formFindAll).toHaveBeenCalledWith(listQuery({ projectId: 5 }))
         })
 
-        it('returns all forms without a filter for all-projects access', async () => {
+        it('hides an unreadable project behind a 404 before querying', async () => {
+            await expect(service.getForms(principal, readOnlyAbility, 6)).rejects.toThrow(NotFoundException)
+
+            expect(formFindAll).not.toHaveBeenCalled()
+        })
+
+        it('returns all forms without a project filter for all-projects access', async () => {
             getProjectIdsFor.mockResolvedValue('all')
 
             await service.getForms(principal, manageAll)
 
             expect(getProjectIdsFor).toHaveBeenCalledWith(principal, 'read')
-            expect(formFindAll).toHaveBeenCalledWith(undefined)
+            expect(formFindAll).toHaveBeenCalledWith(listQuery(undefined))
         })
 
         it('scopes to the readable project ids otherwise', async () => {
@@ -287,7 +302,14 @@ describe('InboundFormService', () => {
 
             await service.getForms(principal, manageAll)
 
-            expect(formFindAll).toHaveBeenCalledWith({ where: { projectId: { [Op.in]: [1, 4] } } })
+            expect(formFindAll).toHaveBeenCalledWith(listQuery({ projectId: { [Op.in]: [1, 4] } }))
+        })
+
+        it('returns nothing without readable projects', async () => {
+            getProjectIdsFor.mockResolvedValue([])
+
+            await expect(service.getForms(principal, readOnlyAbility)).resolves.toEqual([])
+            expect(formFindAll).toHaveBeenCalledWith(listQuery({ projectId: { [Op.in]: [] } }))
         })
     })
 

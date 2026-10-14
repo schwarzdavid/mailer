@@ -5,7 +5,9 @@ import { DomainController } from './domain.controller.js'
 import { DomainService } from '../services/domain.service.js'
 import { DomainDnsService } from '../services/domain-dns.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
-import { Domain, DomainWithDkim } from '../interfaces/domain.interface.js'
+import { Domain, DomainWithDkim, DomainWithProjects } from '../interfaces/domain.interface.js'
+import { createMongoAbility } from '@casl/ability'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
@@ -37,7 +39,7 @@ describe('DomainController', () => {
     let controller: DomainController
     let createDomain: Mock<DomainService['createDomain']>
     let getDomains: Mock<DomainService['getDomains']>
-    let getDomainById: Mock<DomainService['getDomainById']>
+    let getDomainWithProjects: Mock<DomainService['getDomainWithProjects']>
     let reloadDnsRecords: Mock<DomainDnsService['reloadDnsRecords']>
     let deleteUnusedDomain: Mock<DomainService['deleteUnusedDomain']>
 
@@ -67,19 +69,29 @@ describe('DomainController', () => {
         dkims: [activeDkim],
     }
 
+    const domainWithProjects: DomainWithProjects = {
+        ...domain,
+        projects: [{ projectId: 4, name: 'Acme' }],
+    }
+
+    const ability = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
+
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
 
         createDomain = vi.fn<typeof createDomain>().mockResolvedValue(createdDomain)
         getDomains = vi.fn<typeof getDomains>().mockResolvedValue([domain])
-        getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
+        getDomainWithProjects = vi.fn<typeof getDomainWithProjects>().mockResolvedValue(domainWithProjects)
         reloadDnsRecords = vi.fn<typeof reloadDnsRecords>().mockResolvedValue(domain)
         deleteUnusedDomain = vi.fn<typeof deleteUnusedDomain>().mockResolvedValue(undefined)
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [DomainController],
             providers: [
-                { provide: DomainService, useValue: { createDomain, getDomains, getDomainById, deleteUnusedDomain } },
+                {
+                    provide: DomainService,
+                    useValue: { createDomain, getDomains, getDomainWithProjects, deleteUnusedDomain },
+                },
                 { provide: DomainDnsService, useValue: { reloadDnsRecords } },
             ],
         })
@@ -137,11 +149,17 @@ describe('DomainController', () => {
 
     describe('getDomain', () => {
         it('looks up the requested domain by id and groups its DNS records by use', async () => {
-            const result = await controller.getDomain(1)
+            const result = await controller.getDomain(1, ability)
 
-            expect(getDomainById).toHaveBeenCalledWith(1)
+            expect(getDomainWithProjects).toHaveBeenCalledWith(1, ability)
             expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com' })
             expect(result.dns[DomainDnsRecordUse.DMARC]).toMatchObject({ use: DomainDnsRecordUse.DMARC })
+        })
+
+        it('lists the projects the domain is assigned to', async () => {
+            const result = await controller.getDomain(1, ability)
+
+            expect(result.projects).toEqual([{ projectId: 4, name: 'Acme' }])
         })
     })
 

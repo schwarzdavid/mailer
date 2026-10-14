@@ -9,6 +9,11 @@ import { ProjectMemberService } from './project-member.service.js'
 import { ProjectMemberModel } from '../models/project-member.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { UserModel } from '../../user/models/user.model.js'
+import { RoleModel } from '../models/role.model.js'
+import { RolePermissionModel } from '../models/role-permission.model.js'
+import { UserPermissionModel } from '../models/user-permission.model.js'
+import { RolePermission, UserPermission } from '../interfaces/role.interface.js'
+import { Op } from 'sequelize'
 import { PermissionCacheService } from './permission-cache.service.js'
 import { AppAbility } from '../interfaces/app-ability.js'
 import { ProjectMember } from '../interfaces/project-member.interface.js'
@@ -49,6 +54,9 @@ describe('ProjectMemberService', () => {
     let memberBulkCreate: Mock<(rows: object[], options?: object) => Promise<object[]>>
     let projectFindByPk: Mock<(projectId: number) => Promise<object | null>>
     let userFindByPk: Mock<(userId: number) => Promise<object | null>>
+    let userCount: Mock<(options: object) => Promise<number>>
+    let rolePermissionFindAll: Mock<(options: object) => Promise<Pick<RolePermission, 'roleId'>[]>>
+    let userPermissionFindAll: Mock<(options: object) => Promise<Pick<UserPermission, 'userId'>[]>>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
     let transaction: Mock<Sequelize['transaction']>
 
@@ -60,6 +68,9 @@ describe('ProjectMemberService', () => {
         memberBulkCreate = vi.fn<typeof memberBulkCreate>().mockResolvedValue([])
         projectFindByPk = vi.fn<typeof projectFindByPk>().mockResolvedValue({ projectId: 1 })
         userFindByPk = vi.fn<typeof userFindByPk>().mockResolvedValue({ userId: 2 })
+        userCount = vi.fn<typeof userCount>().mockResolvedValue(0)
+        rolePermissionFindAll = vi.fn<typeof rolePermissionFindAll>().mockResolvedValue([])
+        userPermissionFindAll = vi.fn<typeof userPermissionFindAll>().mockResolvedValue([])
         invalidateUser = vi.fn<typeof invalidateUser>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
@@ -73,7 +84,9 @@ describe('ProjectMemberService', () => {
                     useValue: { findAll: memberFindAll, destroy: memberDestroy, bulkCreate: memberBulkCreate },
                 },
                 { provide: getModelToken(ProjectModel), useValue: { findByPk: projectFindByPk } },
-                { provide: getModelToken(UserModel), useValue: { findByPk: userFindByPk } },
+                { provide: getModelToken(UserModel), useValue: { findByPk: userFindByPk, count: userCount } },
+                { provide: getModelToken(RolePermissionModel), useValue: { findAll: rolePermissionFindAll } },
+                { provide: getModelToken(UserPermissionModel), useValue: { findAll: userPermissionFindAll } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
@@ -120,6 +133,89 @@ describe('ProjectMemberService', () => {
 
             await expect(service.getMembers(1, userManagerAbility)).rejects.toThrow(
                 new NotFoundException('Unknown project'),
+            )
+        })
+    })
+
+    describe('getImplicitAccess', () => {
+        const superAdminQuery = {
+            where: undefined,
+            include: [{ model: RoleModel, attributes: [], where: { type: 'super_admin' }, required: true }],
+        }
+
+        it('counts super admins and non-super-admins holding projects.all through role or direct grant', async () => {
+            rolePermissionFindAll.mockResolvedValue([{ roleId: 2 }])
+            userPermissionFindAll.mockResolvedValue([{ userId: 7 }, { userId: 8 }])
+            userCount.mockResolvedValueOnce(2).mockResolvedValueOnce(4)
+
+            const access = await service.getImplicitAccess(1, projectEditorAbility)
+
+            expect(rolePermissionFindAll).toHaveBeenCalledWith({
+                attributes: ['roleId'],
+                where: { permission: 'projects.all' },
+            })
+            expect(userPermissionFindAll).toHaveBeenCalledWith({
+                attributes: ['userId'],
+                where: { permission: 'projects.all' },
+            })
+            expect(userCount).toHaveBeenCalledWith(superAdminQuery)
+            expect(userCount).toHaveBeenCalledWith({
+                where: { [Op.or]: [{ roleId: { [Op.in]: [2] } }, { userId: { [Op.in]: [7, 8] } }] },
+                include: [
+                    { model: RoleModel, attributes: [], where: { type: { [Op.ne]: 'super_admin' } }, required: true },
+                ],
+            })
+            expect(access).toEqual({ superAdminCount: 2, allProjectsUserCount: 4 })
+        })
+
+        it('skips the all-projects count when nobody holds the permission', async () => {
+            userCount.mockResolvedValue(1)
+
+            const access = await service.getImplicitAccess(1, userManagerAbility)
+
+            expect(userCount).toHaveBeenCalledExactlyOnceWith(superAdminQuery)
+            expect(access).toEqual({ superAdminCount: 1, allProjectsUserCount: 0 })
+        })
+
+        it('rejects members with read-only project access', async () => {
+            await expect(service.getImplicitAccess(1, readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(userCount).not.toHaveBeenCalled()
+        })
+
+        it('hides projects the caller cannot read', async () => {
+            await expect(service.getImplicitAccess(2, readOnlyAbility)).rejects.toThrow(NotFoundException)
+            expect(userCount).not.toHaveBeenCalled()
+        })
+
+        it('rejects unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.getImplicitAccess(9, userManagerAbility)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+        })
+    })
+
+    describe('countMembershipsPerUser', () => {
+        it('counts the distinct non-deleted projects each user is a member of', async () => {
+            memberFindAll.mockResolvedValue([
+                memberRow({ projectId: 1, userId: 2, permission: 'read' }),
+                memberRow({ projectMemberId: 2, projectId: 1, userId: 2, permission: 'update' }),
+                memberRow({ projectMemberId: 3, projectId: 4, userId: 2, permission: 'read' }),
+                memberRow({ projectMemberId: 4, projectId: 4, userId: 3, permission: 'read' }),
+            ])
+
+            const counts = await service.countMembershipsPerUser()
+
+            expect(memberFindAll).toHaveBeenCalledWith({
+                attributes: ['projectId', 'userId'],
+                include: [{ model: ProjectModel, attributes: [], required: true }],
+            })
+            expect(counts).toEqual(
+                new Map([
+                    [2, 2],
+                    [3, 1],
+                ]),
             )
         })
     })

@@ -5,7 +5,8 @@ import { UserModel } from '../../user/models/user.model.js'
 import { UserService } from '../../user/services/user.service.js'
 import { UserCreate, UserWithRole } from '../../user/interfaces/user.interface.js'
 import { RoleService } from '../../permission/services/role.service.js'
-import { SETUP_LOCK_KEY } from '../setup.constants.js'
+import { SettingsService } from '../../settings/services/settings.service.js'
+import { SETUP_LOCK_KEY, SetupStep } from '../setup.constants.js'
 
 @Injectable()
 export class SetupService {
@@ -13,11 +14,27 @@ export class SetupService {
         private readonly sequelize: Sequelize,
         private readonly userService: UserService,
         private readonly roleService: RoleService,
+        private readonly settingsService: SettingsService,
         @InjectModel(UserModel) private readonly userModel: typeof UserModel,
     ) {}
 
-    async needsSetup(): Promise<boolean> {
-        return (await this.userModel.count()) === 0
+    async getStep(): Promise<SetupStep> {
+        if ((await this.userModel.count()) === 0) {
+            return 'account'
+        }
+
+        const settings = await this.settingsService.getSettings()
+        if (!settings?.sendingDomainId) {
+            return 'sendingDomain'
+        }
+
+        return settings.setupFinishedAt === null ? 'records' : 'finished'
+    }
+
+    async finishSetup(): Promise<SetupStep> {
+        await this.settingsService.finishSetup()
+
+        return this.getStep()
     }
 
     registerFirstUser(user: Omit<UserCreate, 'roleId'>): Promise<UserWithRole> {

@@ -30,6 +30,10 @@ export interface UserUpdate {
     roleId?: number
 }
 
+export interface UserListEntry extends UserWithRole {
+    membershipCount: number
+}
+
 export interface UserDetail extends UserWithRole {
     permissions: Permission[]
     memberships: ProjectMembership[]

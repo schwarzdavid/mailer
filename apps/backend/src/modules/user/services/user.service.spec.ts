@@ -96,6 +96,7 @@ describe('UserService', () => {
     let getRoleById: Mock<RoleService['getRoleById']>
     let getRoleByType: Mock<RoleService['getRoleByType']>
     let getMembershipsForUser: Mock<ProjectMemberService['getMembershipsForUser']>
+    let countMembershipsPerUser: Mock<ProjectMemberService['countMembershipsPerUser']>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
     let transaction: Mock<Sequelize['transaction']>
 
@@ -112,6 +113,7 @@ describe('UserService', () => {
         getRoleById = vi.fn<typeof getRoleById>().mockResolvedValue(userRole)
         getRoleByType = vi.fn<typeof getRoleByType>().mockResolvedValue(userRole)
         getMembershipsForUser = vi.fn<typeof getMembershipsForUser>().mockResolvedValue([])
+        countMembershipsPerUser = vi.fn<typeof countMembershipsPerUser>().mockResolvedValue(new Map())
         invalidateUser = vi.fn<typeof invalidateUser>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
@@ -130,7 +132,7 @@ describe('UserService', () => {
                     },
                 },
                 { provide: RoleService, useValue: { getRoleById, getRoleByType } },
-                { provide: ProjectMemberService, useValue: { getMembershipsForUser } },
+                { provide: ProjectMemberService, useValue: { getMembershipsForUser, countMembershipsPerUser } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
@@ -238,6 +240,19 @@ describe('UserService', () => {
 
             expect(users).toEqual([
                 expect.objectContaining({ userId: 7, role: expect.objectContaining({ type: 'user' }) as Role }),
+            ])
+        })
+
+        it('adds the number of project memberships per user', async () => {
+            findAll.mockResolvedValue([userRow(), userRow({ userId: 8, email: 'linus@example.com' })])
+            countMembershipsPerUser.mockResolvedValue(new Map([[7, 3]]))
+
+            const users = await service.getUsers()
+
+            expect(countMembershipsPerUser).toHaveBeenCalledOnce()
+            expect(users.map(({ userId, membershipCount }) => ({ userId, membershipCount }))).toEqual([
+                { userId: 7, membershipCount: 3 },
+                { userId: 8, membershipCount: 0 },
             ])
         })
     })

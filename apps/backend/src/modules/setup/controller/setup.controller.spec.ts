@@ -4,13 +4,15 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SetupController } from './setup.controller.js'
 import { SetupService } from '../services/setup.service.js'
 import { JwtHelperService } from '../../auth/services/jwt-helper.service.js'
+import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
 import { UserWithRole } from '../../user/interfaces/user.interface.js'
 import { Role } from '../../permission/interfaces/role.interface.js'
 import { RegisterUserDto } from '../dtos/register-user.dto.js'
 
 describe('SetupController', () => {
     let controller: SetupController
-    let needsSetup: Mock<SetupService['needsSetup']>
+    let getStep: Mock<SetupService['getStep']>
+    let finishSetup: Mock<SetupService['finishSetup']>
     let registerFirstUser: Mock<SetupService['registerFirstUser']>
     let createToken: Mock<JwtHelperService['createToken']>
 
@@ -41,26 +43,41 @@ describe('SetupController', () => {
     }
 
     beforeEach(async () => {
-        needsSetup = vi.fn<typeof needsSetup>().mockResolvedValue(true)
+        getStep = vi.fn<typeof getStep>().mockResolvedValue('account')
+        finishSetup = vi.fn<typeof finishSetup>().mockResolvedValue('finished')
         registerFirstUser = vi.fn<typeof registerFirstUser>().mockResolvedValue(user)
         createToken = vi.fn<typeof createToken>().mockResolvedValue('jwt-token')
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [SetupController],
             providers: [
-                { provide: SetupService, useValue: { needsSetup, registerFirstUser } },
+                { provide: SetupService, useValue: { getStep, finishSetup, registerFirstUser } },
                 { provide: JwtHelperService, useValue: { createToken } },
             ],
         })
             .overrideGuard(ThrottlerGuard)
+            .useValue({ canActivate: () => true })
+            .overrideGuard(PoliciesGuard)
             .useValue({ canActivate: () => true })
             .compile()
 
         controller = module.get(SetupController)
     })
 
-    it('reports the setup status', async () => {
-        await expect(controller.getStatus()).resolves.toEqual({ needsSetup: true })
+    it.each([
+        ['account', true],
+        ['sendingDomain', true],
+        ['records', true],
+        ['finished', false],
+    ] as const)('reports the %s step with needsSetup=%s', async (step, needsSetup) => {
+        getStep.mockResolvedValue(step)
+
+        await expect(controller.getStatus()).resolves.toEqual({ needsSetup, step })
+    })
+
+    it('finishes the setup and reports the resulting status', async () => {
+        await expect(controller.finishSetup()).resolves.toEqual({ needsSetup: false, step: 'finished' })
+        expect(finishSetup).toHaveBeenCalledOnce()
     })
 
     it('registers the first user and returns an authentication', async () => {

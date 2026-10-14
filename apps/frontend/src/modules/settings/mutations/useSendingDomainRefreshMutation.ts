@@ -6,7 +6,7 @@ export function useSendingDomainRefreshMutation() {
     const client = useQueryClient()
 
     return useMutation({
-        mutationFn: () => waitAtleast(SettingsApi.refreshSendingDomain(), 2000),
+        mutationFn: () => waitAtleast(SettingsApi.refreshSendingDomain()),
         onSuccess(sendingDomain) {
             client.setQueryData(['settings'], { sendingDomain } satisfies SettingsDto)
         },

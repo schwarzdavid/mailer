@@ -6,7 +6,14 @@ import { UniqueConstraintError } from 'sequelize'
 import { subject } from '@casl/ability'
 import bcrypt from 'bcryptjs'
 import { UserModel } from '../models/user.model.js'
-import { FullUser, UserCreate, UserDetail, UserUpdate, UserWithRole } from '../interfaces/user.interface.js'
+import {
+    FullUser,
+    UserCreate,
+    UserDetail,
+    UserListEntry,
+    UserUpdate,
+    UserWithRole,
+} from '../interfaces/user.interface.js'
 import { RoleModel } from '../../permission/models/role.model.js'
 import { UserPermissionModel } from '../../permission/models/user-permission.model.js'
 import { RoleService } from '../../permission/services/role.service.js'
@@ -74,10 +81,17 @@ export class UserService {
         }
     }
 
-    async getUsers(): Promise<UserWithRole[]> {
-        const rows = await this.userModel.findAll({ include: [RoleModel] })
+    async getUsers(): Promise<UserListEntry[]> {
+        const [rows, membershipCounts] = await Promise.all([
+            this.userModel.findAll({ include: [RoleModel] }),
+            this.projectMemberService.countMembershipsPerUser(),
+        ])
 
-        return rows.map((row) => userWithRoleFromRow(row))
+        return rows.map((row) => {
+            const user = userWithRoleFromRow(row)
+
+            return { ...user, membershipCount: membershipCounts.get(user.userId) ?? 0 }
+        })
     }
 
     async getUserById(userId: number): Promise<UserDetail> {

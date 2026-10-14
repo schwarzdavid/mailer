@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import App from '../App.vue'
 import { mountView } from './support.ts'
+import { useNotificationHost, useNotify } from '@/composables/useNotify.ts'
+
+vi.stubGlobal('visualViewport', null)
 
 async function mountApp(routes: RouteRecordRaw[], path = '/') {
     const router = createRouter({ history: createMemoryHistory(), routes })
@@ -27,14 +30,13 @@ describe('App', () => {
         expect(wrapper.find('.home-view').text()).toBe('Home')
     })
 
-    it('shows a loading indicator while the default view resolves no component', async () => {
-        // A route that only fills a named view leaves the default `<RouterView>`
-        // in App.vue without a component, exercising its loading fallback.
-        const HelperView = defineComponent({ render: () => h('div', { class: 'helper-view' }) })
+    it('hosts the global notifications', async () => {
+        const HomeView = defineComponent({ render: () => h('main', 'Home') })
+        await mountApp([{ path: '/', component: HomeView }])
 
-        const wrapper = await mountApp([{ path: '/', components: { helper: HelperView } }])
+        useNotify().success('Project saved')
 
-        expect(wrapper.find('.v-progress-circular').exists()).toBe(true)
-        expect(wrapper.find('.helper-view').exists()).toBe(false)
+        await vi.waitFor(() => expect(document.body.textContent).toContain('Project saved'))
+        useNotificationHost().dismiss()
     })
 })

@@ -1,109 +1,89 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
-import type { RawRuleOf } from '@casl/ability'
-import { UserApi, type Permission, type UserDetailDto } from 'api'
+import { RoleApi, UserApi } from 'api'
 import UserPermissionsCard from '../partials/UserPermissionsCard.vue'
-import { mountView } from '@/__tests__/support.ts'
-import type { AppAbility } from '@/plugins/casl.ts'
-import { PERMISSION_GROUPS } from '@/modules/users/permissionGroups.ts'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
+import { roles, userDetail } from '../../__tests__/userFixtures.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
 
 vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
 }))
 
-const grace: UserDetailDto = {
-    userId: 7,
-    firstName: 'Grace',
-    lastName: 'Hopper',
-    email: 'grace@example.com',
-    role: { roleId: 3, name: 'User', type: 'user' },
-    permissions: ['domains.read', 'bounces.read'],
-    memberships: [],
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-}
+vi.mock('vue-router', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('vue-router')>()
+    return { ...actual, onBeforeRouteLeave: vi.fn<typeof actual.onBeforeRouteLeave>() }
+})
 
-function mountCard(rules?: RawRuleOf<AppAbility>[]) {
-    return mountView(UserPermissionsCard, { props: { user: grace } }, rules)
-}
+vi.stubGlobal('visualViewport', null)
 
-function checkbox(wrapper: ReturnType<typeof mountView>, permission: Permission) {
-    return wrapper.get<HTMLInputElement>(`input[value="${permission}"]`)
-}
-
-function checked(wrapper: ReturnType<typeof mountView>) {
-    return wrapper
-        .findAll<HTMLInputElement>('input[type="checkbox"]')
-        .filter((input) => input.element.checked)
-        .map((input) => input.element.value)
-}
-
-async function save(wrapper: ReturnType<typeof mountView>) {
-    const button = wrapper.findAll('button').find((candidate) => candidate.text() === 'Save')
-    await button!.trigger('click')
-    await flushPromises()
-}
+const notifications = useNotificationHost()
 
 afterEach(() => {
     vi.restoreAllMocks()
+    notifications.dismiss()
+    document.body.innerHTML = ''
 })
 
+function checkbox(wrapper: ReturnType<typeof mountInApp>, permission: string) {
+    return wrapper.get(`input[value="${permission}"]`)
+}
+
 describe('UserPermissionsCard', () => {
-    it('renders a labelled checkbox for every permission', () => {
-        const wrapper = mountCard()
+    it('checks direct permissions and explains how access adds up', () => {
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        const wrapper = mountInApp(UserPermissionsCard, { user: userDetail(), canUpdate: true })
 
-        expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(Object.values(PERMISSION_GROUPS).flat().length)
-        expect(wrapper.text()).toContain('View domains')
-        expect(wrapper.text()).toContain('Unblock addresses')
-        expect(wrapper.text()).not.toContain('permissions.labels')
+        expect((checkbox(wrapper, 'bounces.read').element as HTMLInputElement).checked).toBe(true)
+        expect((checkbox(wrapper, 'domains.read').element as HTMLInputElement).checked).toBe(false)
+        expect(wrapper.text()).toContain('How access works')
     })
 
-    it('checks the directly granted permissions', () => {
-        const wrapper = mountCard()
+    it('shows permissions of the role as checked and locked', async () => {
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        const admin = userDetail({ role: { roleId: 2, type: 'admin', name: 'Admin' }, permissions: [] })
+        const wrapper = mountInApp(UserPermissionsCard, { user: admin, canUpdate: true })
 
-        expect(checked(wrapper)).toEqual(['domains.read', 'bounces.read'])
+        await vi.waitFor(() => expect(wrapper.text()).toContain('From role: Admin'))
+        const domains = checkbox(wrapper, 'domains.read').element as HTMLInputElement
+        expect(domains.checked).toBe(true)
+        expect(domains.disabled).toBe(true)
     })
 
-    it('saves the permissions after granting and revoking', async () => {
-        const replace = vi.spyOn(UserApi, 'replaceUserPermissions').mockResolvedValue({ permissions: [] })
-        const wrapper = mountCard()
+    it('saves granted permissions with the card footer', async () => {
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        const save = vi.spyOn(UserApi, 'replaceUserPermissions').mockResolvedValue({ permissions: [] })
+        const wrapper = mountInApp(UserPermissionsCard, { user: userDetail(), canUpdate: true })
 
-        await checkbox(wrapper, 'users.read').setValue(true)
-        await checkbox(wrapper, 'domains.read').setValue(false)
-        await save(wrapper)
+        await checkbox(wrapper, 'domains.read').setValue(true)
+        expect(wrapper.text()).toContain('Unsaved changes')
+        await wrapper.get('form').trigger('submit')
 
         await vi.waitFor(() =>
-            expect(replace).toHaveBeenCalledWith({
-                path: { userId: 7 },
-                body: { permissions: ['bounces.read', 'users.read'] },
+            expect(save).toHaveBeenCalledWith({
+                path: { userId: 4 },
+                body: { permissions: ['bounces.read', 'domains.read'] },
             }),
         )
+        await vi.waitFor(() => expect(notifications.current.value?.text).toBe('Permissions saved'))
     })
 
     it('is read-only without the update permission', () => {
-        const wrapper = mountCard([{ action: 'read', subject: 'User' }])
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        const wrapper = mountInApp(UserPermissionsCard, { user: userDetail(), canUpdate: false })
 
-        expect(
-            wrapper.findAll('input[type="checkbox"]').every((input) => input.attributes('disabled') !== undefined),
-        ).toBe(true)
-        expect(wrapper.findAll('button').some((button) => button.text() === 'Save')).toBe(false)
+        expect((checkbox(wrapper, 'domains.read').element as HTMLInputElement).disabled).toBe(true)
+        expect(findButton(wrapper, 'Save')).toBeUndefined()
     })
 
-    it('shows the API error message', async () => {
-        vi.spyOn(UserApi, 'replaceUserPermissions').mockRejectedValue({ message: 'Cannot grant roles.read' })
-        const wrapper = mountCard()
+    it('shows a failed save inside the card', async () => {
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        vi.spyOn(UserApi, 'replaceUserPermissions').mockRejectedValue({ message: 'Forbidden' })
+        const wrapper = mountInApp(UserPermissionsCard, { user: userDetail(), canUpdate: true })
 
-        await save(wrapper)
+        await checkbox(wrapper, 'domains.read').setValue(true)
+        await wrapper.get('form').trigger('submit')
 
-        await vi.waitFor(() => expect(wrapper.text()).toContain('Cannot grant roles.read'))
-    })
-
-    it('falls back to a generic error without a message', async () => {
-        vi.spyOn(UserApi, 'replaceUserPermissions').mockRejectedValue(new Response(null, { status: 500 }))
-        const wrapper = mountCard()
-
-        await save(wrapper)
-
-        await vi.waitFor(() => expect(wrapper.text()).toContain('The permissions could not be saved'))
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't save the permissions"))
+        expect(wrapper.text()).toContain('Forbidden')
     })
 })

@@ -9,7 +9,7 @@ import { ProjectService } from '../services/project.service.js'
 import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { ProjectCreateDto, ProjectUpdateDto } from '../dtos/project-create.dto.js'
 import { ProjectDomainAssignDto } from '../dtos/project-domain-assign.dto.js'
-import { ProjectMemberDto, ProjectMemberPutDto } from '../dtos/project-member.dto.js'
+import { ProjectImplicitAccessDto, ProjectMemberDto, ProjectMemberPutDto } from '../dtos/project-member.dto.js'
 import { DeletedProjectDto, ProjectDetailDto, ProjectDto, ProjectListDto } from '../dtos/project.dto.js'
 import type { UserWithRole } from '../../user/interfaces/user.interface.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
@@ -115,6 +115,17 @@ export class ProjectController {
         @CurrentAbility() ability: AppAbility,
     ): Promise<ProjectMemberDto[]> {
         return await this.projectMemberService.getMembers(projectId, ability)
+    }
+
+    @ResponseDto(ProjectImplicitAccessDto)
+    @Get(':projectId/implicit-access')
+    async getProjectImplicitAccess(
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<ProjectImplicitAccessDto> {
+        const access = await this.projectMemberService.getImplicitAccess(projectId, ability)
+
+        return ProjectImplicitAccessDto.fromImplicitAccess(access)
     }
 
     @Put(':projectId/members/:userId')

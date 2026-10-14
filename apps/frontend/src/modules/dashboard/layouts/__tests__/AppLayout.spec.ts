@@ -1,29 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { defineComponent, h } from 'vue'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { VApp } from 'vuetify/components'
-import { SettingsApi, type SettingsDto } from 'api'
+import { AuthApi, SettingsApi, type SettingsDto, type UserDto } from 'api'
 import AppLayout from '../AppLayout.vue'
-import { flushPromises } from '@vue/test-utils'
-import { QueryClient } from '@tanstack/vue-query'
 import { mountView } from '@/__tests__/support.ts'
+import { dnsRecord } from '@/__tests__/fixtures.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
-import { JWT_KEY } from '@/constants/jwtKey.ts'
-import { ability } from '@/plugins/casl.ts'
+
+vi.stubGlobal('visualViewport', null)
 
 const AppLayoutHost = defineComponent({
     setup: () => () => h(VApp, () => h(AppLayout)),
 })
 
-function createTestRouter(): Router {
-    return createRouter({
-        history: createMemoryHistory(),
-        routes: Object.values(RouteNames).map((name, index) => ({
-            path: index === 0 ? '/' : `/${index}`,
-            name,
-            component: { template: '<div />' },
-        })),
-    })
+const Page = defineComponent({ render: () => h('p', { class: 'page' }, 'Page content') })
+
+const user: UserDto = {
+    userId: 1,
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'ada@example.com',
+    role: { roleId: 1, type: 'super_admin', name: 'Super Admin' },
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 }
 
 const healthy: SettingsDto = {
@@ -32,129 +32,114 @@ const healthy: SettingsDto = {
         serverIpv4: '203.0.113.10',
         serverIpv6: null,
         lastCheckedAt: null,
-        records: [
-            {
-                host: 'mail.sending-domain.org',
-                type: 'a',
-                use: 'a',
-                value: '203.0.113.10',
-                current: '203.0.113.10',
-                status: 'valid',
-            },
-        ],
+        records: [dnsRecord({ use: 'a', type: 'a' }), dnsRecord({ use: 'mx', type: 'mx' })],
     },
+}
+
+async function layoutRouter(path: string): Promise<Router> {
+    const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+            { path: '/', name: RouteNames.DASHBOARD, component: Page, meta: { section: 'dashboard' } },
+            { path: '/projects', name: RouteNames.PROJECT_LIST, component: Page, meta: { section: 'projects' } },
+            {
+                path: '/forms/:id',
+                name: RouteNames.INBOUND_FORM_DETAILS,
+                component: Page,
+                meta: { section: 'projects' },
+            },
+            {
+                path: '/domains',
+                name: RouteNames.DOMAIN_LIST,
+                component: Page,
+                meta: { section: 'domains', ability: { action: 'read', subject: 'Domain' } },
+            },
+            { path: '/bounces', name: RouteNames.BOUNCE_LIST, component: Page },
+            { path: '/users', name: RouteNames.USER_LIST, component: Page },
+            { path: '/settings', name: RouteNames.SETTINGS, component: Page },
+        ],
+    })
+    await router.push(path)
+    return router
+}
+
+async function mountLayout(path: string, rules?: Parameters<typeof mountView>[2]) {
+    vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(user)
+    const router = await layoutRouter(path)
+    return mountView(AppLayoutHost, { global: { plugins: [router] } }, rules)
 }
 
 afterEach(() => {
     vi.restoreAllMocks()
+    document.body.innerHTML = ''
 })
 
 describe('AppLayout', () => {
-    describe('sending domain health indicator', () => {
-        it('shows a warning icon while no sending domain is configured', async () => {
-            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+    it('renders the page inside the shell', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
+        const wrapper = await mountLayout('/')
 
-            await vi.waitFor(() => {
-                expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
-            })
-            expect(wrapper.find('.mdi-check-circle').exists()).toBe(false)
-        })
-
-        it('shows a healthy icon when every record is valid', async () => {
-            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
-
-            await vi.waitFor(() => {
-                expect(wrapper.find('.mdi-check-circle').exists()).toBe(true)
-            })
-            expect(wrapper.find('.mdi-alert-circle').exists()).toBe(false)
-        })
-
-        it('shows a warning icon when a record is invalid', async () => {
-            const ill: SettingsDto = {
-                sendingDomain: {
-                    ...healthy.sendingDomain!,
-                    records: [{ ...healthy.sendingDomain!.records[0]!, status: 'invalid' }],
-                },
-            }
-            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(ill)
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
-
-            await vi.waitFor(() => {
-                expect(wrapper.find('.mdi-alert-circle').exists()).toBe(true)
-            })
-        })
+        await vi.waitFor(() => expect(wrapper.find('.page').exists()).toBe(true))
+        expect(wrapper.text()).toContain('Mail Admin')
     })
 
-    describe('navigation tab visibility', () => {
-        it('shows every tab for manage-all abilities', async () => {
-            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } })
+    it('highlights the section of a nested page', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
+        const wrapper = await mountLayout('/forms/9')
 
-            await vi.waitFor(() => expect(wrapper.text()).toContain('Users'))
-            expect(wrapper.text()).toContain('Domains')
-            expect(wrapper.text()).toContain('Bounces')
-            expect(wrapper.text()).toContain('Settings')
-        })
-
-        it('hides gated tabs without the read permissions', async () => {
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [])
-
-            await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
-            expect(wrapper.text()).not.toContain('Domains')
-            expect(wrapper.text()).not.toContain('Bounces')
-            expect(wrapper.text()).not.toContain('Users')
-            expect(wrapper.text()).not.toContain('Settings')
-        })
-
-        it.each([
-            ['Domain', 'Domains'],
-            ['Bounce', 'Bounces'],
-            ['User', 'Users'],
-        ])('shows only the tab granted by read %s', async (subject, label) => {
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [
-                { action: 'read', subject },
-            ])
-
-            await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
-            const gatedTabs = ['Domains', 'Bounces', 'Users', 'Settings'].filter((tab) => wrapper.text().includes(tab))
-            expect(gatedTabs).toEqual([label])
-        })
-
-        it('does not poll the settings without the settings permission', async () => {
-            const getSettings = vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [
-                { action: 'read', subject: 'Domain' },
-            ])
-
-            await vi.waitFor(() => expect(wrapper.text()).toContain('Domains'))
-            await flushPromises()
-            expect(getSettings).not.toHaveBeenCalled()
-        })
+        await vi.waitFor(() => expect(wrapper.find('[aria-current="page"]').exists()).toBe(true))
+        expect(wrapper.get('[aria-current="page"]').text()).toBe('Projects')
     })
 
-    describe('logout', () => {
-        afterEach(() => {
-            localStorage.clear()
-            ability.update([])
+    it('shows every item for manage-all abilities', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
+        const wrapper = await mountLayout('/')
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Users'))
+        for (const label of ['Dashboard', 'Projects', 'Domains', 'Bounces', 'Administration', 'Settings']) {
+            expect(wrapper.text()).toContain(label)
+        }
+    })
+
+    it('leaves out items the user may not open', async () => {
+        const wrapper = await mountLayout('/', [{ action: 'read', subject: 'Project' }])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
+        for (const label of ['Domains', 'Bounces', 'Users', 'Settings', 'Administration']) {
+            expect(wrapper.text()).not.toContain(label)
+        }
+    })
+
+    it('flags invalid sending-domain records on the Settings item', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({
+            sendingDomain: { ...healthy.sendingDomain!, records: [dnsRecord({ status: 'invalid' })] },
         })
+        const wrapper = await mountLayout('/')
 
-        it('clears the session, cached data and abilities and returns to the login', async () => {
-            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-            localStorage.setItem(JWT_KEY, JSON.stringify('jwt-token'))
-            ability.update([{ action: 'manage', subject: 'all' }])
-            const removeQueries = vi.spyOn(QueryClient.prototype, 'removeQueries')
-            const router = createTestRouter()
-            const wrapper = mountView(AppLayoutHost, { global: { plugins: [router] } })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('1 sending-domain record needs attention'))
+        expect(wrapper.find('.status-dot--warning').exists()).toBe(true)
+    })
 
-            const logoutButton = wrapper.findAll('button').find((button) => button.text() === 'Logout')
-            await logoutButton!.trigger('click')
+    it('flags a missing sending domain', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+        const wrapper = await mountLayout('/')
 
-            await vi.waitFor(() => expect(router.currentRoute.value.name).toBe(RouteNames.LOGIN))
-            expect(localStorage.getItem(JWT_KEY)).toBeNull()
-            expect(removeQueries).toHaveBeenCalledWith()
-            expect(ability.rules).toEqual([])
-        })
+        await vi.waitFor(() => expect(wrapper.text()).toContain("The sending domain isn't configured yet"))
+    })
+
+    it('stays quiet while every record is valid', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue(healthy)
+        const wrapper = await mountLayout('/')
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Settings'))
+        expect(wrapper.find('.status-dot--warning').exists()).toBe(false)
+    })
+
+    it('shows the no-access state instead of a page the user may not open', async () => {
+        const wrapper = await mountLayout('/domains', [{ action: 'read', subject: 'Project' }])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain("You don't have access to this page"))
+        expect(wrapper.text()).toContain('View domains')
+        expect(wrapper.find('.page').exists()).toBe(false)
     })
 })

@@ -1,100 +1,97 @@
 <template>
-    <VCard :title="t('module.projects.details.domains.title')">
-        <VCardItem>
-            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
-            <p v-if="project.domains.length === 0">{{ t('module.projects.details.domains.empty') }}</p>
-            <VList v-else>
-                <VListItem v-for="domain in project.domains" :key="domain.domainId" :title="domain.fqdn">
-                    <template v-if="canManageDomains" #append>
-                        <VIconBtn
-                            icon="mdi-close"
-                            :loading="isUnassigning && unassigningId === domain.domainId"
-                            @click="unassign(domain.domainId)"
-                        />
-                    </template>
-                </VListItem>
-            </VList>
-            <div v-if="canManageDomains" class="d-flex gc-3 align-center pt-4">
-                <VSelect
-                    :items="unassignedDomains"
-                    item-title="fqdn"
-                    item-value="domainId"
-                    v-model="selectedDomainId"
-                    :label="t('field.domain')"
-                    hide-details
+    <SectionCard
+        :title="t('module.projects.details.domains.title')"
+        :description="t('module.projects.details.domains.description')"
+        :count="visibleDomains.length"
+        flush
+    >
+        <template v-if="canUpdate" #actions>
+            <VBtn
+                size="small"
+                :prepend-icon="mdiPlus"
+                :text="t('module.projects.details.domains.assign')"
+                @click="assignOpen = true"
+            />
+        </template>
+        <div v-if="visibleDomains.length === 0" class="project-domains__empty">
+            <InlineAlert
+                tone="warning"
+                :title="t('module.projects.details.domains.empty.title')"
+                :text="t('module.projects.details.domains.empty.text')"
+            />
+        </div>
+        <ListRow v-for="domain in visibleDomains" :key="domain.domainId" :icon="mdiWeb" :title="domain.fqdn" mono-title>
+            <template #subtitle>
+                <template v-if="domainStatus.invalidSummary(domainRecords(domain))">
+                    {{ domainStatus.invalidSummary(domainRecords(domain)) }}
+                    <span class="row-sep">·</span>
+                </template>
+                <RouterLink
+                    :to="{ name: RouteNames.DOMAIN_DETAILS, params: { domainId: domain.domainId } }"
+                    class="row-link"
+                >
+                    {{ t('module.projects.details.domains.viewRecords') }}
+                </RouterLink>
+            </template>
+            <template #meta>
+                <StatusBadge v-bind="domainStatus.domainBadge(domain)" />
+            </template>
+            <template v-if="canUpdate" #actions>
+                <IconButton
+                    :icon="mdiLinkVariantOff"
+                    :label="t('module.projects.details.domains.unassign', { domain: domain.fqdn })"
+                    danger
+                    @click="unassign(domain)"
                 />
-                <VBtn
-                    :text="t('module.projects.details.domains.add')"
-                    :disabled="selectedDomainId === null"
-                    :loading="isAssigning"
-                    @click="assign"
-                />
-            </div>
-        </VCardItem>
-    </VCard>
+            </template>
+        </ListRow>
+    </SectionCard>
+    <AssignDomainDialog v-if="canUpdate" v-model="assignOpen" :project="project" />
 </template>
 
 <script setup lang="ts">
     import { computed, ref } from 'vue'
-    import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
-    import { useAbility } from '@casl/vue'
-    import { subject } from '@casl/ability'
-    import type { ProjectDetailDto } from 'api'
-    import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
-    import { useProjectDomainAssignMutation } from '@/modules/projects/mutations/useProjectDomainAssignMutation.ts'
+    import { mdiLinkVariantOff, mdiPlus, mdiWeb } from '@mdi/js'
+    import type { DomainDto, ProjectDetailDto } from 'api'
+    import IconButton from '@/components/IconButton.vue'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import ListRow from '@/components/ListRow.vue'
+    import SectionCard from '@/components/SectionCard.vue'
+    import StatusBadge from '@/components/StatusBadge.vue'
+    import { useUndoRemove } from '@/composables/useUndoRemove.ts'
+    import { domainRecords, useDomainStatus } from '@/modules/domains/helpers/domainStatus.ts'
     import { useProjectDomainUnassignMutation } from '@/modules/projects/mutations/useProjectDomainUnassignMutation.ts'
-    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
+    import AssignDomainDialog from '@/modules/projects/views/details/partials/AssignDomainDialog.vue'
+    import { RouteNames } from '@/router/RouteNames.ts'
 
-    const props = defineProps<{ project: ProjectDetailDto }>()
+    const props = defineProps<{ project: ProjectDetailDto; canUpdate: boolean }>()
 
     const { t } = useI18n()
-    const userAbility = useAbility()
-    const can = userAbility.can.bind(userAbility)
-    const canManageDomains = computed(
-        () => can('update', subject('Project', { projectId: props.project.projectId })) && can('read', 'Domain'),
-    )
-    const domainsQueryOptions = useDomainsQuery()
-    const { data: domains } = useQuery({
-        queryKey: domainsQueryOptions.queryKey,
-        queryFn: domainsQueryOptions.queryFn,
-        enabled: canManageDomains,
-    })
-    const { mutateAsync: assignDomain, isPending: isAssigning } = useProjectDomainAssignMutation()
-    const { mutateAsync: unassignDomain, isPending: isUnassigning } = useProjectDomainUnassignMutation()
-    const selectedDomainId = ref<number | null>(null)
-    const unassigningId = ref<number | null>(null)
-    const errorMessage = ref<string | null>(null)
+    const domainStatus = useDomainStatus()
+    const assignOpen = ref(false)
+    const { mutateAsync: unassignDomain } = useProjectDomainUnassignMutation()
+    const { remove, isHidden } = useUndoRemove<number>()
 
-    const unassignedDomains = computed(
-        () =>
-            domains.value?.filter(
-                (domain) => !props.project.domains.some((assigned) => assigned.domainId === domain.domainId),
-            ) ?? [],
-    )
+    const visibleDomains = computed(() => props.project.domains.filter((domain) => !isHidden(domain.domainId)))
 
-    async function assign() {
-        if (selectedDomainId.value === null) {
-            return
-        }
-        errorMessage.value = null
-        try {
-            await assignDomain({ projectId: props.project.projectId, domainId: selectedDomainId.value })
-            selectedDomainId.value = null
-        } catch (error) {
-            errorMessage.value = apiErrorMessage(error, t('module.projects.details.domains.assignError'))
-        }
-    }
-
-    async function unassign(domainId: number) {
-        errorMessage.value = null
-        unassigningId.value = domainId
-        try {
-            await unassignDomain({ projectId: props.project.projectId, domainId })
-        } catch (error) {
-            errorMessage.value = apiErrorMessage(error, t('module.projects.details.domains.error'))
-        } finally {
-            unassigningId.value = null
-        }
+    function unassign(domain: DomainDto) {
+        remove(domain.domainId, {
+            text: t('module.projects.details.domains.unassigned', { domain: domain.fqdn }),
+            errorText: t('module.projects.details.domains.unassignError', { domain: domain.fqdn }),
+            commit: () => unassignDomain({ projectId: props.project.projectId, domainId: domain.domainId }),
+        })
     }
 </script>
+
+<style scoped>
+    .project-domains__empty {
+        padding: 4px 24px 16px;
+    }
+
+    @media (max-width: 599.98px) {
+        .project-domains__empty {
+            padding: 4px 16px 16px;
+        }
+    }
+</style>

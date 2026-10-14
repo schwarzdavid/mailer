@@ -1,33 +1,96 @@
 <template>
-    <VContainer>
-        <div class="d-flex justify-space-between align-center">
-            <h1>{{ t('module.domains.list.title') }}</h1>
-            <AddDomainDialog v-if="can('create', 'Domain')" v-slot="{ props }">
-                <VBtn v-bind="props">{{ t('cta.add') }}</VBtn>
-            </AddDomainDialog>
-        </div>
-        <VDivider />
-        <VFadeTransition leave-absolute>
-            <div class="d-flex flex-column gr-3 pt-6" v-if="isPending">
-                <VSkeletonLoader v-for="i in 3" :key="i" type="table-heading" />
-            </div>
-            <div class="d-flex flex-column gr-3 pt-6" v-else>
-                <DomainListEntry v-for="domain in domains" :key="domain.domainId" :domain="domain" />
-            </div>
-        </VFadeTransition>
-    </VContainer>
+    <PageHeader :title="t('module.domains.list.title')" :description="t('module.domains.list.description')">
+        <template v-if="canCreate" #actions>
+            <VBtn
+                variant="flat"
+                color="primary"
+                :prepend-icon="mdiPlus"
+                :text="t('module.domains.list.create')"
+                @click="createOpen = true"
+            />
+        </template>
+    </PageHeader>
+
+    <ErrorState
+        v-if="isError"
+        size="page"
+        :thing="t('module.domains.list.thing')"
+        :error="error"
+        :retrying="isFetching"
+        @retry="refetch()"
+    />
+    <EmptyState
+        v-else-if="domains && domains.length === 0"
+        size="page"
+        :icon="mdiWeb"
+        :title="t('module.domains.list.empty.title')"
+        :text="t('module.domains.list.empty.text')"
+    >
+        <template v-if="canCreate" #actions>
+            <VBtn
+                variant="flat"
+                color="primary"
+                :prepend-icon="mdiPlus"
+                :text="t('module.domains.list.create')"
+                @click="createOpen = true"
+            />
+        </template>
+    </EmptyState>
+    <VCard v-else class="domain-list">
+        <ListSkeleton v-if="isPending" :label="t('module.domains.list.loading')" />
+        <ListRow
+            v-for="domain in domains"
+            v-else
+            :key="domain.domainId"
+            :icon="mdiWeb"
+            :title="domain.fqdn"
+            mono-title
+            :to="{ name: RouteNames.DOMAIN_DETAILS, params: { domainId: domain.domainId } }"
+        >
+            <template #subtitle>
+                <i18n-t v-if="domain.lastCheckedAt" keypath="dns.checkedAt" tag="span">
+                    <template #time><RelativeTime :value="domain.lastCheckedAt" /></template>
+                </i18n-t>
+                <span v-else>{{ t('dns.neverChecked') }}</span>
+            </template>
+            <template #meta>
+                <StatusBadge v-bind="domainStatus.domainBadge(domain)" />
+            </template>
+        </ListRow>
+    </VCard>
+
+    <AddDomainDialog v-if="canCreate" v-model="createOpen" />
 </template>
 
 <script setup lang="ts">
-    import AddDomainDialog from '@/modules/domains/views/list/partials/AddDomainDialog.vue'
+    import { computed, ref } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
-    import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
-    import DomainListEntry from '@/modules/domains/views/list/partials/DomainListEntry.vue'
     import { useI18n } from 'vue-i18n'
     import { useAbility } from '@casl/vue'
+    import { mdiPlus, mdiWeb } from '@mdi/js'
+    import EmptyState from '@/components/EmptyState.vue'
+    import ErrorState from '@/components/ErrorState.vue'
+    import ListRow from '@/components/ListRow.vue'
+    import PageHeader from '@/components/PageHeader.vue'
+    import RelativeTime from '@/components/RelativeTime.vue'
+    import StatusBadge from '@/components/StatusBadge.vue'
+    import ListSkeleton from '@/components/skeletons/ListSkeleton.vue'
+    import { useDomainStatus } from '@/modules/domains/helpers/domainStatus.ts'
+    import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
+    import AddDomainDialog from '@/modules/domains/views/list/partials/AddDomainDialog.vue'
+    import { RouteNames } from '@/router/RouteNames.ts'
 
-    const { data: domains, isPending } = useQuery(useDomainsQuery())
     const { t } = useI18n()
     const userAbility = useAbility()
-    const can = userAbility.can.bind(userAbility)
+    const domainStatus = useDomainStatus()
+    const { data: domains, isPending, isError, error, isFetching, refetch } = useQuery(useDomainsQuery())
+    const createOpen = ref(false)
+
+    const canCreate = computed(() => userAbility.can('create', 'Domain'))
 </script>
+
+<style scoped>
+    .domain-list {
+        background: rgb(var(--v-theme-surface));
+    }
+</style>

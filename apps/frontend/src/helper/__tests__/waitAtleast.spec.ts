@@ -25,10 +25,10 @@ function track<T>(promise: Promise<T>) {
 }
 
 describe('waitAtleast', () => {
-    it('holds back a fast result until the default minimum of one second', async () => {
+    it('holds back a fast result until the default minimum of 300ms', async () => {
         const state = track(waitAtleast(Promise.resolve('done')))
 
-        await vi.advanceTimersByTimeAsync(999)
+        await vi.advanceTimersByTimeAsync(299)
         expect(state.settled).toBe(false)
 
         await vi.advanceTimersByTimeAsync(1)

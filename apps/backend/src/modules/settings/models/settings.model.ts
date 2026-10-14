@@ -38,6 +38,10 @@ export class SettingsModel extends Model<Settings, SettingsCreate> implements Se
     @Column(DataType.STRING(45))
     declare serverIpv6: string | null
 
+    @AllowNull
+    @Column(DataType.DATE)
+    declare setupFinishedAt: Date | null
+
     @BelongsTo(() => DomainModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',

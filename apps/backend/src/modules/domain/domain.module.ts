@@ -11,10 +11,20 @@ import { DnsHealthService } from './services/dns-health.service.js'
 import { DomainDnsModel } from './models/domain-dns.model.js'
 import { SettingsModel } from '../settings/models/settings.model.js'
 import { InboundFormModel } from '../inbound-form/models/inbound-form.model.js'
+import { ProjectModel } from '../project/models/project.model.js'
+import { ProjectDomainModel } from '../project/models/project-domain.model.js'
 
 @Module({
     imports: [
-        SequelizeModule.forFeature([DomainModel, DomainDkimModel, DomainDnsModel, SettingsModel, InboundFormModel]),
+        SequelizeModule.forFeature([
+            DomainModel,
+            DomainDkimModel,
+            DomainDnsModel,
+            SettingsModel,
+            InboundFormModel,
+            ProjectModel,
+            ProjectDomainModel,
+        ]),
         EncryptionModule,
     ],
     controllers: [DomainController],

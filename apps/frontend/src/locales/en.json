@@ -1,16 +1,55 @@
 {
+    "app": {
+        "name": "Mail Admin",
+        "documentTitle": "{page} · Mail Admin",
+        "copyright": "© {year} David Schwarz IT Services GmbH"
+    },
+    "nav": {
+        "breadcrumbs": "Breadcrumbs",
+        "main": "Main navigation",
+        "open": "Open navigation",
+        "close": "Close navigation",
+        "dashboard": "Dashboard",
+        "projects": "Projects",
+        "domains": "Domains",
+        "bounces": "Bounces",
+        "users": "Users",
+        "settings": "Settings",
+        "administration": "Administration",
+        "backToDashboard": "Back to dashboard",
+        "health": {
+            "unconfigured": "The sending domain isn't configured yet",
+            "records": "{count} sending-domain record needs attention | {count} sending-domain records need attention"
+        },
+        "account": {
+            "open": "Account menu for {name}",
+            "theme": "Theme",
+            "themes": {
+                "system": "System",
+                "light": "Light",
+                "dark": "Dark"
+            },
+            "logout": "Log out"
+        },
+        "permission": {
+            "Domain": "View domains",
+            "Bounce": "View bounces",
+            "Settings": "View settings",
+            "User": "View users"
+        }
+    },
     "validation": {
-        "required": "This field is required",
-        "minLength": "Min {min} characters",
-        "maxLength": "Max {max} characters",
-        "email": "Invalid email",
-        "invalid": "Invalid value",
-        "hostname": "Invalid domain name",
-        "ipv4": "Invalid IPv4 address",
-        "ipv6": "Invalid IPv6 address"
+        "required": "Fill in this field.",
+        "minLength": "Use at least {min} characters.",
+        "maxLength": "Use at most {max} characters.",
+        "email": "Enter a valid email address, like name{'@'}example.com.",
+        "invalid": "This value isn't valid.",
+        "hostname": "Enter a domain name, like mail.example.com.",
+        "ipv4": "Enter an IPv4 address, like 203.0.113.10.",
+        "ipv6": "Enter an IPv6 address, like 2001:db8::1."
     },
     "field": {
-        "email": "Email Address",
+        "email": "Email address",
         "password": "Password",
         "domain": "Domain name",
         "name": "Name",
@@ -21,7 +60,11 @@
         "role": "Role",
         "serverIpv4": "Server IPv4 address",
         "serverIpv6": "Server IPv6 address (optional)",
-        "user": "User"
+        "user": "User",
+        "required": "{label} *",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
+        "passwordHint": "At least 8 characters."
     },
     "cta": {
         "abort": "Abort",
@@ -40,331 +83,863 @@
         "publish": "Publish",
         "saveDraft": "Save draft",
         "continue": "Continue",
-        "finish": "Finish"
+        "finish": "Finish",
+        "cancel": "Cancel",
+        "discard": "Discard",
+        "checkAgain": "Check again"
+    },
+    "form": {
+        "unsavedChanges": "Unsaved changes"
+    },
+    "dialog": {
+        "close": "Close",
+        "saveFailed": "Couldn't save",
+        "actionFailed": "That didn't work",
+        "tryAgain": "Check your connection and try again.",
+        "discard": {
+            "title": "Discard unsaved changes?",
+            "body": "Your edits haven't been saved and will be lost.",
+            "confirm": "Discard",
+            "cancel": "Keep editing"
+        }
+    },
+    "copy": {
+        "action": "Copy {label}",
+        "copied": "Copied",
+        "announce": "Copied {label}",
+        "showFull": "Show full value",
+        "showLess": "Show less",
+        "reveal": "Show {label}",
+        "hide": "Hide {label}"
+    },
+    "state": {
+        "loading": "Loading",
+        "thing": "this page",
+        "retry": "Try again",
+        "details": "Details",
+        "load": {
+            "title": "Couldn't load {thing}",
+            "text": "Something went wrong on the way. Check your connection and try again."
+        },
+        "notFound": {
+            "title": "This {thing} doesn't exist",
+            "text": "It may have been deleted, or the link is mistyped."
+        },
+        "forbidden": {
+            "title": "You don't have access to this page",
+            "text": "Ask a Super admin to grant you access.",
+            "textPermission": "You need the “{permission}” permission. Ask a Super admin to grant it."
+        },
+        "detail": {
+            "status": "Status",
+            "message": "Message",
+            "time": "Time",
+            "page": "Page"
+        }
+    },
+    "notify": {
+        "undo": "Undo",
+        "retry": "Retry",
+        "dismiss": "Dismiss"
+    },
+    "status": {
+        "valid": "Valid",
+        "invalid": "Invalid",
+        "partlyValid": "{valid} of {total} valid",
+        "active": "Active",
+        "inactive": "Inactive",
+        "published": "Published v{version}",
+        "draft": "Draft v{version}",
+        "noTemplate": "No template",
+        "permanent": "Permanent",
+        "transient": "Transient"
+    },
+    "dns": {
+        "title": "DNS records",
+        "instruction": "Add these records at your DNS provider. Changes can take up to 24 hours to show up.",
+        "checkAgain": "Check again",
+        "checking": "Checking…",
+        "summary": "{valid} of {total} records valid",
+        "checkedAt": "Checked {time}",
+        "neverChecked": "Not checked yet",
+        "host": "Host",
+        "value": "Value",
+        "hostFor": "host for {name}",
+        "valueFor": "value for {name}",
+        "currentFor": "current value for {name}",
+        "different": "Found a different value",
+        "reason": {
+            "missing": "No record found at this host yet.",
+            "ptr": "Reverse DNS doesn't point here yet. Your hosting provider sets it."
+        },
+        "advice": {
+            "spf": "Add the include from the value above to your existing SPF record instead of creating a second one.",
+            "replace": "Replace the existing record with the value above.",
+            "ptr": "Ask your hosting provider to set the reverse DNS of {host} to {value}."
+        },
+        "purpose": {
+            "spf": "Lists the servers allowed to send mail for this domain.",
+            "dkim": "Lets receivers verify that this server signed the mail.",
+            "dmarc": "Tells receivers what to do with mail that fails SPF or DKIM.",
+            "a": "Points the mail host name to this server's IPv4 address.",
+            "aaaa": "Points the mail host name to this server's IPv6 address.",
+            "mx": "Routes bounces and replies for this domain to this server.",
+            "ptr": "Reverse DNS. Set by your hosting provider, not your DNS zone."
+        },
+        "needAttention": "{names} needs attention | {names} need attention",
+        "ptrIpv4": "PTR (IPv4)",
+        "ptrIpv6": "PTR (IPv6)",
+        "listAnd": "{head} and {last}"
     },
     "module": {
-        "onboarding": {
-            "title": "Welcome",
-            "steps": {
-                "account": {
-                    "title": "Create your account",
-                    "intro": "Create the administrator account for this installation.",
-                    "error": "The account could not be created"
-                },
-                "domain": {
-                    "title": "Sending domain",
-                    "intro": "Configure the domain this server sends mail from."
-                },
-                "records": {
-                    "title": "DNS records",
-                    "intro": "Publish these DNS records so receivers can authenticate your mail. You can finish setup while they are still propagating."
-                }
-            }
-        },
         "auth": {
             "login": {
-                "title": "Welcome Back",
-                "intro": "Enter your credentials to access the admin panel",
-                "invalidCredentials": "Invalid email or password",
-                "error": "Login failed, please try again"
+                "title": "Log in",
+                "intro": "Use the account an administrator created for you.",
+                "invalidCredentials": "Email or password is wrong. Check both and try again.",
+                "error": "Couldn't log in. Check your connection and try again.",
+                "submit": "Log in",
+                "expired": "Your session expired. Log in again to continue where you left off."
             }
         },
-        "dashboard": {
-            "nav": "Dashboard"
-        },
-        "domains": {
-            "nav": "Domains",
-            "list": {
-                "title": "Domains"
-            },
-            "add": {
-                "title": "New Domain",
-                "intro": "Enter your domain name",
-                "invalidSubdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example{'@'}{fqdn}.",
-                "error": "The domain could not be created"
-            },
-            "delete": {
-                "action": "Delete",
-                "title": "Delete Domain",
-                "confirm": "Do you really want to delete {fqdn}? Its DNS records and DKIM keys are removed and it is unassigned from all projects. This cannot be undone.",
-                "error": "The domain could not be deleted"
-            },
-            "status": {
-                "valid": "Valid",
-                "invalid": "Invalid"
-            },
-            "dns": {
-                "title": "DNS Records",
-                "intro": "Before you can use this domain to send emails, configure your domain's DNS records to verify your domain ownership and to allow us to send emails in your name. After setting your DNS records, it may take up to 24 hours for the changes to take effect.",
-                "lastChecked": "Last checked at {date}",
-                "fields": {
-                    "status": "Status",
-                    "type": "Type",
-                    "host": "Host",
-                    "value": "Value"
-                },
-                "spf": {
-                    "title": "SPF",
-                    "description": "SPF is used to verify that an email is actually sent by our server."
-                },
-                "dkim": {
-                    "title": "DKIM",
-                    "description": "DKIM is used to verify that this server is allowed to send emails in your name."
-                },
-                "dmarc": {
-                    "title": "DMARC",
-                    "description": "DMARC defines how the receiver should react to spoofed emails."
-                }
-            }
+        "notFound": {
+            "title": "Page not found",
+            "thing": "page"
         },
         "projects": {
-            "nav": "Projects",
+            "counts": {
+                "forms": "No forms | 1 form | {count} forms",
+                "domains": "No sender domain | 1 sender domain | {count} sender domains",
+                "members": "No members | 1 member | {count} members"
+            },
             "list": {
                 "title": "Projects",
-                "empty": "No projects yet. Create one to group your forms and domains.",
-                "counts": "{forms} forms · {domains} domains"
+                "description": "Group the forms of one website and choose which domains they send from.",
+                "create": "New project",
+                "thing": "projects",
+                "loading": "Loading projects",
+                "domainInvalid": "Domain invalid",
+                "empty": {
+                    "title": "Create your first project",
+                    "text": "Projects group the inbound forms of one website and decide which sender domains they may use."
+                },
+                "emptyLimited": {
+                    "title": "You're not in any project yet",
+                    "text": "Ask an admin to add you as a member. Projects you join appear here."
+                }
             },
             "add": {
-                "title": "New Project",
-                "intro": "Give your project a name. Forms live inside a project; domains can be assigned to it.",
-                "error": "The project could not be created"
+                "title": "New project",
+                "intro": "A project groups the inbound forms of one website. You can assign sender domains and members next.",
+                "placeholder": "e.g. Acme Website",
+                "submit": "Create project",
+                "nameRequired": "Enter a name for the project.",
+                "success": "Project created",
+                "error": "Couldn't create the project. Check your connection and try again."
             },
             "deleted": {
                 "title": "Recently deleted",
-                "purgeAt": "Will be permanently deleted on {date}",
+                "description": "Deleted projects and their forms are purged after 30 days. Domains are kept.",
+                "purgeAt": "Purged on {date}, {relative}",
                 "restore": "Restore",
-                "error": "The project could not be restored"
+                "restoring": "Restoring…",
+                "restored": "{name} restored",
+                "open": "Open project",
+                "error": "Couldn't restore {name}"
             },
             "details": {
+                "thing": "project",
+                "loading": "Loading project",
+                "backToList": "Back to projects",
+                "readOnly": "Read only",
+                "readOnlyAlert": {
+                    "title": "You can view this project",
+                    "text": "Your membership allows Read. Ask an admin for Update to change forms, receivers or templates."
+                },
                 "general": {
                     "title": "General",
-                    "error": "The project could not be saved"
-                },
-                "domains": {
-                    "title": "Domains",
-                    "empty": "No domains assigned yet. Assign a domain so forms in this project can send mail.",
-                    "add": "Assign",
-                    "error": "The domain could not be removed",
-                    "assignError": "The domain could not be assigned"
+                    "name": "Project name",
+                    "saved": "Project saved",
+                    "error": "Couldn't save the project. Check your connection and try again."
                 },
                 "forms": {
-                    "title": "Inbound Forms",
-                    "empty": "No forms in this project yet."
+                    "title": "Inbound forms",
+                    "description": "Public endpoints that websites post to.",
+                    "add": "New form",
+                    "thing": "forms",
+                    "empty": {
+                        "title": "No forms yet",
+                        "text": "Create a form to get a public endpoint for your website's contact form."
+                    }
+                },
+                "domains": {
+                    "title": "Sender domains",
+                    "description": "Forms in this project may only send from these domains.",
+                    "assign": "Assign domain",
+                    "viewRecords": "View DNS records",
+                    "unassign": "Unassign {domain}",
+                    "unassigned": "{domain} unassigned",
+                    "unassignError": "Couldn't unassign {domain}",
+                    "assigned": "{domain} assigned",
+                    "assignError": "Couldn't assign the domain. Check your connection and try again.",
+                    "empty": {
+                        "title": "Forms here can't send mail yet",
+                        "text": "Assign a verified sender domain first."
+                    },
+                    "dialog": {
+                        "title": "Assign sender domain",
+                        "intro": "Forms in {project} will be able to send from this domain.",
+                        "field": "Sender domain",
+                        "submit": "Assign domain",
+                        "hint": "Unverified domains can be assigned, but forms can't send from them until their DNS records are valid.",
+                        "addDomain": "Add a domain",
+                        "required": "Choose a domain."
+                    }
                 },
                 "delete": {
                     "title": "Delete project",
-                    "intro": "The project and its forms are moved to the trash and permanently deleted after 30 days. Domains are kept.",
-                    "error": "The project could not be deleted"
+                    "description": "Moves {name} to Recently deleted. It's purged after 30 days; sender domains are kept. | Moves {name} and its form to Recently deleted. They're purged after 30 days; sender domains are kept. | Moves {name} and its {count} forms to Recently deleted. They're purged after 30 days; sender domains are kept.",
+                    "action": "Delete project…",
+                    "confirmTitle": "Delete project “{name}”?",
+                    "confirmBody": "{name} moves to Recently deleted and is purged after 30 days. You can restore it until then. Sender domains are kept. | {name} and its form move to Recently deleted and are purged after 30 days. You can restore them until then. Sender domains are kept. | {name} and its {count} forms move to Recently deleted and are purged after 30 days. You can restore them until then. Sender domains are kept.",
+                    "confirm": "Delete project",
+                    "done": "{name} moved to Recently deleted",
+                    "view": "View",
+                    "error": "Couldn't delete the project"
                 }
             },
             "members": {
                 "title": "Members",
+                "description": "People who work on this project and what they may do here.",
                 "add": "Add member",
-                "edit": "Edit member",
-                "empty": "No members yet.",
-                "error": "The member could not be saved",
-                "removeError": "The member could not be removed"
+                "thing": "members",
+                "editLabel": "Edit access of {name}",
+                "removeLabel": "Remove {name}",
+                "removed": "{name} removed",
+                "removeError": "Couldn't remove {name}",
+                "added": "{name} added",
+                "updated": "Access of {name} updated",
+                "error": "Couldn't save the member. Check your connection and try again.",
+                "manageInUsers": "Manage in Users",
+                "empty": {
+                    "title": "No members yet",
+                    "text": "Only admins and users with “Access all projects” can open this project."
+                },
+                "implicit": {
+                    "note": "Also open to {who}, without membership.",
+                    "and": " and ",
+                    "superAdmins": "{count} Super admin | {count} Super admins",
+                    "allProjects": "{count} user with “Access all projects” | {count} users with “Access all projects”"
+                },
+                "dialog": {
+                    "addTitle": "Add member",
+                    "editTitle": "Edit {name}'s access",
+                    "submit": "Add member",
+                    "access": "Access in {project}",
+                    "userHint": "{email} · role {role}",
+                    "userRequired": "Choose a user.",
+                    "permissionRequired": "Choose at least one permission.",
+                    "explain": {
+                        "read": "See the project, its forms and receivers",
+                        "update": "Edit forms, fields, receivers and templates",
+                        "delete": "Delete forms and the project"
+                    }
+                }
+            }
+        },
+        "domains": {
+            "list": {
+                "title": "Domains",
+                "description": "The domains your forms send from. Each one is verified with three DNS records.",
+                "create": "New domain",
+                "thing": "domains",
+                "loading": "Loading domains",
+                "empty": {
+                    "title": "Add your first sender domain",
+                    "text": "Forms send from a domain you own. Add it, publish three DNS records, and it is ready."
+                }
+            },
+            "add": {
+                "title": "New sender domain",
+                "intro": "Use a subdomain that only sends mail, such as {example}. You'll get three DNS records to publish next.",
+                "submit": "Add domain",
+                "success": "{fqdn} added",
+                "error": "Couldn't add the domain. Check your connection and try again.",
+                "apex": {
+                    "title": "Use a subdomain if you can",
+                    "text": "{fqdn} looks like a main domain. A subdomain like {example} keeps form mail from affecting your regular email. You can still add it."
+                }
+            },
+            "details": {
+                "thing": "domain",
+                "backToList": "Back to domains",
+                "usedBy": "Used by {names}",
+                "unused": "Not used by a project",
+                "stillInvalid": "All records are still invalid",
+                "checkFailed": "Couldn't check DNS for {fqdn}",
+                "projects": {
+                    "title": "Used by",
+                    "description": "Projects whose forms may send from this domain.",
+                    "empty": {
+                        "title": "No project uses this domain",
+                        "text": "Assign it on a project's Sender domains card."
+                    }
+                },
+                "delete": {
+                    "title": "Delete domain",
+                    "description": "Removes {fqdn} and its DNS verification. No project uses it.",
+                    "blocked": "{fqdn} is used by {names}. Unassign it there before you can delete it.",
+                    "action": "Delete domain…",
+                    "confirmTitle": "Delete domain {fqdn}?",
+                    "confirmBody": "The domain and its DNS verification are removed. No project uses it. This can't be undone.",
+                    "confirm": "Delete domain",
+                    "done": "{fqdn} deleted",
+                    "error": "Couldn't delete the domain"
+                }
+            }
+        },
+        "settings": {
+            "title": "Settings",
+            "description": "Server configuration from the first-run setup. Changes here affect every project.",
+            "thing": "settings",
+            "loading": "Loading settings",
+            "sendingDomain": {
+                "title": "Sending domain",
+                "description": "The host name and IP addresses this server sends mail from. Saving updates the DNS records below.",
+                "domainHint": "A host name that points to this server, such as mail.example.com.",
+                "saved": "Sending domain saved",
+                "error": "Couldn't save the sending domain",
+                "confirm": {
+                    "title": "Change the sending domain?",
+                    "body": "All DNS records are generated again for {fqdn}. Mail may be rejected until you publish them.",
+                    "action": "Change domain"
+                }
+            },
+            "records": {
+                "instruction": "Add these records in your DNS zone; the PTR records are set at your hosting provider.",
+                "unchanged": "All open records are still invalid",
+                "checkFailed": "Couldn't check DNS for {fqdn}",
+                "allValid": {
+                    "title": "All {count} records are valid",
+                    "text": "{fqdn} is fully set up for reliable delivery."
+                }
+            }
+        },
+        "setup": {
+            "title": "Setup",
+            "thing": "the setup status",
+            "signedInAs": "Signed in as {name}",
+            "stepper": {
+                "label": "Setup steps",
+                "compact": "Step {current} of {total} · {title}"
+            },
+            "steps": {
+                "account": "Admin account",
+                "sendingDomain": "Sending domain",
+                "records": "DNS records"
+            },
+            "intro": {
+                "account": {
+                    "title": "Welcome to Mail Admin",
+                    "lead": "Let's set up this server. It takes three steps and a few DNS records."
+                },
+                "sendingDomain": {
+                    "title": "Where does this server send from?",
+                    "lead": "Mail Admin generates the DNS records for this host name and these addresses in the next step."
+                },
+                "records": {
+                    "title": "Publish the DNS records",
+                    "lead": "Add these records in your DNS zone so receivers can authenticate your mail. The PTR records are set at your hosting provider."
+                }
+            },
+            "account": {
+                "title": "Create the admin account",
+                "description": "This becomes the first Super admin. You can add more users once setup is done.",
+                "submit": "Create account",
+                "error": "Couldn't create the account"
+            },
+            "domain": {
+                "submit": "Save and continue"
+            },
+            "records": {
+                "summary": "{valid} of {total} records are valid.",
+                "canFinish": "You can finish now: Mail Admin keeps checking and lists open records on the dashboard and in Settings.",
+                "finish": "Finish setup",
+                "finishFailed": "Couldn't finish setup"
+            }
+        },
+        "users": {
+            "roles": {
+                "super_admin": "Every permission, including changing other Super admins",
+                "admin": "Every permission, but can't change Super admins",
+                "user": "No permissions of its own; add them per user or through project memberships"
+            },
+            "list": {
+                "title": "Users",
+                "description": "Who can sign in, their role, and extra permissions.",
+                "create": "New user",
+                "thing": "users",
+                "loading": "Loading users",
+                "you": "You",
+                "allProjects": "All",
+                "actions": "Actions for {name}",
+                "edit": "Edit user",
+                "delete": "Delete user…",
+                "columns": {
+                    "name": "Name",
+                    "role": "Role",
+                    "projects": "Projects",
+                    "actions": "Actions"
+                }
+            },
+            "add": {
+                "title": "New user",
+                "submit": "Create user",
+                "passwordHint": "At least 8 characters. Share it with {name} securely.",
+                "theUser": "the user",
+                "success": "User created",
+                "error": "Couldn't create the user. Check your connection and try again."
+            },
+            "delete": {
+                "title": "Delete user",
+                "description": "{name} loses access immediately. This can't be undone. | {name} loses access immediately and is removed from 1 project. This can't be undone. | {name} loses access immediately and is removed from {count} projects. This can't be undone.",
+                "confirmTitle": "Delete user {name}?",
+                "confirmBody": "{name} loses access immediately. This can't be undone. | {name} loses access immediately and is removed from 1 project. This can't be undone. | {name} loses access immediately and is removed from {count} projects. This can't be undone.",
+                "confirm": "Delete user",
+                "done": "{name} deleted",
+                "error": "Couldn't delete the user"
+            },
+            "details": {
+                "thing": "user",
+                "loading": "Loading user",
+                "backToList": "Back to users",
+                "memberOf": "Member of no projects | Member of 1 project | Member of {count} projects",
+                "superAdmin": {
+                    "title": "Super admins have every permission",
+                    "text": "Permissions and memberships don't apply."
+                },
+                "profile": {
+                    "title": "Profile",
+                    "newPassword": "New password (optional)",
+                    "newPasswordHint": "Leave empty to keep the current password.",
+                    "ownRole": "You can't change your own role.",
+                    "saved": "Profile saved",
+                    "error": "Couldn't save the profile"
+                },
+                "permissions": {
+                    "title": "Permissions",
+                    "description": "Granted in addition to the role, in every project.",
+                    "fromRole": "From role: {role}",
+                    "saved": "Permissions saved",
+                    "error": "Couldn't save the permissions",
+                    "explainer": {
+                        "title": "How access works",
+                        "text": "Permissions add up: the role and these permissions apply everywhere; a project membership adds Read, Update or Delete for that one project. Super admins and users with “Access all projects” reach every project without membership."
+                    }
+                },
+                "memberships": {
+                    "title": "Project memberships",
+                    "description": "Access to single projects. Change it on the project's Members card.",
+                    "empty": {
+                        "title": "No project memberships",
+                        "text": "Add this user on a project's Members card."
+                    }
+                }
+            }
+        },
+        "bounces": {
+            "title": "Bounces",
+            "description": "Messages that receiving servers rejected. Addresses that keep failing are blocked for a while.",
+            "tabs": {
+                "bounces": "Bounces",
+                "blocked": "Blocked addresses"
+            },
+            "list": {
+                "thing": "bounces",
+                "loading": "Loading bounces",
+                "search": "Search recipient or reason",
+                "count": "No bounces | 1 bounce | {count} bounces",
+                "range": "{from}–{to} of {total}",
+                "previous": "Previous page",
+                "next": "Next page",
+                "types": {
+                    "all": "All"
+                },
+                "columns": {
+                    "recipient": "Recipient",
+                    "type": "Type",
+                    "status": "Status",
+                    "reason": "Reason",
+                    "received": "Received"
+                },
+                "empty": {
+                    "title": "No bounces",
+                    "text": "Every message so far was accepted by the receiving server."
+                },
+                "noMatch": {
+                    "title": "No bounces match “{search}”",
+                    "titleType": "No bounces of this type",
+                    "text": "Try another address or reason, or show all types.",
+                    "clear": "Clear filters"
+                }
+            },
+            "blocked": {
+                "thing": "blocked addresses",
+                "loading": "Loading blocked addresses",
+                "count": "No addresses | 1 address | {count} addresses",
+                "indefinitely": "Until unblocked",
+                "unblock": "Unblock",
+                "unblockLabel": "Unblock {email}",
+                "unblocked": "Unblocked {email}",
+                "error": "Couldn't unblock {email}",
+                "columns": {
+                    "recipient": "Recipient",
+                    "until": "Blocked until",
+                    "count": "Times blocked",
+                    "actions": "Actions"
+                },
+                "empty": {
+                    "title": "No blocked addresses",
+                    "text": "Addresses that keep bouncing are blocked here for a while."
+                }
             }
         },
         "inboundForms": {
-            "add": {
-                "title": "New Form",
-                "intro": "Give your form a name. The slug becomes part of the public endpoint URL.",
-                "error": "The form could not be created"
+            "receiverCount": "No receivers | 1 receiver | {count} receivers",
+            "field": {
+                "senderDomain": "Sender domain"
             },
-            "status": {
-                "active": "Active",
-                "inactive": "Inactive"
+            "validation": {
+                "slug": "Use lowercase letters, numbers and single hyphens, like contact-request.",
+                "key": "Use letters, numbers, hyphens and underscores only.",
+                "keyTaken": "Another field already uses this key.",
+                "pattern": "This isn't a valid regular expression.",
+                "maxLength": "Must be at least the minimum length ({min}).",
+                "max": "Must be at least the minimum ({min})."
+            },
+            "rules": {
+                "lengthRange": "{min}–{max} characters",
+                "minLength": "At least {min} characters",
+                "maxLength": "Up to {max} characters",
+                "range": "{min} – {max}",
+                "min": "At least {min}",
+                "max": "Up to {max}",
+                "pattern": "Matches {pattern}",
+                "default": "Default “{value}”"
+            },
+            "add": {
+                "title": "New inbound form",
+                "intro": "Creates a public endpoint your website's form can post to. Fields and receivers come next.",
+                "namePlaceholder": "e.g. Contact request",
+                "slugHint": "Generated from the name until you edit it.",
+                "domainHint": "Only domains assigned to {project}.",
+                "submit": "Create form",
+                "success": "Form created",
+                "error": "Couldn't create the form. Check your connection and try again."
             },
             "details": {
-                "endpoint": "Endpoint URL",
+                "thing": "form",
+                "loading": "Loading form",
+                "endpoint": {
+                    "title": "Endpoint",
+                    "description": "Your website's form posts here.",
+                    "copyLabel": "endpoint URL",
+                    "accept": "Accept submissions",
+                    "acceptHint": "The endpoint answers 404 while this is off.",
+                    "on": "On",
+                    "off": "Off: the endpoint answers 404",
+                    "example": "Example HTML form",
+                    "exampleLabel": "example HTML form",
+                    "send": "Send",
+                    "activated": "Form activated",
+                    "deactivated": "Form deactivated",
+                    "toggleFailed": "Couldn't change whether the form accepts submissions"
+                },
                 "general": {
                     "title": "General",
-                    "error": "The form could not be saved"
+                    "slugHint": "Changing it changes the endpoint URL.",
+                    "saved": "Form saved"
                 },
                 "fields": {
                     "title": "Fields",
-                    "empty": "No fields defined yet. Add the fields your website form will submit.",
+                    "description": "The keys your website's form submits, and how each is checked.",
                     "add": "Add field",
                     "key": "Key",
                     "label": "Label",
                     "type": "Type",
                     "required": "Required",
+                    "requiredYes": "Required",
+                    "optional": "Optional",
+                    "rules": "Rules",
+                    "actionsColumn": "Actions",
                     "defaultValue": "Default value",
                     "minLength": "Min length",
                     "maxLength": "Max length",
                     "pattern": "Pattern (regex)",
                     "min": "Minimum",
                     "max": "Maximum",
+                    "edit": "Edit field",
+                    "remove": "Remove field",
+                    "actions": "Actions for field {key}",
+                    "editLabel": "Edit field {key}",
+                    "removeLabel": "Remove field {key}",
+                    "added": "Field “{key}” added",
+                    "saved": "Field “{key}” saved",
+                    "removed": "Field “{key}” removed",
+                    "removeError": "Couldn't remove field “{key}”",
                     "typeOptions": {
                         "text": "Text",
                         "email": "Email",
                         "number": "Number",
                         "boolean": "Boolean"
                     },
-                    "error": "The fields could not be saved"
+                    "empty": {
+                        "title": "No fields yet",
+                        "text": "Add the keys your website's form submits. Unknown keys can't be used in templates."
+                    },
+                    "dialog": {
+                        "editTitle": "Edit field {key}",
+                        "keyHint": "The name attribute in your HTML form.",
+                        "labelHint": "Shown in templates and the editor.",
+                        "requiredHint": "Submissions without this field are rejected.",
+                        "textRules": "Text rules",
+                        "numberRules": "Number rules",
+                        "patternHint": "Optional. The whole value must match."
+                    }
                 },
                 "security": {
                     "title": "Security",
-                    "empty": "No security schemes configured. Add a honeypot or reCAPTCHA to protect the endpoint.",
-                    "add": "Add scheme",
+                    "description": "Checks that run before a submission is accepted.",
+                    "add": "Add check",
                     "type": "Type",
                     "location": "Location",
                     "key": "Key",
                     "secret": "Secret key",
-                    "secretKeepHint": "Leave empty to keep the current secret",
-                    "secretConfigured": "Secret configured",
+                    "secretKeepHint": "Leave empty to keep the current secret.",
                     "minScore": "Minimum score (v3)",
+                    "minScoreShort": "min. score {score}",
+                    "editLabel": "Edit {type}",
+                    "removeLabel": "Remove {type}",
+                    "saved": "Security check saved",
+                    "removed": "{type} removed",
+                    "removeError": "Couldn't remove {type}",
                     "typeOptions": {
                         "google-recaptcha": "Google reCAPTCHA",
-                        "honeypot": "Honeypot"
+                        "honeypot": "Honeypot",
+                        "csrf": "CSRF token"
                     },
                     "locationOptions": {
                         "body": "Body",
                         "header": "Header",
                         "query": "Query parameter"
                     },
-                    "error": "The security schemes could not be saved"
+                    "empty": {
+                        "title": "No checks yet",
+                        "text": "A honeypot or reCAPTCHA keeps bots out."
+                    },
+                    "dialog": {
+                        "editTitle": "Edit security check",
+                        "typeLocked": "The type can't change. Remove the check and add a new one instead.",
+                        "minScoreHint": "0.0 (likely a bot) to 1.0 (likely human). Leave empty for reCAPTCHA v2."
+                    }
                 },
                 "receivers": {
                     "title": "Receivers",
-                    "empty": "No receivers configured. Add one to send an email for every submission.",
+                    "description": "Each receiver sends one email per submission.",
                     "add": "Add receiver",
                     "from": "Sender",
                     "to": "Recipient",
                     "replyTo": "Reply-To",
-                    "recipientHint": "A fixed address or a form field like {placeholder}",
-                    "template": {
-                        "none": "No template",
-                        "draft": "Draft v{version}",
-                        "published": "Published v{version}",
-                        "edit": "Edit template"
+                    "noReplyTo": "No Reply-To",
+                    "editTemplate": "Edit template",
+                    "writeTemplate": "Write template",
+                    "viewTemplate": "View template",
+                    "edit": "Edit receiver",
+                    "activate": "Activate",
+                    "deactivate": "Deactivate",
+                    "remove": "Remove receiver…",
+                    "actions": "Actions for receiver {email}",
+                    "saved": "Receiver saved",
+                    "added": "Receiver added",
+                    "activated": "{email} activated",
+                    "deactivated": "{email} deactivated",
+                    "toggleFailed": "Couldn't change {email}",
+                    "removed": "Receiver {email} removed",
+                    "removeError": "Couldn't remove receiver {email}",
+                    "confirmTitle": "Remove receiver {email}?",
+                    "confirmBody": "Its template is deleted with it. New submissions stop going to this address. | Its template and its version are deleted with it. New submissions stop going to this address. | Its template and all {count} versions are deleted with it. New submissions stop going to this address.",
+                    "confirm": "Remove receiver",
+                    "empty": {
+                        "title": "No receivers yet",
+                        "text": "Submissions are accepted but nobody is emailed."
                     },
-                    "error": "The receiver could not be saved",
-                    "removeError": "The receiver could not be removed"
+                    "dialog": {
+                        "editTitle": "Edit receiver",
+                        "senderHint": "Must end in {'@'}{domain}, the form's sender domain.",
+                        "noDomain": "Choose a sender domain on the form first.",
+                        "senderDomain": "Use an address ending in {'@'}{domain}.",
+                        "recipientHint": "A fixed address or a form field like {placeholder}.",
+                        "none": "None",
+                        "activeHint": "Inactive receivers are skipped."
+                    }
+                },
+                "delete": {
+                    "title": "Delete form",
+                    "description": "Removes the endpoint with its fields, checks, receivers and templates. Your website's form stops working. This can't be undone.",
+                    "action": "Delete form…",
+                    "confirmTitle": "Delete form “{name}”?",
+                    "confirmBody": "The endpoint {endpoint} stops working, and its {fields} fields, {checks} checks, {receivers} receivers and their templates are deleted. This can't be undone.",
+                    "confirm": "Delete form",
+                    "done": "Form “{name}” deleted",
+                    "error": "Couldn't delete the form"
                 }
             },
             "template": {
                 "title": "Email template",
+                "thing": "template",
+                "receiverThing": "receiver",
+                "backToForm": "Back to form",
                 "subject": "Subject",
-                "fieldsHint": "Click a field to insert it at the cursor",
-                "preview": "Preview",
-                "previewError": "Template error: {error}",
-                "saveFailed": "Saving failed: {error}",
-                "versions": "Versions",
-                "version": "v{version} ({status})",
-                "statusOptions": {
-                    "draft": "Draft",
-                    "published": "Published"
-                },
+                "subjectHint": "Placeholders work here too.",
+                "insertLabel": "Insert field",
                 "insertField": "Insert field {key}",
-                "unknownError": "Unknown error"
-            }
-        },
-        "bounces": {
-            "nav": "Bounces",
-            "title": "Bounces",
-            "tabs": {
-                "bounces": "Bounces",
-                "blocked": "Blocked addresses"
-            },
-            "list": {
-                "empty": "No bounces recorded yet.",
-                "fields": {
-                    "email": "Recipient",
-                    "type": "Type",
-                    "statusCode": "Status",
-                    "reason": "Reason",
-                    "receivedAt": "Received"
+                "code": "Code",
+                "preview": "Preview",
+                "paneTitle": "Template",
+                "paneLanguage": "HTML + Handlebars",
+                "cursor": "Ln {line}, Col {column}",
+                "shortcutHint": "Type {'{{'} for field suggestions · Ctrl+S saves a draft",
+                "previewTitle": "Preview with sample data",
+                "desktop": "Desktop",
+                "mobile": "Mobile",
+                "from": "From",
+                "to": "To",
+                "replyTo": "Reply-To",
+                "nothingToPreview": "Nothing to preview yet",
+                "error": "Template error",
+                "errorOnLine": "Template error on line {line}",
+                "showingLastGood": "Showing the last version that compiled.",
+                "versions": "Versions",
+                "versionsTitle": "Versions of this template",
+                "versionsNote": "Opening a version loads it into the editor. Save a draft to keep it.",
+                "editing": "Editing",
+                "live": "Live: v{version} ·",
+                "liveShort": "Live",
+                "saveFailed": "Couldn't save the draft",
+                "unknownError": "Check your connection and try again. Your changes are still in the editor.",
+                "published": "Published as v{version}",
+                "publishConfirm": {
+                    "title": "Publish draft v{version}?",
+                    "body": "New submissions to {email} use this template right away. Earlier versions stay in the history."
                 },
-                "typeOptions": {
-                    "permanent": "Permanent",
-                    "transient": "Transient"
-                }
-            },
-            "blocked": {
-                "empty": "No addresses are currently blocked.",
-                "unblock": "Unblock",
-                "fields": {
-                    "email": "Recipient",
-                    "blockedUntil": "Blocked until",
-                    "blockCount": "Times blocked"
+                "noTemplate": {
+                    "title": "No template yet",
+                    "text": "Start from a layout that lists every field of this form, or from an empty file.",
+                    "layout": "Use field layout",
+                    "empty": "Start empty"
                 },
-                "error": "The address could not be unblocked"
-            }
-        },
-        "users": {
-            "nav": "Users",
-            "list": {
-                "title": "Users"
-            },
-            "add": {
-                "title": "New User",
-                "intro": "Create the account and share the initial password with the user yourself.",
-                "error": "The user could not be created"
-            },
-            "delete": {
-                "title": "Delete User",
-                "confirm": "Do you really want to delete {name}? This cannot be undone.",
-                "error": "The user could not be deleted"
-            },
-            "details": {
-                "loadError": "The user could not be loaded",
-                "profile": {
-                    "title": "Profile",
-                    "newPassword": "New password (optional)",
-                    "error": "The user could not be updated"
-                },
-                "permissions": {
-                    "title": "Direct permissions",
-                    "intro": "Permissions granted in addition to the role.",
-                    "error": "The permissions could not be saved"
-                },
-                "memberships": {
-                    "title": "Project memberships",
-                    "empty": "No project access granted."
+                "layout": {
+                    "label": "Layout",
+                    "editor": "Editor",
+                    "split": "Split",
+                    "preview": "Preview"
                 }
             }
         },
-        "settings": {
-            "nav": "Settings",
-            "title": "Settings",
-            "sendingDomain": {
-                "title": "Sending Domain",
-                "error": "The sending domain could not be saved",
-                "intro": "The sending domain is the mail infrastructure domain of this server. It is used as the bounce address for outgoing mails and as the SPF include target for all sender domains.",
-                "records": {
-                    "title": "DNS Records",
-                    "intro": "Configure these records in your DNS zone (the PTR record is set at your hosting provider). Once every record is valid, your server is fully set up for reliable delivery.",
-                    "lastChecked": "Last checked at {date}",
-                    "a": {
-                        "title": "A",
-                        "description": "Points the sending domain at your server's IPv4 address."
+        "dashboard": {
+            "greeting": {
+                "default": "Welcome back, {name}.",
+                "newInstall": "Setup is done. Four steps to your first delivered submission."
+            },
+            "stats": {
+                "projects": "Projects",
+                "deleted": "{count} in Recently deleted | {count} in Recently deleted",
+                "activeForms": "Active forms",
+                "of": "of {total}",
+                "ofValid": "of {total} valid",
+                "formOff": "{name} is off",
+                "formsOff": "{count} forms are off",
+                "senderDomains": "Sender domains",
+                "needRecords": "{count} needs DNS records | {count} need DNS records",
+                "bounces": "Bounces · 7 days",
+                "bounceSplit": "{permanent} permanent · {transient} transient"
+            },
+            "attention": {
+                "title": "Needs attention",
+                "description": "Everything that keeps mail from reaching an inbox.",
+                "showAll": "Show all {count}",
+                "sendingMissing": "The sending domain isn't configured",
+                "sendingRecords": "{count} sending-domain record is invalid | {count} sending-domain records are invalid",
+                "sendingSubtitle": "{names} for {fqdn} · Settings",
+                "domainCantSend": "{fqdn} can't send yet",
+                "noTemplate": "A receiver has no template",
+                "permanentBounces": "{count} permanent bounce this week | {count} permanent bounces this week",
+                "latestBounce": "Latest: {email} · {time}",
+                "empty": {
+                    "title": "Nothing needs you",
+                    "text": "All DNS records are valid, every receiver has a template, and no permanent bounces this week."
+                }
+            },
+            "forms": {
+                "title": "Forms",
+                "thing": "forms",
+                "description": "Every form you can open, by project.",
+                "descriptionMember": "Forms in the projects you are a member of.",
+                "noForms": "No forms yet."
+            },
+            "health": {
+                "title": "Delivery health",
+                "thing": "the sending domain",
+                "check": "Check now",
+                "sendingDomain": "Sending domain",
+                "senderDomains": "Sender domains",
+                "noDomains": "No sender domains yet."
+            },
+            "bounces": {
+                "title": "Recent bounces",
+                "viewAll": "View all"
+            },
+            "getStarted": {
+                "title": "Get started",
+                "description": "{done} of 4 done. These steps go away once your first submission can be delivered.",
+                "openProject": "Open project",
+                "openForm": "Open form",
+                "steps": {
+                    "domain": {
+                        "title": "Add and verify a sender domain",
+                        "text": "The domain your forms send from, such as forms.example.com, verified with three DNS records."
                     },
-                    "aaaa": {
-                        "title": "AAAA",
-                        "description": "Points the sending domain at your server's IPv6 address."
+                    "project": {
+                        "title": "Create a project",
+                        "text": "A project groups the forms of one website and picks its sender domains."
                     },
-                    "mx": {
-                        "title": "MX",
-                        "description": "Routes bounce messages back to this server so failed deliveries are detected."
+                    "form": {
+                        "title": "Create a form and add a receiver",
+                        "text": "Define the fields your website submits and who gets an email for each submission."
                     },
-                    "spf": {
-                        "title": "SPF",
-                        "description": "Authorizes your server's IP addresses to send mail for this domain."
-                    },
-                    "dkim": {
-                        "title": "DKIM",
-                        "description": "Allows receivers to verify that mails were signed by this server."
-                    },
-                    "dmarc": {
-                        "title": "DMARC",
-                        "description": "Defines how receivers should treat mails that fail SPF or DKIM."
-                    },
-                    "ptr": {
-                        "title": "PTR (Reverse DNS)",
-                        "description": "Set at your hosting provider: the server IP must resolve back to the sending domain."
+                    "template": {
+                        "title": "Publish a template and connect your website",
+                        "text": "Write the receiver's email, then point your form's action at the endpoint URL."
                     }
+                }
+            },
+            "explainer": {
+                "title": "How it fits together",
+                "sendingDomain": {
+                    "term": "Sending domain",
+                    "text": "is this server's own mail identity (Settings)."
+                },
+                "senderDomains": {
+                    "term": "Sender domains",
+                    "text": "are the domains your emails come from, verified by DNS."
+                },
+                "projects": {
+                    "term": "Projects",
+                    "text": "group the forms of one website and pick their sender domains."
+                },
+                "forms": {
+                    "term": "Forms",
+                    "text": "are public endpoints. Each receiver sends one email per submission, using its template."
                 }
             }
         }
@@ -401,5 +976,11 @@
             "update": "Update",
             "delete": "Delete"
         }
+    },
+    "roles": {
+        "super_admin": "Super admin",
+        "admin": "Admin",
+        "user": "User",
+        "custom": "Custom"
     }
 }

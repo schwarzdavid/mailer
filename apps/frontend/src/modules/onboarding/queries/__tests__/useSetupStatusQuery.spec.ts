@@ -10,18 +10,18 @@ afterEach(() => {
 
 describe('useSetupStatusQuery', () => {
     it('loads the setup status under the setup.status key', async () => {
-        const statusSpy = vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true })
+        const statusSpy = vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
         const { result, queryClient, unmount } = withVueQuery(() => useQuery(useSetupStatusQuery()))
 
         await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
 
         expect(statusSpy).toHaveBeenCalledOnce()
-        expect(queryClient.getQueryData(['setup.status'])).toEqual({ needsSetup: true })
+        expect(queryClient.getQueryData(['setup.status'])).toEqual({ needsSetup: true, step: 'account' })
         unmount()
     })
 
     it('never refetches once known, so route guards do not hit the api on every navigation', async () => {
-        const statusSpy = vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: false })
+        const statusSpy = vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: false, step: 'finished' })
         const { queryClient, unmount } = withVueQuery(() => null)
 
         await queryClient.fetchQuery(useSetupStatusQuery())

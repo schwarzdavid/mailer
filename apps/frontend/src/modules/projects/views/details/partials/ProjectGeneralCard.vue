@@ -1,77 +1,93 @@
 <template>
-    <VCard :title="t('module.projects.details.general.title')">
-        <form @submit.prevent="onSubmit">
-            <VCardItem>
-                <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
-                <VTextField
-                    name="name"
-                    :label="t('field.name')"
-                    v-model="name"
-                    :error-messages="errors.name"
-                    :disabled="!canUpdate"
-                />
-            </VCardItem>
-            <VCardActions v-if="canUpdate || canDelete">
-                <DeleteProjectDialog v-if="canDelete" :project="project" v-slot="{ props: activator }">
-                    <VBtn color="error" v-bind="activator" :text="t('cta.delete')" />
-                </DeleteProjectDialog>
-                <VSpacer />
-                <VBtn
-                    v-if="canUpdate"
-                    color="primary"
-                    variant="elevated"
-                    :text="t('cta.save')"
-                    :loading="isPending"
-                    type="submit"
-                />
-            </VCardActions>
+    <SectionCard :title="t('module.projects.details.general.title')">
+        <form v-if="canUpdate" id="project-general" class="project-general" novalidate @submit.prevent="onSubmit">
+            <InlineAlert v-if="errorMessage" tone="error" :title="t('dialog.saveFailed')" :text="errorMessage" />
+            <VTextField
+                v-model="name"
+                name="name"
+                :label="requiredLabel(t('module.projects.details.general.name'))"
+                :error-messages="errors.name"
+                aria-required="true"
+            />
         </form>
-    </VCard>
+        <ReadonlyValue v-else :label="t('module.projects.details.general.name')" :value="project.name" />
+        <template v-if="canUpdate" #footer>
+            <SaveFooter form="project-general" :dirty="meta.dirty" :pending="isPending" @discard="discard" />
+        </template>
+    </SectionCard>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from 'vue'
+    import { ref, watch } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
-    import { useAbility } from '@casl/vue'
-    import { subject } from '@casl/ability'
     import type { ProjectDetailDto } from 'api'
-    import { useProjectUpdateMutation } from '@/modules/projects/mutations/useProjectUpdateMutation.ts'
-    import DeleteProjectDialog from '@/modules/projects/views/details/partials/DeleteProjectDialog.vue'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import ReadonlyValue from '@/components/ReadonlyValue.vue'
+    import SaveFooter from '@/components/SaveFooter.vue'
+    import SectionCard from '@/components/SectionCard.vue'
+    import { useDirtyGuard } from '@/composables/useDirtyGuard.ts'
+    import { useNotify } from '@/composables/useNotify.ts'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
+    import { useProjectUpdateMutation } from '@/modules/projects/mutations/useProjectUpdateMutation.ts'
 
-    const props = defineProps<{ project: ProjectDetailDto }>()
+    const props = defineProps<{ project: ProjectDetailDto; canUpdate: boolean }>()
 
     const { t } = useI18n()
-    const userAbility = useAbility()
-    const can = userAbility.can.bind(userAbility)
+    const requiredLabel = useRequiredLabel()
+    const notify = useNotify()
     const { mutateAsync, isPending } = useProjectUpdateMutation()
     const errorMessage = ref<string | null>(null)
 
-    const canUpdate = computed(() => can('update', subject('Project', { projectId: props.project.projectId })))
-    const canDelete = computed(() => can('delete', subject('Project', { projectId: props.project.projectId })))
-
-    const { defineField, handleSubmit, errors } = useForm({
+    const { defineField, handleSubmit, errors, meta, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                name: z.string().min(1).max(255),
+                name: z
+                    .string()
+                    .trim()
+                    .min(1, { error: () => t('module.projects.add.nameRequired') })
+                    .max(255),
             }),
         ),
-        initialValues: {
-            name: props.project.name,
-        },
+        initialValues: { name: props.project.name },
     })
 
     const [name] = defineField('name')
+
+    useDirtyGuard(() => meta.value.dirty)
+
+    watch(
+        () => props.project.name,
+        (value) => {
+            if (!meta.value.dirty) {
+                resetForm({ values: { name: value } })
+            }
+        },
+    )
+
+    function discard() {
+        errorMessage.value = null
+        resetForm({ values: { name: props.project.name } })
+    }
 
     const onSubmit = handleSubmit(async (values) => {
         errorMessage.value = null
         try {
             await mutateAsync({ projectId: props.project.projectId, update: { name: values.name } })
+            resetForm({ values: { name: values.name } })
+            notify.success(t('module.projects.details.general.saved'))
         } catch (error) {
             errorMessage.value = apiErrorMessage(error, t('module.projects.details.general.error'))
         }
     })
 </script>
+
+<style scoped>
+    .project-general {
+        display: grid;
+        gap: 20px;
+    }
+</style>

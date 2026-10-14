@@ -28,7 +28,13 @@ const project: Project = {
     deletedAt: null,
 }
 
-const projectWithCounts: ProjectWithCounts = { ...project, inboundFormCount: 2, domainCount: 1 }
+const projectWithCounts: ProjectWithCounts = {
+    ...project,
+    inboundFormCount: 2,
+    domainCount: 1,
+    memberCount: 3,
+    domainsHealthy: false,
+}
 const projectWithDomains: ProjectWithDomains = { ...project, domains: [domain] }
 const deletedProject: DeletedProject = { ...project, deletedAt: new Date('2026-07-01T00:00:00.000Z') }
 
@@ -59,6 +65,7 @@ describe('ProjectController', () => {
     let getMembers: Mock<ProjectMemberService['getMembers']>
     let setMemberPermissions: Mock<ProjectMemberService['setMemberPermissions']>
     let removeMember: Mock<ProjectMemberService['removeMember']>
+    let getImplicitAccess: Mock<ProjectMemberService['getImplicitAccess']>
 
     beforeEach(async () => {
         createProject = vi.fn<typeof createProject>().mockResolvedValue(project)
@@ -73,6 +80,9 @@ describe('ProjectController', () => {
         getMembers = vi.fn<typeof getMembers>().mockResolvedValue([])
         setMemberPermissions = vi.fn<typeof setMemberPermissions>().mockResolvedValue(undefined)
         removeMember = vi.fn<typeof removeMember>().mockResolvedValue(undefined)
+        getImplicitAccess = vi
+            .fn<typeof getImplicitAccess>()
+            .mockResolvedValue({ superAdminCount: 2, allProjectsUserCount: 1 })
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [ProjectController],
@@ -93,7 +103,7 @@ describe('ProjectController', () => {
                 },
                 {
                     provide: ProjectMemberService,
-                    useValue: { getMembers, setMemberPermissions, removeMember },
+                    useValue: { getMembers, setMemberPermissions, removeMember, getImplicitAccess },
                 },
             ],
         })
@@ -120,7 +130,22 @@ describe('ProjectController', () => {
         const dtos = await controller.getProjects(principal)
 
         expect(getProjects).toHaveBeenCalledWith(principal)
-        expect(dtos).toEqual([expect.objectContaining({ projectId: 1, inboundFormCount: 2, domainCount: 1 })])
+        expect(dtos).toEqual([
+            expect.objectContaining({
+                projectId: 1,
+                inboundFormCount: 2,
+                domainCount: 1,
+                memberCount: 3,
+                domainsHealthy: false,
+            }),
+        ])
+    })
+
+    it('reports implicit project access through the member service', async () => {
+        const dto = await controller.getProjectImplicitAccess(1, manageAll)
+
+        expect(getImplicitAccess).toHaveBeenCalledWith(1, manageAll)
+        expect(dto).toEqual({ superAdminCount: 2, allProjectsUserCount: 1 })
     })
 
     it('lists deleted projects with the purge date', async () => {

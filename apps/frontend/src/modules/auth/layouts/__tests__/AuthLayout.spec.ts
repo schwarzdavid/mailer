@@ -12,7 +12,7 @@ const AuthLayoutHost = defineComponent({
 })
 
 describe('AuthLayout', () => {
-    it('renders the active child route inside the centred card with the copyright footer', async () => {
+    it('renders the active child route below the logo with the copyright footer', async () => {
         const router = createRouter({
             history: createMemoryHistory(),
             routes: [{ path: '/login', component: AuthLayout, children: [{ path: '', component: ChildView }] }],
@@ -20,7 +20,8 @@ describe('AuthLayout', () => {
         await router.push('/login')
         const wrapper = mountView(AuthLayoutHost, { global: { plugins: [router] } })
 
-        expect(wrapper.find('.v-card .child-view').text()).toBe('Child content')
-        expect(wrapper.get('footer').text()).toContain('Copyright © 2026 David Schwarz IT Services GmbH')
+        expect(wrapper.find('.auth-layout__column .child-view').text()).toBe('Child content')
+        expect(wrapper.text()).toContain('Mail Admin')
+        expect(wrapper.get('footer').text()).toContain('David Schwarz IT Services GmbH')
     })
 })

@@ -4,7 +4,8 @@ import { BounceController } from './bounce.controller.js'
 import { BounceService } from '../services/bounce.service.js'
 import { EmailBlockService } from '../services/email-block.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
-import { Bounce, BounceType } from '../interfaces/bounce.interface.js'
+import { Bounce, BouncePage, BounceType } from '../interfaces/bounce.interface.js'
+import { BounceQueryDto } from '../dtos/bounce-query.dto.js'
 import { EmailBlock } from '../interfaces/email-block.interface.js'
 
 const bounce: Bounce = {
@@ -28,6 +29,10 @@ const block: EmailBlock = {
     updatedAt: new Date('2026-07-13T10:00:00.000Z'),
 }
 
+const bouncePage: BouncePage = { items: [bounce], total: 41 }
+
+const defaultQuery: BounceQueryDto = { page: 1, itemsPerPage: 25, sortBy: 'receivedAt', sortOrder: 'desc' }
+
 describe('BounceController', () => {
     let controller: BounceController
     let getBounces: Mock<BounceService['getBounces']>
@@ -35,7 +40,7 @@ describe('BounceController', () => {
     let unblock: Mock<EmailBlockService['unblock']>
 
     beforeEach(async () => {
-        getBounces = vi.fn<typeof getBounces>().mockResolvedValue([bounce])
+        getBounces = vi.fn<typeof getBounces>().mockResolvedValue(bouncePage)
         getBlockedAddresses = vi.fn<typeof getBlockedAddresses>().mockResolvedValue([block])
         unblock = vi.fn<typeof unblock>().mockResolvedValue({ ...block, blockedUntil: null })
 
@@ -53,11 +58,53 @@ describe('BounceController', () => {
         controller = module.get(BounceController)
     })
 
-    it('lists bounce events', async () => {
-        const result = await controller.getBounces()
+    it('lists a page of bounce events with the total count', async () => {
+        const result = await controller.getBounces(defaultQuery)
 
-        expect(getBounces).toHaveBeenCalledOnce()
-        expect(result).toEqual([expect.objectContaining({ emailAddress: 'missing@example.org' })])
+        expect(getBounces).toHaveBeenCalledWith({
+            page: 1,
+            itemsPerPage: 25,
+            search: undefined,
+            type: undefined,
+            receivedAfter: undefined,
+            sortBy: 'receivedAt',
+            sortOrder: 'desc',
+        })
+        expect(result).toEqual({
+            items: [
+                {
+                    bounceId: 1,
+                    emailAddress: 'missing@example.org',
+                    type: BounceType.PERMANENT,
+                    statusCode: '5.1.1',
+                    reason: 'User unknown',
+                    receivedAt: bounce.receivedAt,
+                },
+            ],
+            total: 41,
+        })
+    })
+
+    it('passes filters through and parses the received-after timestamp', async () => {
+        await controller.getBounces({
+            page: 2,
+            itemsPerPage: 10,
+            search: 'mailbox',
+            type: BounceType.TRANSIENT,
+            receivedAfter: '2026-07-13T10:00:00.000Z',
+            sortBy: 'type',
+            sortOrder: 'asc',
+        })
+
+        expect(getBounces).toHaveBeenCalledWith({
+            page: 2,
+            itemsPerPage: 10,
+            search: 'mailbox',
+            type: BounceType.TRANSIENT,
+            receivedAfter: new Date('2026-07-13T10:00:00.000Z'),
+            sortBy: 'type',
+            sortOrder: 'asc',
+        })
     })
 
     it('lists blocked addresses', async () => {

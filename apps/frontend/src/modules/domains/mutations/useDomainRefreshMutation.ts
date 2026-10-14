@@ -1,20 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { DomainApi } from 'api'
+import { DomainApi, type DomainDetailDto } from 'api'
 import { waitAtleast } from '@/helper/waitAtleast.ts'
 
 export function useDomainRefreshMutation() {
     const client = useQueryClient()
 
     return useMutation({
-        mutationFn: (domainId: number) =>
-            waitAtleast(
-                DomainApi.refreshDomainRecords({
-                    path: { domainId },
-                }),
-                2000,
-            ),
+        mutationFn: (domainId: number) => waitAtleast(DomainApi.refreshDomainRecords({ path: { domainId } })),
         onSuccess(data) {
-            client.setQueryData(['domains', data.domainId], data)
+            client.setQueryData<DomainDetailDto>(['domains', data.domainId], (detail) =>
+                detail ? { ...detail, ...data } : detail,
+            )
+            void client.invalidateQueries({ queryKey: ['domains'], exact: true })
+            void client.invalidateQueries({ queryKey: ['projects'] })
         },
     })
 }

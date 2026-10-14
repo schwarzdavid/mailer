@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/vue-query'
-import { UserApi, type UserDto } from 'api'
+import { UserApi, type UserListDto } from 'api'
 import { useUsersQuery } from '../useUsersQuery.ts'
 
-const users: UserDto[] = [
+const users: UserListDto[] = [
     {
         userId: 7,
         firstName: 'Grace',
@@ -12,6 +12,7 @@ const users: UserDto[] = [
         role: { roleId: 3, name: 'User', type: 'user' },
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        membershipCount: 0,
     },
 ]
 

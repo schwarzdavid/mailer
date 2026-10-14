@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
-import { Logger, NotFoundException } from '@nestjs/common'
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SettingsService } from './settings.service.js'
 import { SettingsModel } from '../models/settings.model.js'
@@ -15,10 +15,11 @@ import {
     DomainDnsRecordUse,
 } from '../../domain/interfaces/domain-dns.interface.js'
 
-type SettingsRow = Settings & { save: Mock<() => Promise<void>> }
+type SettingsRow = Settings & { get(options: { plain: true }): Settings; save: Mock<() => Promise<void>> }
 
 const settingsRow = (base: Settings): SettingsRow => ({
     ...base,
+    get: () => ({ ...base }),
     save: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 })
 
@@ -68,6 +69,7 @@ describe('SettingsService', () => {
         sendingDomainId: 10,
         serverIpv4: '203.0.113.10',
         serverIpv6: null,
+        setupFinishedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     }
@@ -104,6 +106,55 @@ describe('SettingsService', () => {
 
     afterEach(() => {
         vi.restoreAllMocks()
+    })
+
+    describe('getSettings', () => {
+        it('returns null when no settings row exists', async () => {
+            await expect(service.getSettings()).resolves.toBeNull()
+        })
+
+        it('returns the settings row as a plain object', async () => {
+            findOne.mockResolvedValue(settingsRow(settings))
+
+            await expect(service.getSettings()).resolves.toEqual(settings)
+        })
+    })
+
+    describe('finishSetup', () => {
+        it('rejects finishing before any settings exist', async () => {
+            await expect(service.finishSetup()).rejects.toThrow(
+                new ConflictException('Configure a sending domain before finishing the setup.'),
+            )
+        })
+
+        it('rejects finishing while no sending domain is configured', async () => {
+            const row = settingsRow({ ...settings, sendingDomainId: null })
+            findOne.mockResolvedValue(row)
+
+            await expect(service.finishSetup()).rejects.toBeInstanceOf(ConflictException)
+            expect(row.save).not.toHaveBeenCalled()
+        })
+
+        it('stamps the finish time once a sending domain exists', async () => {
+            const row = settingsRow(settings)
+            findOne.mockResolvedValue(row)
+
+            await service.finishSetup()
+
+            expect(row.setupFinishedAt).toBeInstanceOf(Date)
+            expect(row.save).toHaveBeenCalledOnce()
+        })
+
+        it('keeps the original finish time when called again', async () => {
+            const finishedAt = new Date('2026-07-01T00:00:00.000Z')
+            const row = settingsRow({ ...settings, setupFinishedAt: finishedAt })
+            findOne.mockResolvedValue(row)
+
+            await service.finishSetup()
+
+            expect(row.setupFinishedAt).toBe(finishedAt)
+            expect(row.save).not.toHaveBeenCalled()
+        })
     })
 
     describe('getSendingDomain', () => {

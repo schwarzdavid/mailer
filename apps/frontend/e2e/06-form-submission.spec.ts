@@ -4,6 +4,7 @@ import {
     card,
     formName,
     formSlug,
+    input,
     login,
     projectName,
     receiverAddress,
@@ -107,14 +108,15 @@ test('submitted values are HTML-escaped in the delivered mail', async ({ request
 test('deactivating the form in the UI closes the public endpoint', async ({ page, request }) => {
     await login(page, admin)
     await page.goto('/projects')
-    await page.getByText(projectName).click()
-    await page.getByText(formName).click()
+    await page.getByRole('link', { name: new RegExp(projectName) }).click()
+    await card(page, 'Inbound forms')
+        .getByRole('link', { name: new RegExp(formName) })
+        .click()
 
-    const general = card(page, 'General')
-    await general.getByLabel('Active', { exact: true }).uncheck()
     const saved = page.waitForResponse((response) => response.request().method() === 'PATCH')
-    await general.getByRole('button', { name: 'Save' }).click()
+    await input(card(page, 'Endpoint'), 'isActive').uncheck()
     expect((await saved).ok()).toBe(true)
+    await expect(page.getByText('Form deactivated')).toBeVisible()
 
     const response = await request.post(submitUrl(formSlug), {
         data: { data: { name: 'Jane Doe', email: 'jane.doe@example.org' } },

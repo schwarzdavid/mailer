@@ -1,92 +1,88 @@
 <template>
-    <VDialog max-width="600" v-model="model" @after-leave="onAfterLeave" :persistent="isPending">
-        <template #activator="props">
-            <slot v-bind="props" />
-        </template>
-        <VCard :title="t('module.users.add.title')">
-            <template #append>
-                <VIconBtn icon="mdi-close" @click="model = false" :disabled="isPending" />
-            </template>
-            <form @submit.prevent="onSubmit">
-                <VCardItem>
-                    <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
-                    <p class="mb-4">{{ t('module.users.add.intro') }}</p>
-                    <VTextField
-                        name="firstName"
-                        :label="t('field.firstName')"
-                        v-model="firstName"
-                        :error-messages="errors.firstName"
-                    />
-                    <VTextField
-                        name="lastName"
-                        :label="t('field.lastName')"
-                        v-model="lastName"
-                        :error-messages="errors.lastName"
-                    />
-                    <VTextField name="email" :label="t('field.email')" v-model="email" :error-messages="errors.email" />
-                    <VTextField
-                        name="password"
-                        type="password"
-                        :label="t('field.password')"
-                        v-model="password"
-                        :error-messages="errors.password"
-                    />
-                    <VSelect
-                        name="roleId"
-                        :label="t('field.role')"
-                        :items="roleOptions"
-                        item-title="name"
-                        item-value="roleId"
-                        v-model="roleId"
-                        :error-messages="errors.roleId"
-                    />
-                </VCardItem>
-                <VCardActions>
-                    <VSpacer />
-                    <VBtn color="error" :text="t('cta.abort')" :disabled="isPending" @click="model = false" />
-                    <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="isPending" type="submit" />
-                </VCardActions>
-            </form>
-        </VCard>
-    </VDialog>
+    <FormDialog
+        v-model="model"
+        width="lg"
+        :title="t('module.users.add.title')"
+        :submit-label="t('module.users.add.submit')"
+        :pending="isPending"
+        :error="errorMessage"
+        :dirty="meta.dirty"
+        @submit="onSubmit"
+    >
+        <div class="form-grid form-grid--2">
+            <VTextField
+                v-model="firstName"
+                name="firstName"
+                :label="requiredLabel(t('field.firstName'))"
+                :error-messages="errors.firstName"
+                aria-required="true"
+            />
+            <VTextField
+                v-model="lastName"
+                name="lastName"
+                :label="requiredLabel(t('field.lastName'))"
+                :error-messages="errors.lastName"
+                aria-required="true"
+            />
+            <VTextField
+                v-model="email"
+                name="email"
+                type="email"
+                :label="requiredLabel(t('field.email'))"
+                :error-messages="errors.email"
+                aria-required="true"
+            />
+            <PasswordField
+                v-model="password"
+                name="password"
+                :label="requiredLabel(t('field.password'))"
+                :hint="t('module.users.add.passwordHint', { name: firstName || t('module.users.add.theUser') })"
+                persistent-hint
+                :error-messages="errors.password"
+                autocomplete="new-password"
+                aria-required="true"
+            />
+            <RoleSelect v-model="roleId" class="span-2" :error-messages="errors.roleId" />
+        </div>
+    </FormDialog>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from 'vue'
+    import { computed, ref, watch } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
-    import { useRouter } from 'vue-router'
     import { useQuery } from '@tanstack/vue-query'
+    import { useRouter } from 'vue-router'
+    import FormDialog from '@/components/FormDialog.vue'
+    import PasswordField from '@/components/PasswordField.vue'
+    import { useNotify } from '@/composables/useNotify.ts'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
+    import RoleSelect from '@/modules/users/components/RoleSelect.vue'
     import { useRolesQuery } from '@/modules/users/queries/useRolesQuery.ts'
-    import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
     import { useUserCreateMutation } from '@/modules/users/mutations/useUserCreateMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
-    const model = ref<undefined | boolean>()
+    const model = defineModel<boolean>({ required: true })
     const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
+    const notify = useNotify()
     const router = useRouter()
     const errorMessage = ref<string | null>(null)
     const { mutateAsync, isPending } = useUserCreateMutation()
     const { data: roles } = useQuery(useRolesQuery())
-    const { data: currentUser } = useQuery(useAuthQuery())
+    const defaultRoleId = computed(() => roles.value?.find((role) => role.type === 'user')?.roleId)
 
-    const roleOptions = computed(() =>
-        (roles.value ?? []).filter(
-            (role) => role.type !== 'super_admin' || currentUser.value?.role.type === 'super_admin',
-        ),
-    )
-
-    const { defineField, handleSubmit, errors, resetForm } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                firstName: z.string().min(1),
-                lastName: z.string().min(1),
+                firstName: z.string().trim().min(1),
+                lastName: z.string().trim().min(1),
                 email: z.email(),
                 password: z.string().min(8),
-                roleId: z.number().optional(),
+                roleId: z.number(),
             }),
         ),
     })
@@ -97,18 +93,26 @@
     const [password] = defineField('password')
     const [roleId] = defineField('roleId')
 
+    watch(
+        [model, defaultRoleId],
+        ([open], previous) => {
+            if (open && (!previous?.[0] || !meta.value.dirty)) {
+                errorMessage.value = null
+                resetForm({ values: { roleId: defaultRoleId.value } })
+            }
+        },
+        { immediate: true },
+    )
+
     const onSubmit = handleSubmit(async (values) => {
         errorMessage.value = null
         try {
             const { userId } = await mutateAsync(values)
-            void router.push({ name: RouteNames.USER_DETAILS, params: { userId } })
+            model.value = false
+            await router.push({ name: RouteNames.USER_DETAILS, params: { userId } })
+            notify.success(t('module.users.add.success'))
         } catch (error) {
             errorMessage.value = apiErrorMessage(error, t('module.users.add.error'))
         }
     })
-
-    function onAfterLeave() {
-        errorMessage.value = null
-        resetForm()
-    }
 </script>

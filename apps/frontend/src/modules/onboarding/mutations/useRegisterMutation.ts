@@ -5,7 +5,7 @@ import { JWT_KEY } from '@/constants/jwtKey.ts'
 
 export function useRegisterMutation() {
     const client = useQueryClient()
-    const jwt = useLocalStorage<string | null>(JWT_KEY, null)
+    const jwt = useLocalStorage<string | null>(JWT_KEY, null, { flush: 'sync' })
 
     return useMutation({
         mutationFn: (registration: RegisterUserDto) =>
@@ -15,7 +15,7 @@ export function useRegisterMutation() {
         onSuccess({ user, token }) {
             jwt.value = token
             client.setQueryData(['auth.user'], user)
-            client.setQueryData(['setup.status'], { needsSetup: false } satisfies SetupStatusDto)
+            client.setQueryData(['setup.status'], { needsSetup: true, step: 'sendingDomain' } satisfies SetupStatusDto)
         },
     })
 }

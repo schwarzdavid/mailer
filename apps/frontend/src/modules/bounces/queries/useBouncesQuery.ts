@@ -1,10 +1,13 @@
-import { queryOptions } from '@tanstack/vue-query'
-import { BounceApi } from 'api'
-import { waitAtleast } from '@/helper/waitAtleast.ts'
+import { type MaybeRefOrGetter, toValue } from 'vue'
+import { keepPreviousData, queryOptions } from '@tanstack/vue-query'
+import { BounceApi, type GetBouncesData } from 'api'
 
-export function useBouncesQuery() {
+export type BounceQuery = NonNullable<GetBouncesData['query']>
+
+export function useBouncesQuery(query: MaybeRefOrGetter<BounceQuery> = {}) {
     return queryOptions({
-        queryKey: ['bounces'],
-        queryFn: () => waitAtleast(BounceApi.getBounces()),
+        queryKey: ['bounces', query],
+        queryFn: () => BounceApi.getBounces({ query: toValue(query) }),
+        placeholderData: keepPreviousData,
     })
 }

@@ -16,6 +16,10 @@ interface UserBody {
     roleId?: number
 }
 
+interface UserListBody extends UserBody {
+    membershipCount: number
+}
+
 interface UserDetailBody extends UserBody {
     permissions: string[]
     memberships: { projectId: number; projectName: string; permissions: string[] }[]
@@ -179,6 +183,54 @@ describe('User + Role (e2e)', () => {
                 expect.arrayContaining([superCredentials.email, managedCredentials.email]),
             )
             expect(users.every((user) => user.password === undefined)).toBe(true)
+        })
+
+        it('counts the distinct non-deleted project memberships of each listed user', async () => {
+            const membershipCount = async (userId: number): Promise<number | undefined> => {
+                const response = await http().get('/api/user').set('Authorization', bearer(superToken)).expect(200)
+                return (response.body as UserListBody[]).find((user) => user.userId === userId)?.membershipCount
+            }
+            const createProject = async (name: string): Promise<number> => {
+                const response = await http()
+                    .post('/api/project')
+                    .set('Authorization', bearer(superToken))
+                    .send({ name })
+                    .expect(201)
+                return (response.body as { projectId: number }).projectId
+            }
+
+            expect(await membershipCount(managedUserId)).toBe(0)
+
+            const firstProjectId = await createProject('User E2E Membership One')
+            const secondProjectId = await createProject('User E2E Membership Two')
+            await http()
+                .put(`/api/project/${firstProjectId}/members/${managedUserId}`)
+                .set('Authorization', bearer(superToken))
+                .send({ permissions: ['read', 'update', 'delete'] })
+                .expect(200)
+            await http()
+                .put(`/api/project/${secondProjectId}/members/${managedUserId}`)
+                .set('Authorization', bearer(superToken))
+                .send({ permissions: ['read'] })
+                .expect(200)
+            expect(await membershipCount(managedUserId)).toBe(2)
+
+            await http().delete(`/api/project/${secondProjectId}`).set('Authorization', bearer(superToken)).expect(200)
+            expect(await membershipCount(managedUserId)).toBe(1)
+
+            await http()
+                .post(`/api/project/${secondProjectId}/restore`)
+                .set('Authorization', bearer(superToken))
+                .expect(201)
+            expect(await membershipCount(managedUserId)).toBe(2)
+
+            for (const projectId of [firstProjectId, secondProjectId]) {
+                await http()
+                    .delete(`/api/project/${projectId}/members/${managedUserId}`)
+                    .set('Authorization', bearer(superToken))
+                    .expect(200)
+            }
+            expect(await membershipCount(managedUserId)).toBe(0)
         })
 
         it('returns the user detail with permissions and memberships', async () => {

@@ -1,9 +1,14 @@
 import 'vuetify/styles'
-import '@mdi/font/css/materialdesignicons.css'
+import '@fontsource/noto-sans/400.css'
+import '@fontsource/noto-sans/500.css'
+import '@fontsource/noto-sans/600.css'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
+import '@/styles/main.scss'
 
-import { createApp } from 'vue'
+import { createApp, watchEffect } from 'vue'
 import App from './App.vue'
-import { router } from './router'
+import { loginRedirect, router } from './router'
 import { vuetify } from '@/plugins/vuetify.ts'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { queryClient } from '@/plugins/tanstack.ts'
@@ -65,4 +70,18 @@ client.setConfig({
         }
         return undefined
     },
+})
+
+client.interceptors.response.use((response) => {
+    const route = router.currentRoute.value
+    if (response.status === 401 && localStorage.getItem(JWT_KEY) && route.meta.requiresAuth) {
+        localStorage.removeItem(JWT_KEY)
+        queryClient.removeQueries()
+        void router.push(loginRedirect(route.fullPath, true))
+    }
+    return response
+})
+
+watchEffect(() => {
+    document.documentElement.lang = i18n.global.locale.value
 })

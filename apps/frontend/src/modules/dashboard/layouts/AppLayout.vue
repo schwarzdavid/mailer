@@ -1,74 +1,140 @@
 <template>
-    <div>
-        <VAppBar class="px-2">
-            Logo
-            <VTabs>
-                <VTab :to="{ name: RouteNames.DASHBOARD }" exact :text="t('module.dashboard.nav')" />
-                <VTab :to="{ name: RouteNames.PROJECT_LIST }" :text="t('module.projects.nav')" />
-                <VTab
-                    v-if="can('read', 'Domain')"
-                    :to="{ name: RouteNames.DOMAIN_LIST }"
-                    :text="t('module.domains.nav')"
-                />
-                <VTab
-                    v-if="can('read', 'Bounce')"
-                    :to="{ name: RouteNames.BOUNCE_LIST }"
-                    :text="t('module.bounces.nav')"
-                />
-                <VTab v-if="can('read', 'User')" :to="{ name: RouteNames.USER_LIST }" :text="t('module.users.nav')" />
-                <VTab v-if="can('read', 'Settings')" :to="{ name: RouteNames.SETTINGS }">
-                    {{ t('module.settings.nav') }}
-                    <VIcon :icon="healthIcon" :color="healthColor" size="small" class="ms-1" />
-                </VTab>
-            </VTabs>
-            <VSpacer />
-            <VBtn variant="flat" :text="t('cta.logout')" @click="logout" />
-        </VAppBar>
-        <VMain>
-            <RouterView />
-        </VMain>
-    </div>
+    <VAppBar v-if="xs" class="app-bar" height="56" flat>
+        <span class="app-bar__menu">
+            <IconButton :icon="mdiMenu" :label="t('nav.open')" @click="drawer = true" />
+            <StatusDot v-if="health.needsAttention.value" tone="warning" class="app-bar__dot" />
+        </span>
+        <RouterLink :to="{ name: RouteNames.DASHBOARD }" class="app-bar__brand">
+            <AppLogo wordmark />
+        </RouterLink>
+        <VSpacer />
+        <AccountMenu avatar-only />
+    </VAppBar>
+    <VNavigationDrawer
+        v-model="drawer"
+        :permanent="!xs"
+        :temporary="xs"
+        :rail="rail"
+        :width="xs ? 280 : 248"
+        :rail-width="72"
+        class="app-drawer"
+    >
+        <AppNavigation :rail="rail" :closable="xs" @close="drawer = false" />
+    </VNavigationDrawer>
+    <VMain class="app-main">
+        <div class="app-main__content" :class="{ 'app-main__content--wide': route.meta.wide }">
+            <ErrorState v-if="forbidden" kind="forbidden" size="page" :permission="forbiddenPermission">
+                <template #actions>
+                    <VBtn variant="text" :to="{ name: RouteNames.DASHBOARD }" :text="t('nav.backToDashboard')" />
+                </template>
+            </ErrorState>
+            <RouterView v-else />
+        </div>
+    </VMain>
 </template>
 
 <script setup lang="ts">
-    import { computed } from 'vue'
-    import { RouteNames } from '@/router/RouteNames.ts'
+    import { computed, ref, watch } from 'vue'
     import { useI18n } from 'vue-i18n'
-    import { useQuery, useQueryClient } from '@tanstack/vue-query'
-    import { useLocalStorage } from '@vueuse/core'
-    import { JWT_KEY } from '@/constants/jwtKey.ts'
-    import { useRouter } from 'vue-router'
-    import { useSettingsQuery } from '@/modules/settings/queries/useSettingsQuery.ts'
+    import { useRoute } from 'vue-router'
+    import { useDisplay } from 'vuetify'
     import { useAbility } from '@casl/vue'
-    import { ability } from '@/plugins/casl.ts'
+    import { mdiMenu } from '@mdi/js'
+    import AppLogo from '@/components/AppLogo.vue'
+    import ErrorState from '@/components/ErrorState.vue'
+    import IconButton from '@/components/IconButton.vue'
+    import StatusDot from '@/components/StatusDot.vue'
+    import AccountMenu from '@/modules/dashboard/layouts/partials/AccountMenu.vue'
+    import AppNavigation from '@/modules/dashboard/layouts/partials/AppNavigation.vue'
+    import { useSendingDomainHealth } from '@/modules/settings/composables/useSendingDomainHealth.ts'
+    import { RouteNames } from '@/router/RouteNames.ts'
 
     const { t } = useI18n()
-    const client = useQueryClient()
-    const jwt = useLocalStorage<string | null>(JWT_KEY, null)
-    const router = useRouter()
+    const route = useRoute()
+    const { xs, mdAndUp } = useDisplay()
     const userAbility = useAbility()
-    const can = userAbility.can.bind(userAbility)
+    const health = useSendingDomainHealth()
 
-    const { queryKey: settingsQueryKey, queryFn: settingsQueryFn } = useSettingsQuery()
-    const { data: settings } = useQuery({
-        queryKey: settingsQueryKey,
-        queryFn: settingsQueryFn,
-        refetchInterval: 60_000,
-        enabled: computed(() => can('read', 'Settings')),
+    const drawer = ref(!xs.value)
+    const rail = computed(() => !xs.value && (!mdAndUp.value || !!route.meta.rail))
+
+    const forbidden = computed(() => {
+        const required = route.meta.ability
+        return !!required && !userAbility.can(required.action, required.subject)
+    })
+    const forbiddenPermission = computed(() => {
+        const required = route.meta.ability
+        return required ? t(`nav.permission.${required.subject}`) : undefined
     })
 
-    const isHealthy = computed(
-        () =>
-            !!settings.value?.sendingDomain &&
-            settings.value.sendingDomain.records.every((record) => record.status === 'valid'),
-    )
-    const healthIcon = computed(() => (isHealthy.value ? 'mdi-check-circle' : 'mdi-alert-circle'))
-    const healthColor = computed(() => (isHealthy.value ? 'success' : 'warning'))
+    watch(xs, (isPhone) => {
+        drawer.value = !isPhone
+    })
 
-    function logout() {
-        jwt.value = null
-        client.removeQueries()
-        ability.update([])
-        void router.push({ name: RouteNames.LOGIN })
-    }
+    watch(
+        () => route.fullPath,
+        () => {
+            if (xs.value) {
+                drawer.value = false
+            }
+        },
+    )
 </script>
+
+<style scoped>
+    .app-bar {
+        border-bottom: 1px solid rgb(var(--v-theme-border));
+        background: rgb(var(--v-theme-surface)) !important;
+    }
+
+    .app-bar :deep(.v-toolbar__content) {
+        gap: 4px;
+        padding: 0 8px;
+    }
+
+    .app-bar__menu {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .app-bar__dot {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
+        pointer-events: none;
+    }
+
+    .app-bar__brand {
+        display: inline-flex;
+        text-decoration: none;
+    }
+
+    .app-drawer {
+        background: rgb(var(--v-theme-surface));
+        border-color: rgb(var(--v-theme-border)) !important;
+    }
+
+    .app-main {
+        background: rgb(var(--v-theme-background));
+    }
+
+    .app-main__content {
+        width: 100%;
+        max-width: calc(1120px + 64px);
+        margin: 0 auto;
+        padding: 32px;
+    }
+
+    .app-main__content--wide {
+        max-width: none;
+        padding: 24px 32px;
+    }
+
+    @media (max-width: 599.98px) {
+        .app-main__content,
+        .app-main__content--wide {
+            padding: 16px;
+        }
+    }
+</style>

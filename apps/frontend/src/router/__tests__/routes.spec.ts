@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AbilityRuleDto, UserDto } from 'api'
+import type { AbilityRuleDto, SetupStatusDto, UserDto } from 'api'
 import { router } from '@/router'
 import { RouteNames } from '@/router/RouteNames.ts'
+import { JWT_KEY } from '@/constants/jwtKey.ts'
 
 const user: UserDto = {
     userId: 1,
@@ -14,9 +15,13 @@ const user: UserDto = {
 }
 
 type Scenario = {
-    needsSetup?: boolean | Error
+    step?: SetupStatusDto['step'] | Error
     user?: UserDto | Error
     rules?: AbilityRuleDto[] | Error
+}
+
+function status(step: SetupStatusDto['step']): SetupStatusDto {
+    return { step, needsSetup: step !== 'finished' }
 }
 
 async function freshRouter(scenario: Scenario) {
@@ -26,11 +31,11 @@ async function freshRouter(scenario: Scenario) {
     const currentUser = vi.spyOn(api.AuthApi, 'currentUser')
     const getAbility = vi.spyOn(api.AuthApi, 'getAbility')
 
-    const { needsSetup = false, user: authenticated = user, rules = [] } = scenario
-    if (needsSetup instanceof Error) {
-        getStatus.mockRejectedValue(needsSetup)
+    const { step = 'finished', user: authenticated = user, rules = [] } = scenario
+    if (step instanceof Error) {
+        getStatus.mockRejectedValue(step)
     } else {
-        getStatus.mockResolvedValue({ needsSetup })
+        getStatus.mockResolvedValue(status(step))
     }
     if (authenticated instanceof Error) {
         currentUser.mockRejectedValue(authenticated)
@@ -59,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
 })
 
 describe('router', () => {
@@ -69,30 +75,50 @@ describe('router', () => {
     })
 
     describe('setup guard', () => {
-        it.each(['/', '/login', '/domains', '/users/3'])(
-            'sends %s to the onboarding while setup is pending',
-            async (path) => {
-                const { landed, currentUser } = await navigate({ needsSetup: true }, path)
+        it.each(['/', '/login', '/domains', '/users/3'])('sends %s to setup while no account exists', async (path) => {
+            const { landed, currentUser } = await navigate({ step: 'account' }, path)
+
+            expect(landed).toBe(RouteNames.ONBOARDING)
+            expect(currentUser).not.toHaveBeenCalled()
+        })
+
+        it('redirects the old onboarding URL to setup', async () => {
+            const { router: fresh, landed } = await navigate({ step: 'account' }, '/onboarding')
+
+            expect(landed).toBe(RouteNames.ONBOARDING)
+            expect(fresh.currentRoute.value.path).toBe('/setup')
+        })
+
+        it.each(['sendingDomain', 'records'] as const)(
+            'resumes a signed-in admin at setup while on the %s step',
+            async (step) => {
+                const { landed } = await navigate({ step }, '/projects')
 
                 expect(landed).toBe(RouteNames.ONBOARDING)
-                expect(currentUser).not.toHaveBeenCalled()
             },
         )
 
-        it('keeps the onboarding reachable while setup is pending', async () => {
-            const { landed } = await navigate({ needsSetup: true }, '/onboarding')
+        it('asks a signed-out admin to log in before resuming setup', async () => {
+            const { landed } = await navigate({ step: 'records', user: new Error('Unauthorized') }, '/setup')
 
-            expect(landed).toBe(RouteNames.ONBOARDING)
+            expect(landed).toBe(RouteNames.LOGIN)
         })
 
-        it('closes the onboarding once setup is done', async () => {
-            const { landed } = await navigate({ needsSetup: false }, '/onboarding')
+        it('keeps the login reachable during setup', async () => {
+            const { landed, currentUser } = await navigate({ step: 'sendingDomain' }, '/login')
+
+            expect(landed).toBe(RouteNames.LOGIN)
+            expect(currentUser).not.toHaveBeenCalled()
+        })
+
+        it('closes setup once it is finished', async () => {
+            const { landed } = await navigate({ step: 'finished' }, '/setup')
 
             expect(landed).toBe(RouteNames.DASHBOARD)
         })
 
-        it('treats an unreachable setup status as completed', async () => {
-            const { landed } = await navigate({ needsSetup: new Error('offline') }, '/')
+        it('treats an unreachable setup status as finished', async () => {
+            const { landed } = await navigate({ step: new Error('offline') }, '/')
 
             expect(landed).toBe(RouteNames.DASHBOARD)
             expect(console.error).toHaveBeenCalled()
@@ -105,18 +131,6 @@ describe('router', () => {
             await fresh.push('/projects')
 
             expect(getStatus).toHaveBeenCalledTimes(1)
-        })
-
-        it('asks again after a failed setup status and honors the later answer', async () => {
-            const { router: fresh, getStatus } = await freshRouter({})
-            getStatus.mockRejectedValueOnce(new Error('Too Many Requests')).mockResolvedValue({ needsSetup: true })
-
-            await fresh.push('/')
-            expect(fresh.currentRoute.value.name).toBe(RouteNames.DASHBOARD)
-
-            await fresh.push('/projects')
-            expect(fresh.currentRoute.value.name).toBe(RouteNames.ONBOARDING)
-            expect(getStatus).toHaveBeenCalledTimes(2)
         })
     })
 
@@ -131,6 +145,14 @@ describe('router', () => {
             const { router: fresh } = await navigate({ user: new Error('Unauthorized') }, '/users/3?tab=permissions')
 
             expect(fresh.currentRoute.value.query).toEqual({ redirect: '/users/3?tab=permissions' })
+        })
+
+        it('marks the session as expired when a stored token was rejected', async () => {
+            localStorage.setItem(JWT_KEY, 'stale-token')
+            const { router: fresh } = await navigate({ user: new Error('Unauthorized') }, '/projects')
+
+            expect(fresh.currentRoute.value.query).toEqual({ redirect: '/projects', expired: '1' })
+            expect(localStorage.getItem(JWT_KEY)).toBeNull()
         })
 
         it('does not add a redirect for the dashboard', async () => {
@@ -152,61 +174,40 @@ describe('router', () => {
 
             expect(landed).toBe(RouteNames.PROJECT_DETAILS)
         })
+
+        it('shows unknown URLs inside the shell', async () => {
+            const { landed } = await navigate({}, '/does/not/exist')
+
+            expect(landed).toBe(RouteNames.NOT_FOUND)
+        })
     })
 
-    describe('permission guard', () => {
+    describe('permission metadata', () => {
         it.each([
-            ['/domains', 'Domain', RouteNames.DOMAIN_LIST],
-            ['/domains/5', 'Domain', RouteNames.DOMAIN_DETAILS],
-            ['/bounces', 'Bounce', RouteNames.BOUNCE_LIST],
-            ['/settings', 'Settings', RouteNames.SETTINGS],
-            ['/users', 'User', RouteNames.USER_LIST],
-            ['/users/3', 'User', RouteNames.USER_DETAILS],
-        ])('opens %s with read %s', async (path, subject, name) => {
-            const { landed } = await navigate({ rules: [{ action: ['read'], subject }] }, path)
+            ['/domains', 'Domain', 'domains'],
+            ['/domains/5', 'Domain', 'domains'],
+            ['/bounces', 'Bounce', 'bounces'],
+            ['/bounces/blocked', 'Bounce', 'bounces'],
+            ['/settings', 'Settings', 'settings'],
+            ['/users', 'User', 'users'],
+            ['/users/3', 'User', 'users'],
+        ])('keeps %s open so the shell can explain a missing %s permission', async (path, subject, section) => {
+            const { router: fresh } = await navigate({ rules: [{ action: ['read'], subject: 'Project' }] }, path)
 
-            expect(landed).toBe(name)
+            expect(fresh.currentRoute.value.meta.ability).toEqual({ action: 'read', subject })
+            expect(fresh.currentRoute.value.meta.section).toBe(section)
         })
 
-        it.each(['/domains', '/domains/5', '/bounces', '/settings', '/users', '/users/3'])(
-            'sends users without permission from %s to the dashboard',
-            async (path) => {
-                const { landed } = await navigate({ rules: [{ action: ['read'], subject: 'Project' }] }, path)
+        it.each([
+            ['/', 'dashboard'],
+            ['/projects', 'projects'],
+            ['/projects/4', 'projects'],
+            ['/forms/9', 'projects'],
+            ['/forms/9/receivers/2/template', 'projects'],
+        ])('highlights the right section for %s', async (path, section) => {
+            const { router: fresh } = await navigate({}, path)
 
-                expect(landed).toBe(RouteNames.DASHBOARD)
-            },
-        )
-
-        it('does not let one permission open another gated page', async () => {
-            const { landed } = await navigate({ rules: [{ action: ['read'], subject: 'Domain' }] }, '/users')
-
-            expect(landed).toBe(RouteNames.DASHBOARD)
-        })
-
-        it('honors inverted rules', async () => {
-            const { landed } = await navigate(
-                {
-                    rules: [
-                        { action: ['manage'], subject: 'all' },
-                        { action: ['read'], subject: 'Settings', inverted: true },
-                    ],
-                },
-                '/settings',
-            )
-
-            expect(landed).toBe(RouteNames.DASHBOARD)
-        })
-
-        it('denies gated pages when the abilities cannot be loaded', async () => {
-            const { landed } = await navigate({ rules: new Error('offline') }, '/domains')
-
-            expect(landed).toBe(RouteNames.DASHBOARD)
-        })
-
-        it('still opens ungated pages when the abilities cannot be loaded', async () => {
-            const { landed } = await navigate({ rules: new Error('offline') }, '/projects')
-
-            expect(landed).toBe(RouteNames.PROJECT_LIST)
+            expect(fresh.currentRoute.value.meta.section).toBe(section)
         })
     })
 })

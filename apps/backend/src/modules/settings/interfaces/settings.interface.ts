@@ -5,11 +5,12 @@ export interface Settings {
     sendingDomainId: number | null
     serverIpv4: string
     serverIpv6: string | null
+    setupFinishedAt: Date | null
     createdAt: Date
     updatedAt: Date
 }
 
-export type SettingsCreate = Omit<Settings, 'settingId' | 'createdAt' | 'updatedAt'>
+export type SettingsCreate = Omit<Settings, 'settingId' | 'setupFinishedAt' | 'createdAt' | 'updatedAt'>
 
 export interface SendingDomain {
     fqdn: string

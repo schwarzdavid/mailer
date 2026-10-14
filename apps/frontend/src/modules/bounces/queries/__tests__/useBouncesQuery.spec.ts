@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BounceApi, type BounceDto } from 'api'
+import { BounceApi, type BounceDto, type BouncePageDto } from 'api'
 import { useQuery } from '@tanstack/vue-query'
 import { useBouncesQuery } from '../useBouncesQuery.ts'
 import { useBlockedAddressesQuery } from '../useBlockedAddressesQuery.ts'
 import { withVueQuery } from '@/__tests__/support.ts'
-
-vi.mock('@/helper/waitAtleast.ts', () => ({
-    waitAtleast: <T>(promise: Promise<T>) => promise,
-}))
 
 const bounces: BounceDto[] = [
     {
@@ -25,15 +21,17 @@ afterEach(() => {
 })
 
 describe('useBouncesQuery', () => {
-    it('loads the bounces and exposes them under the bounces key', async () => {
-        const listSpy = vi.spyOn(BounceApi, 'getBounces').mockResolvedValue(bounces)
-        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useBouncesQuery()))
+    it('loads one page of bounces with the given filters', async () => {
+        const page: BouncePageDto = { items: bounces, total: 1 }
+        const listSpy = vi.spyOn(BounceApi, 'getBounces').mockResolvedValue(page)
+        const query = { page: 2, itemsPerPage: 25, type: 'permanent' as const }
+        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useBouncesQuery(query)))
 
         await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
 
-        expect(listSpy).toHaveBeenCalledOnce()
-        expect(result.data.value).toEqual(bounces)
-        expect(queryClient.getQueryData(['bounces'])).toEqual(bounces)
+        expect(listSpy).toHaveBeenCalledWith({ query })
+        expect(result.data.value).toEqual(page)
+        expect(queryClient.getQueryData(['bounces', query])).toEqual(page)
         unmount()
     })
 })

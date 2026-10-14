@@ -1,52 +1,55 @@
 import { expect, test } from '@playwright/test'
-import { admin, sendingDomain } from './support/fixtures.ts'
+import { admin, input, sendingDomain } from './support/fixtures.ts'
 
-test('a fresh installation onboards the first administrator and the sending domain', async ({ page }) => {
+test('a fresh installation sets up the first administrator and the sending domain', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveURL(/\/onboarding$/)
-    await expect(page.getByText('Create the administrator account for this installation.')).toBeVisible()
+    await expect(page).toHaveURL(/\/setup$/)
+    await expect(page.getByRole('heading', { name: 'Welcome to Mail Admin' })).toBeVisible()
+    await expect(page.getByText('Create the admin account')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(page.getByText('This field is required').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Create account' }).click()
+    await expect(page.getByText('Fill in this field.').first()).toBeVisible()
 
-    await page.getByLabel('First name', { exact: true }).fill(admin.firstName)
-    await page.getByLabel('Last name', { exact: true }).fill(admin.lastName)
-    await page.getByLabel('Email Address', { exact: true }).fill(admin.email)
-    await page.getByLabel('Password', { exact: true }).fill(admin.password)
-    await expect(page.getByText('This field is required')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Continue' }).click()
+    await input(page, 'firstName').fill(admin.firstName)
+    await input(page, 'lastName').fill(admin.lastName)
+    await input(page, 'email').fill(admin.email)
+    await input(page, 'password').fill(admin.password)
+    await page.getByRole('button', { name: 'Create account' }).click()
 
-    await expect(page.getByText('Configure the domain this server sends mail from.')).toBeVisible()
-    await page.getByLabel('Domain name', { exact: true }).fill('not a domain')
-    await page.getByLabel('Server IPv4 address', { exact: true }).fill('999.1.1.1')
-    await expect(page.getByText('Invalid domain name')).toBeVisible()
-    await expect(page.getByText('Invalid IPv4 address')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Where does this server send from?' })).toBeVisible()
+    await expect(page.getByText(`Signed in as ${admin.firstName} ${admin.lastName}`)).toBeVisible()
+    await input(page, 'fqdn').fill('not a domain')
+    await input(page, 'serverIpv4').fill('999.1.1.1')
+    await input(page, 'serverIpv4').blur()
+    await expect(page.getByText('Enter a domain name, like mail.example.com.')).toBeVisible()
+    await expect(page.getByText('Enter an IPv4 address, like 203.0.113.10.')).toBeVisible()
 
-    await page.getByLabel('Domain name', { exact: true }).fill(sendingDomain)
-    await page.getByLabel('Server IPv4 address', { exact: true }).fill('203.0.113.10')
-    await expect(page.getByText('Invalid domain name')).toBeHidden()
-    await expect(page.getByText('Invalid IPv4 address')).toBeHidden()
-    await page.getByRole('button', { name: 'Save' }).click()
+    await input(page, 'fqdn').fill(sendingDomain)
+    await input(page, 'serverIpv4').fill('203.0.113.10')
+    await page.getByRole('button', { name: 'Save and continue' }).click()
 
-    await expect(page.getByText('Publish these DNS records so receivers can authenticate your mail.')).toBeVisible()
-    for (const record of ['A', 'MX', 'SPF', 'DKIM', 'DMARC', 'PTR (Reverse DNS)']) {
-        await expect(page.getByText(record, { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Publish the DNS records' })).toBeVisible()
+    for (const record of ['A', 'MX', 'SPF', 'DKIM', 'DMARC', 'PTR (IPv4)']) {
+        await expect(
+            page.getByRole('heading', { level: 3, name: new RegExp(`^${record.replace(/[()]/g, '\\$&')}`) }).first(),
+        ).toBeVisible()
     }
-    const recordValues = page.locator('input[readonly]')
-    await expect(recordValues.first()).toBeVisible()
-    const values = await recordValues.evaluateAll((inputs) =>
-        inputs.map((input) => (input instanceof HTMLInputElement ? input.value : '')),
-    )
+    const values = await page.locator('.copy-field__value').allTextContents()
     expect(values).toContain(sendingDomain)
     expect(values).toContain('203.0.113.10')
     expect(values.some((value) => value.startsWith('v=DKIM1'))).toBe(true)
 
-    await page.getByRole('button', { name: 'Finish' }).click()
+    await page.getByRole('button', { name: 'Sending domain' }).click()
+    await expect(input(page, 'fqdn')).toHaveValue(sendingDomain)
+    await page.getByRole('button', { name: 'DNS records' }).click()
+
+    await page.getByRole('button', { name: 'Finish setup' }).click()
     await expect(page).toHaveURL(/\/$/)
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+    await expect(page.getByText('Get started')).toBeVisible()
 })
 
-test('onboarding is closed once the installation is set up', async ({ page }) => {
-    await page.goto('/onboarding')
+test('setup is closed once the installation is set up', async ({ page }) => {
+    await page.goto('/setup')
     await expect(page).toHaveURL(/\/login$/)
 })

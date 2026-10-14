@@ -1,11 +1,12 @@
-import { Controller, Delete, Get, Param, ParseIntPipe, SerializeOptions } from '@nestjs/common'
+import { Controller, Delete, Get, Param, ParseIntPipe, Query, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { BounceService } from '../services/bounce.service.js'
 import { EmailBlockService } from '../services/email-block.service.js'
-import { BounceDto } from '../dtos/bounce.dto.js'
+import { BouncePageDto } from '../dtos/bounce-page.dto.js'
+import { BounceQueryDto } from '../dtos/bounce-query.dto.js'
 import { EmailBlockDto } from '../dtos/email-block.dto.js'
 
 @JwtAuth()
@@ -18,10 +19,20 @@ export class BounceController {
     ) {}
 
     @RequireAbility({ action: 'read', subject: 'Bounce' })
-    @SerializeOptions({ type: BounceDto })
+    @ResponseDto(BouncePageDto)
     @Get()
-    async getBounces(): Promise<BounceDto[]> {
-        return await this.bounceService.getBounces()
+    async getBounces(@Query() query: BounceQueryDto): Promise<BouncePageDto> {
+        const page = await this.bounceService.getBounces({
+            page: query.page,
+            itemsPerPage: query.itemsPerPage,
+            search: query.search,
+            type: query.type,
+            receivedAfter: query.receivedAfter === undefined ? undefined : new Date(query.receivedAfter),
+            sortBy: query.sortBy,
+            sortOrder: query.sortOrder,
+        })
+
+        return BouncePageDto.fromBouncePage(page)
     }
 
     @RequireAbility({ action: 'read', subject: 'Bounce' })

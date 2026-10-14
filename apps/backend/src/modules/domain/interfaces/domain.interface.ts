@@ -10,6 +10,15 @@ export interface Domain {
     lastCheckedAt: Date | null
 }
 
+export interface DomainProject {
+    projectId: number
+    name: string
+}
+
+export interface DomainWithProjects extends Domain {
+    projects: DomainProject[]
+}
+
 export interface DomainWithDkim extends Domain {
     activeDkim: DomainDkim
     dkims: DomainDkim[]

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { InboundFormApi, type InboundFormDto } from 'api'
+import { InboundFormApi, type InboundFormListDto } from 'api'
 import { useQuery } from '@tanstack/vue-query'
 import { useInboundFormsQuery } from '../useInboundFormsQuery.ts'
 import { withVueQuery } from '@/__tests__/support.ts'
 
-const form: InboundFormDto = {
+const form: InboundFormListDto = {
     inboundFormId: 1,
     projectId: 5,
     domainId: 3,
@@ -12,6 +12,7 @@ const form: InboundFormDto = {
     slug: 'contact',
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    receivers: [],
 }
 
 afterEach(() => {

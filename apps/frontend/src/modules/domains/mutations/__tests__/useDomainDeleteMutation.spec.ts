@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DomainApi, type DomainDnsRecordDto, type DomainDto } from 'api'
+import { DomainApi, type DomainDnsRecordDto, type DomainDetailDto } from 'api'
 import { useDomainDeleteMutation } from '../useDomainDeleteMutation.ts'
 import { useDomainQuery } from '../../queries/useDomainQuery.ts'
 import { withVueQuery } from '@/__tests__/support.ts'
@@ -17,12 +17,13 @@ const record: DomainDnsRecordDto = {
     value: 'v=spf1 include:sending-domain.org -all',
 }
 
-const domain: DomainDto = {
+const domain: DomainDetailDto = {
     domainId: 5,
     fqdn: 'mail.example.org',
     rootDomain: 'example.org',
     dns: { spf: record, dkim: record, dmarc: record },
     lastCheckedAt: null,
+    projects: [],
 }
 
 afterEach(() => {

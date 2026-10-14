@@ -15,6 +15,13 @@ export type DeletedProject = Project & { deletedAt: Date }
 export interface ProjectWithCounts extends Project {
     inboundFormCount: number
     domainCount: number
+    memberCount: number
+    domainsHealthy: boolean
+}
+
+export interface ProjectImplicitAccess {
+    superAdminCount: number
+    allProjectsUserCount: number
 }
 
 export interface ProjectWithDomains extends Project {

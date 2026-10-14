@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { QueryClient } from '@tanstack/vue-query'
-import { DomainApi, type DomainDnsRecordDto, type DomainDto } from 'api'
+import { DomainApi, type DomainDnsRecordDto, type DomainDetailDto } from 'api'
 import { useDomainQuery } from '../useDomainQuery.ts'
 
 const record: DomainDnsRecordDto = {
@@ -13,12 +13,13 @@ const record: DomainDnsRecordDto = {
     value: 'v=spf1 include:sending-domain.org -all',
 }
 
-const domain: DomainDto = {
+const domain: DomainDetailDto = {
     domainId: 5,
     fqdn: 'mail.example.org',
     rootDomain: 'example.org',
     dns: { spf: record, dkim: record, dmarc: record },
     lastCheckedAt: null,
+    projects: [],
 }
 
 afterEach(() => {

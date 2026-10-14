@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { SettingsModel } from '../models/settings.model.js'
 import { SendingDomain, SendingDomainConfigure, Settings } from '../interfaces/settings.interface.js'
@@ -15,6 +15,25 @@ export class SettingsService {
         private readonly domainDnsService: DomainDnsService,
         @InjectModel(SettingsModel) private readonly settingsModel: typeof SettingsModel,
     ) {}
+
+    async getSettings(): Promise<Settings | null> {
+        const settings = await this.settingsModel.findOne()
+
+        return settings ? settings.get({ plain: true }) : null
+    }
+
+    async finishSetup(): Promise<void> {
+        const settings = await this.settingsModel.findOne()
+        if (!settings?.sendingDomainId) {
+            throw new ConflictException('Configure a sending domain before finishing the setup.')
+        }
+
+        if (settings.setupFinishedAt === null) {
+            settings.setupFinishedAt = new Date()
+            await settings.save()
+            this.logger.log('Finished setup')
+        }
+    }
 
     async getSendingDomain(): Promise<SendingDomain | null> {
         const settings = await this.settingsModel.findOne()

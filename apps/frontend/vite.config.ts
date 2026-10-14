@@ -11,7 +11,9 @@ export default defineConfig({
     plugins: [
         vue(),
         vueDevTools(),
-        vuetify(),
+        vuetify({
+            styles: { configFile: 'src/styles/settings.scss' },
+        }),
         vueI18n({
             include: fileURLToPath(new URL('./src/locales/**', import.meta.url)),
         }),

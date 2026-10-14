@@ -3,11 +3,22 @@ import { InjectModel } from '@nestjs/sequelize'
 import { Op, UniqueConstraintError } from 'sequelize'
 import { DomainModel } from '../models/domain.model.js'
 import { DomainDkimService } from './domain-dkim.service.js'
-import { Domain, DomainWithActiveDkim, DomainWithDkim, SendingDomainIps } from '../interfaces/domain.interface.js'
+import {
+    Domain,
+    DomainProject,
+    DomainWithActiveDkim,
+    DomainWithDkim,
+    DomainWithProjects,
+    SendingDomainIps,
+} from '../interfaces/domain.interface.js'
 import { DomainDnsService } from './domain-dns.service.js'
 import { DomainDkimModel } from '../models/domain-dkim.model.js'
 import { SettingsModel } from '../../settings/models/settings.model.js'
 import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { ProjectDomainModel } from '../../project/models/project-domain.model.js'
+import { canOnProject } from '../../permission/helpers/project-access.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { parse } from 'tldts'
 
 @Injectable()
@@ -20,6 +31,8 @@ export class DomainService {
         @InjectModel(DomainModel) private readonly domainModel: typeof DomainModel,
         @InjectModel(SettingsModel) private readonly settingsModel: typeof SettingsModel,
         @InjectModel(InboundFormModel) private readonly inboundFormModel: typeof InboundFormModel,
+        @InjectModel(ProjectModel) private readonly projectModel: typeof ProjectModel,
+        @InjectModel(ProjectDomainModel) private readonly projectDomainModel: typeof ProjectDomainModel,
     ) {}
 
     async createDomain(fqdn: string): Promise<DomainWithDkim> {
@@ -102,6 +115,16 @@ export class DomainService {
         return domain.get({ plain: true })
     }
 
+    async getDomainWithProjects(domainId: number, ability: AppAbility): Promise<DomainWithProjects> {
+        const domain = await this.getDomainById(domainId)
+        const projects = await this.findActiveProjects(domainId)
+
+        return {
+            ...domain,
+            projects: projects.filter((project) => canOnProject(ability, 'read', project.projectId)),
+        }
+    }
+
     async getConfiguredSendingDomain(): Promise<Domain | null> {
         const settings = await this.settingsModel.findOne()
         if (!settings?.sendingDomainId) {
@@ -124,6 +147,13 @@ export class DomainService {
             throw new ConflictException('The sending domain cannot be deleted')
         }
 
+        const projects = await this.findActiveProjects(domainId)
+        if (projects.length > 0) {
+            throw new ConflictException(
+                `The domain is still assigned to ${projects.length} project(s). Remove it from every project before deleting it.`,
+            )
+        }
+
         const formCount = await this.inboundFormModel.count({ where: { domainId } })
         if (formCount > 0) {
             throw new ConflictException('The domain is still used by inbound forms')
@@ -131,6 +161,21 @@ export class DomainService {
 
         await this.deleteDomain(domainId)
         this.logger.log(`Deleted domain ${domain.fqdn}`)
+    }
+
+    private async findActiveProjects(domainId: number): Promise<DomainProject[]> {
+        const assignments = await this.projectDomainModel.findAll({ attributes: ['projectId'], where: { domainId } })
+        if (assignments.length === 0) {
+            return []
+        }
+
+        const projects = await this.projectModel.findAll({
+            attributes: ['projectId', 'name'],
+            where: { projectId: { [Op.in]: assignments.map((assignment) => assignment.projectId) } },
+            order: [['name', 'ASC']],
+        })
+
+        return projects.map(({ projectId, name }) => ({ projectId, name }))
     }
 
     private async insertDomain(fqdn: string, rootDomain: string): Promise<DomainModel> {

@@ -1,6 +1,6 @@
 import { Expose, Type } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { InboundForm, InboundFormFull, InboundFormWithReceivers } from '../interfaces/inbound-form.interface.js'
 import { InboundFormTemplateSummary } from '../interfaces/inbound-form-template.interface.js'
 import { InboundFormFieldDto } from './inbound-form-field.dto.js'
 import { InboundFormSecurityDto } from './inbound-form-security.dto.js'
@@ -39,6 +39,24 @@ export class InboundFormDto {
             slug: form.slug,
             isActive: form.isActive,
             createdAt: form.createdAt,
+        }
+    }
+}
+
+export class InboundFormListDto extends InboundFormDto {
+    @Expose()
+    @Type(() => InboundFormReceiverDto)
+    receivers!: InboundFormReceiverDto[]
+
+    static fromInboundFormWithReceivers(
+        form: InboundFormWithReceivers,
+        summaries: Record<number, InboundFormTemplateSummary>,
+    ): InboundFormListDto {
+        return {
+            ...InboundFormDto.fromInboundForm(form),
+            receivers: form.inboundFormReceivers.map((receiver) =>
+                InboundFormReceiverDto.fromReceiver(receiver, summaries[receiver.inboundFormReceiverId]),
+            ),
         }
     }
 }

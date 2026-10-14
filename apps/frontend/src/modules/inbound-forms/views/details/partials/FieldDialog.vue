@@ -1,104 +1,108 @@
 <template>
-    <VDialog max-width="700" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)">
-        <VCard :title="field ? t('cta.edit') : t('module.inboundForms.details.fields.add')">
-            <form @submit.prevent="onSubmit">
-                <VCardItem>
-                    <VAlert v-if="error" type="error" class="mb-4" :text="error" />
-                    <VRow dense>
-                        <VCol cols="6">
-                            <VTextField
-                                name="key"
-                                :label="t('module.inboundForms.details.fields.key')"
-                                v-model="key"
-                                :error-messages="errors.key"
-                            />
-                        </VCol>
-                        <VCol cols="6">
-                            <VTextField
-                                name="label"
-                                :label="t('module.inboundForms.details.fields.label')"
-                                v-model="label"
-                                :error-messages="errors.label"
-                            />
-                        </VCol>
-                        <VCol cols="6">
-                            <VSelect
-                                name="type"
-                                :label="t('module.inboundForms.details.fields.type')"
-                                v-model="type"
-                                :items="typeOptions"
-                                :error-messages="errors.type"
-                            />
-                        </VCol>
-                        <VCol cols="6">
-                            <VTextField
-                                name="defaultValue"
-                                :label="t('module.inboundForms.details.fields.defaultValue')"
-                                v-model="defaultValue"
-                            />
-                        </VCol>
-                        <VCol cols="12">
-                            <VCheckbox
-                                name="required"
-                                :label="t('module.inboundForms.details.fields.required')"
-                                v-model="required"
-                            />
-                        </VCol>
-                        <template v-if="type === 'text'">
-                            <VCol cols="4">
-                                <VNumberInput
-                                    name="minLength"
-                                    :label="t('module.inboundForms.details.fields.minLength')"
-                                    :model-value="minLength ?? null"
-                                    :min="0"
-                                    @update:model-value="minLength = $event"
-                                />
-                            </VCol>
-                            <VCol cols="4">
-                                <VNumberInput
-                                    name="maxLength"
-                                    :label="t('module.inboundForms.details.fields.maxLength')"
-                                    :model-value="maxLength ?? null"
-                                    :min="0"
-                                    @update:model-value="maxLength = $event"
-                                />
-                            </VCol>
-                            <VCol cols="4">
-                                <VTextField
-                                    name="pattern"
-                                    :label="t('module.inboundForms.details.fields.pattern')"
-                                    v-model="pattern"
-                                />
-                            </VCol>
-                        </template>
-                        <template v-if="type === 'number'">
-                            <VCol cols="6">
-                                <VNumberInput
-                                    name="min"
-                                    :label="t('module.inboundForms.details.fields.min')"
-                                    :model-value="min ?? null"
-                                    @update:model-value="min = $event"
-                                />
-                            </VCol>
-                            <VCol cols="6">
-                                <VNumberInput
-                                    name="max"
-                                    :label="t('module.inboundForms.details.fields.max')"
-                                    :model-value="max ?? null"
-                                    @update:model-value="max = $event"
-                                />
-                            </VCol>
-                        </template>
-                    </VRow>
-                </VCardItem>
-                <VCardActions>
-                    <VSpacer />
-                    <VBtn color="error" :text="t('cta.abort')" @click="emit('update:modelValue', false)" />
-                    <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="saving" type="submit" />
-                </VCardActions>
-            </form>
-        </VCard>
-    </VDialog>
+    <FormDialog
+        v-model="model"
+        width="lg"
+        :title="
+            field
+                ? t('module.inboundForms.details.fields.dialog.editTitle', { key: field.key })
+                : t('module.inboundForms.details.fields.add')
+        "
+        :submit-label="field ? t('cta.save') : t('module.inboundForms.details.fields.add')"
+        :pending="saving"
+        :error="error"
+        :dirty="meta.dirty"
+        @submit="onSubmit"
+    >
+        <div class="form-grid form-grid--2">
+            <VTextField
+                v-model="key"
+                name="key"
+                class="mono-field"
+                :label="requiredLabel(t('module.inboundForms.details.fields.key'))"
+                :hint="t('module.inboundForms.details.fields.dialog.keyHint')"
+                persistent-hint
+                :error-messages="errors.key"
+                aria-required="true"
+            />
+            <VTextField
+                v-model="label"
+                name="label"
+                :label="requiredLabel(t('module.inboundForms.details.fields.label'))"
+                :hint="t('module.inboundForms.details.fields.dialog.labelHint')"
+                persistent-hint
+                :error-messages="errors.label"
+                aria-required="true"
+            />
+            <VSelect
+                v-model="type"
+                name="type"
+                :label="t('module.inboundForms.details.fields.type')"
+                :items="typeOptions"
+                :error-messages="errors.type"
+            />
+            <VTextField
+                v-model="defaultValue"
+                name="defaultValue"
+                :label="t('module.inboundForms.details.fields.defaultValue')"
+            />
+            <VCheckbox
+                v-model="required"
+                class="span-2"
+                name="required"
+                :label="t('module.inboundForms.details.fields.required')"
+                :messages="t('module.inboundForms.details.fields.dialog.requiredHint')"
+            />
+            <template v-if="type === 'text'">
+                <h3 class="field-dialog__section span-2">
+                    {{ t('module.inboundForms.details.fields.dialog.textRules') }}
+                </h3>
+                <VNumberInput
+                    name="minLength"
+                    :label="t('module.inboundForms.details.fields.minLength')"
+                    :model-value="minLength ?? null"
+                    :min="0"
+                    :error-messages="errors.minLength"
+                    @update:model-value="minLength = $event"
+                />
+                <VNumberInput
+                    name="maxLength"
+                    :label="t('module.inboundForms.details.fields.maxLength')"
+                    :model-value="maxLength ?? null"
+                    :min="0"
+                    :error-messages="errors.maxLength"
+                    @update:model-value="maxLength = $event"
+                />
+                <VTextField
+                    v-model="pattern"
+                    class="span-2 mono-field"
+                    name="pattern"
+                    :label="t('module.inboundForms.details.fields.pattern')"
+                    :hint="t('module.inboundForms.details.fields.dialog.patternHint')"
+                    persistent-hint
+                    :error-messages="errors.pattern"
+                />
+            </template>
+            <template v-if="type === 'number'">
+                <h3 class="field-dialog__section span-2">
+                    {{ t('module.inboundForms.details.fields.dialog.numberRules') }}
+                </h3>
+                <VNumberInput
+                    name="min"
+                    :label="t('module.inboundForms.details.fields.min')"
+                    :model-value="min ?? null"
+                    :error-messages="errors.min"
+                    @update:model-value="min = $event"
+                />
+                <VNumberInput
+                    name="max"
+                    :label="t('module.inboundForms.details.fields.max')"
+                    :model-value="max ?? null"
+                    :error-messages="errors.max"
+                    @update:model-value="max = $event"
+                />
+            </template>
+        </div>
+    </FormDialog>
 </template>
 
 <script setup lang="ts">
@@ -108,20 +112,24 @@
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormFieldDto, InboundFormFieldUpsertDto, InboundFormFieldValidationDto } from 'api'
+    import FormDialog from '@/components/FormDialog.vue'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
-    const props = defineProps<{
-        modelValue: boolean
-        field: InboundFormFieldDto | null
-        saving: boolean
-        error?: string | null
-    }>()
+    const props = withDefaults(
+        defineProps<{
+            field: InboundFormFieldDto | null
+            existingKeys: string[]
+            saving: boolean
+            error?: string | null
+        }>(),
+        { error: null },
+    )
+    const model = defineModel<boolean>({ required: true })
 
-    const emit = defineEmits<{
-        'update:modelValue': [value: boolean]
-        save: [field: InboundFormFieldUpsertDto]
-    }>()
+    const emit = defineEmits<{ save: [field: InboundFormFieldUpsertDto] }>()
 
     const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
 
     const typeOptions = computed(() =>
         (['text', 'email', 'number', 'boolean'] as const).map((value) => ({
@@ -130,24 +138,59 @@
         })),
     )
 
-    const { defineField, handleSubmit, errors, resetForm } = useForm({
+    function isValidPattern(pattern: string | undefined) {
+        if (!pattern) {
+            return true
+        }
+        try {
+            new RegExp(pattern)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
         validationSchema: toTypedSchema(
-            z.object({
-                key: z
-                    .string()
-                    .min(1)
-                    .max(255)
-                    .regex(/^[\w-]+$/),
-                label: z.string().min(1).max(255),
-                type: z.enum(['text', 'email', 'number', 'boolean']),
-                defaultValue: z.string().max(255).optional(),
-                required: z.boolean().optional(),
-                minLength: z.number().int().min(0).nullable().optional(),
-                maxLength: z.number().int().min(0).nullable().optional(),
-                pattern: z.string().optional(),
-                min: z.number().nullable().optional(),
-                max: z.number().nullable().optional(),
-            }),
+            z
+                .object({
+                    key: z
+                        .string()
+                        .min(1)
+                        .max(255)
+                        .regex(/^[\w-]+$/, { error: () => t('module.inboundForms.validation.key') })
+                        .refine((value) => value === props.field?.key || !props.existingKeys.includes(value), {
+                            error: () => t('module.inboundForms.validation.keyTaken'),
+                        }),
+                    label: z.string().trim().min(1).max(255),
+                    type: z.enum(['text', 'email', 'number', 'boolean']),
+                    defaultValue: z.string().max(255).optional(),
+                    required: z.boolean().optional(),
+                    minLength: z.number().int().min(0).nullable().optional(),
+                    maxLength: z.number().int().min(0).nullable().optional(),
+                    pattern: z
+                        .string()
+                        .optional()
+                        .refine(isValidPattern, { error: () => t('module.inboundForms.validation.pattern') }),
+                    min: z.number().nullable().optional(),
+                    max: z.number().nullable().optional(),
+                })
+                .refine(
+                    (values) =>
+                        values.minLength == null || values.maxLength == null || values.maxLength >= values.minLength,
+                    {
+                        path: ['maxLength'],
+                        error: (issue) =>
+                            t('module.inboundForms.validation.maxLength', {
+                                min: (issue.input as { minLength?: number }).minLength ?? 0,
+                            }),
+                    },
+                )
+                .refine((values) => values.min == null || values.max == null || values.max >= values.min, {
+                    path: ['max'],
+                    error: (issue) =>
+                        t('module.inboundForms.validation.max', { min: (issue.input as { min?: number }).min ?? 0 }),
+                }),
         ),
     })
 
@@ -163,7 +206,7 @@
     const [max] = defineField('max')
 
     watch(
-        () => props.modelValue,
+        model,
         (open) => {
             if (!open) {
                 return
@@ -183,6 +226,7 @@
                 },
             })
         },
+        { immediate: true },
     )
 
     const onSubmit = handleSubmit((values) => {
@@ -219,3 +263,12 @@
         })
     })
 </script>
+
+<style scoped>
+    .field-dialog__section {
+        margin: 4px 0 -8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.25rem;
+    }
+</style>

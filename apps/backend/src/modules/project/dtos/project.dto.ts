@@ -1,4 +1,5 @@
 import { Expose, Type } from 'class-transformer'
+import { ApiProperty } from '@nestjs/swagger'
 import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface.js'
 import { PROJECT_PURGE_AFTER_MS } from '../project.constants.js'
 import { DomainDto } from '../../domain/dtos/domain.dto.js'
@@ -34,11 +35,21 @@ export class ProjectListDto extends ProjectDto {
     @Expose()
     domainCount!: number
 
+    @Expose()
+    @ApiProperty({ type: Number })
+    memberCount!: number
+
+    @Expose()
+    @ApiProperty({ type: Boolean })
+    domainsHealthy!: boolean
+
     static fromProjectWithCounts(project: ProjectWithCounts): ProjectListDto {
         return {
             ...ProjectDto.fromProject(project),
             inboundFormCount: project.inboundFormCount,
             domainCount: project.domainCount,
+            memberCount: project.memberCount,
+            domainsHealthy: project.domainsHealthy,
         }
     }
 }

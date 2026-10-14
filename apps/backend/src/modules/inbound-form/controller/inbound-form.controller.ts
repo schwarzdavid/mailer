@@ -11,7 +11,7 @@ import {
     Query,
     SerializeOptions,
 } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiQuery, ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { Principal } from '../../auth/decorators/Principal.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
@@ -19,7 +19,7 @@ import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { InboundFormService } from '../services/inbound-form.service.js'
 import { InboundFormTemplateService } from '../services/inbound-form-template.service.js'
 import { InboundFormCreateDto, InboundFormUpdateDto } from '../dtos/inbound-form-create.dto.js'
-import { InboundFormDetailDto, InboundFormDto } from '../dtos/inbound-form.dto.js'
+import { InboundFormDetailDto, InboundFormDto, InboundFormListDto } from '../dtos/inbound-form.dto.js'
 import { InboundFormFieldDto, InboundFormFieldsPutDto } from '../dtos/inbound-form-field.dto.js'
 import { InboundFormSecurityDto, InboundFormSecurityPutDto } from '../dtos/inbound-form-security.dto.js'
 import {
@@ -59,16 +59,21 @@ export class InboundFormController {
         return InboundFormDto.fromInboundForm(form)
     }
 
-    @SerializeOptions({ type: InboundFormDto })
+    @SerializeOptions({ type: InboundFormListDto })
+    @ApiQuery({ name: 'projectId', required: false, type: Number })
     @Get()
     async getInboundForms(
         @Query('projectId', new ParseIntPipe({ optional: true })) projectId: number | undefined,
         @Principal() principal: UserWithRole,
         @CurrentAbility() ability: AppAbility,
-    ): Promise<InboundFormDto[]> {
+    ): Promise<InboundFormListDto[]> {
         const forms = await this.inboundFormService.getForms(principal, ability, projectId)
+        const receiverIds = forms.flatMap((form) =>
+            form.inboundFormReceivers.map((receiver) => receiver.inboundFormReceiverId),
+        )
+        const summaries = await this.templateService.getVersionSummaries(receiverIds)
 
-        return forms.map((form) => InboundFormDto.fromInboundForm(form))
+        return forms.map((form) => InboundFormListDto.fromInboundFormWithReceivers(form, summaries))
     }
 
     @ResponseDto(InboundFormDetailDto)

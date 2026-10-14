@@ -1,14 +1,15 @@
-<script setup lang="ts"></script>
-
 <template>
     <VApp>
-        <RouterView v-slot="{ Component }">
-            <component :is="Component" v-if="Component" />
-            <VMain v-else>
-                <VProgressCircular indeterminate size="64" />
-            </VMain>
-        </RouterView>
+        <RouterView />
+        <ConfirmDialogHost />
+        <NotificationHost />
     </VApp>
 </template>
 
-<style scoped></style>
+<script setup lang="ts">
+    import ConfirmDialogHost from '@/components/ConfirmDialogHost.vue'
+    import NotificationHost from '@/components/NotificationHost.vue'
+    import { useThemePreference } from '@/composables/useThemePreference.ts'
+
+    useThemePreference()
+</script>

@@ -5,9 +5,14 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { UserModel } from '../src/modules/user/models/user.model.js'
+import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
+import { DomainModel } from '../src/modules/domain/models/domain.model.js'
+import { configureSendingDomain } from './support/sending-domain.js'
+import { login, seedUser } from './support/session.js'
 
 describe('SetupController (e2e)', () => {
     let app: INestApplication<App>
+    let token: string
 
     const registration = {
         firstName: 'Ada',
@@ -20,6 +25,8 @@ describe('SetupController (e2e)', () => {
 
     beforeAll(async () => {
         app = await createTestApp()
+        await app.get<typeof SettingsModel>(getModelToken(SettingsModel)).destroy({ where: {} })
+        await app.get<typeof DomainModel>(getModelToken(DomainModel)).destroy({ where: {} })
         const userModel = app.get<typeof UserModel>(getModelToken(UserModel))
         await userModel.destroy({ where: {} })
     })
@@ -31,7 +38,13 @@ describe('SetupController (e2e)', () => {
     it('reports that setup is needed while no user exists', async () => {
         const response = await http().get('/api/setup/status').expect(200)
 
-        expect(response.body).toEqual({ needsSetup: true })
+        expect(response.body).toEqual({ needsSetup: true, step: 'account' })
+    })
+
+    it('refuses to finish the setup without a token', async () => {
+        const response = await http().post('/api/setup/finish')
+
+        expect(response.status).toBe(401)
     })
 
     it('registers the first user and returns a usable token', async () => {
@@ -43,12 +56,56 @@ describe('SetupController (e2e)', () => {
         expect(body.user.password).toBeUndefined()
 
         await http().get('/api/auth/user').set('Authorization', `Bearer ${body.token}`).expect(200)
+        token = body.token
+    })
+
+    it('asks for the sending domain once the account exists', async () => {
+        const response = await http().get('/api/setup/status').expect(200)
+
+        expect(response.body).toEqual({ needsSetup: true, step: 'sendingDomain' })
+    })
+
+    it('refuses to finish the setup before a sending domain is configured', async () => {
+        const response = await http().post('/api/setup/finish').set('Authorization', `Bearer ${token}`)
+
+        expect(response.status).toBe(409)
+    })
+
+    it('shows the records step once the sending domain is configured', async () => {
+        await configureSendingDomain(app, token, 'mail.setup-e2e.org')
+
+        const response = await http().get('/api/setup/status').expect(200)
+
+        expect(response.body).toEqual({ needsSetup: true, step: 'records' })
+    })
+
+    it('only lets settings editors finish the setup', async () => {
+        const credentials = { email: 'setup.plain@example.com', password: 'correct-horse-battery-staple' }
+        await seedUser(app, credentials, 'user')
+        const plainToken = await login(app, credentials)
+
+        const response = await http().post('/api/setup/finish').set('Authorization', `Bearer ${plainToken}`)
+
+        expect(response.status).toBe(403)
+        await http().get('/api/setup/status').expect(200, { needsSetup: true, step: 'records' })
+    })
+
+    it('finishes the setup durably and idempotently', async () => {
+        const finished = await http().post('/api/setup/finish').set('Authorization', `Bearer ${token}`).expect(200)
+        expect(finished.body).toEqual({ needsSetup: false, step: 'finished' })
+
+        const settingsModel = app.get<typeof SettingsModel>(getModelToken(SettingsModel))
+        const finishedAt = (await settingsModel.findOne())?.setupFinishedAt
+        expect(finishedAt).toBeInstanceOf(Date)
+
+        await http().post('/api/setup/finish').set('Authorization', `Bearer ${token}`).expect(200)
+        expect((await settingsModel.findOne())?.setupFinishedAt).toEqual(finishedAt)
     })
 
     it('reports that setup is completed afterwards', async () => {
         const response = await http().get('/api/setup/status').expect(200)
 
-        expect(response.body).toEqual({ needsSetup: false })
+        expect(response.body).toEqual({ needsSetup: false, step: 'finished' })
     })
 
     it('refuses a second registration with 403', async () => {

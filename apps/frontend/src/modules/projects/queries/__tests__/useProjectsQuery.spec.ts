@@ -11,6 +11,8 @@ const project: ProjectListDto = {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     inboundFormCount: 2,
     domainCount: 1,
+    memberCount: 2,
+    domainsHealthy: true,
 }
 
 afterEach(() => {

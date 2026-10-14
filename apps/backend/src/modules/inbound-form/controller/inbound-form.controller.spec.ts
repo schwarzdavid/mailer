@@ -5,7 +5,7 @@ import { InboundFormController } from './inbound-form.controller.js'
 import { InboundFormService } from '../services/inbound-form.service.js'
 import { InboundFormTemplateService } from '../services/inbound-form-template.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { InboundForm, InboundFormFull, InboundFormWithReceivers } from '../interfaces/inbound-form.interface.js'
 import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
 import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
@@ -37,6 +37,11 @@ const formFull: InboundFormFull = {
     ...form,
     inboundFormFields: [],
     inboundFormSecurity: [],
+    inboundFormReceivers: [receiver],
+}
+
+const formWithReceivers: InboundFormWithReceivers = {
+    ...form,
     inboundFormReceivers: [receiver],
 }
 
@@ -84,7 +89,7 @@ describe('InboundFormController', () => {
 
     beforeEach(async () => {
         createForm = vi.fn<typeof createForm>().mockResolvedValue(form)
-        getForms = vi.fn<typeof getForms>().mockResolvedValue([form])
+        getForms = vi.fn<typeof getForms>().mockResolvedValue([formWithReceivers])
         getFormById = vi.fn<typeof getFormById>().mockResolvedValue(formFull)
         updateForm = vi.fn<typeof updateForm>().mockResolvedValue(formFull)
         deleteForm = vi.fn<typeof deleteForm>().mockResolvedValue(undefined)
@@ -151,11 +156,56 @@ describe('InboundFormController', () => {
         expect(result.slug).toBe('contact')
     })
 
-    it('lists forms', async () => {
+    it('lists forms with their receivers and template summaries', async () => {
         const result = await controller.getInboundForms(undefined, principal, manageAll)
 
-        expect(result).toHaveLength(1)
-        expect(result[0]).toMatchObject({ inboundFormId: 1, slug: 'contact' })
+        expect(getForms).toHaveBeenCalledWith(principal, manageAll, undefined)
+        expect(getVersionSummaries).toHaveBeenCalledWith([31])
+        expect(result).toEqual([
+            {
+                inboundFormId: 1,
+                projectId: 5,
+                domainId: 3,
+                name: 'Contact',
+                slug: 'contact',
+                isActive: true,
+                createdAt: form.createdAt,
+                receivers: [
+                    {
+                        inboundFormReceiverId: 31,
+                        emailFrom: 'noreply@mail.example.com',
+                        emailReceiver: 'owner@business.com',
+                        emailReplyTo: null,
+                        isActive: true,
+                        draftVersion: 1,
+                        publishedVersion: null,
+                    },
+                ],
+            },
+        ])
+    })
+
+    it('collects the receiver ids of every listed form for one summary lookup', async () => {
+        getForms.mockResolvedValue([
+            formWithReceivers,
+            { ...form, inboundFormId: 2, slug: 'other', inboundFormReceivers: [] },
+            {
+                ...form,
+                inboundFormId: 3,
+                slug: 'third',
+                inboundFormReceivers: [{ ...receiver, inboundFormReceiverId: 32, inboundFormId: 3 }],
+            },
+        ])
+        getVersionSummaries.mockResolvedValue({
+            31: { draftVersion: 1, publishedVersion: null },
+            32: { draftVersion: null, publishedVersion: 2 },
+        })
+
+        const result = await controller.getInboundForms(undefined, principal, manageAll)
+
+        expect(getVersionSummaries).toHaveBeenCalledExactlyOnceWith([31, 32])
+        expect(result.map((entry) => entry.receivers.length)).toEqual([1, 0, 1])
+        expect(result[2]?.receivers[0]).toMatchObject({ draftVersion: null, publishedVersion: 2 })
     })
 
     it('passes the project filter through', async () => {

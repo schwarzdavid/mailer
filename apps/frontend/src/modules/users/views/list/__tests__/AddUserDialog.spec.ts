@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
-import { flushPromises } from '@vue/test-utils'
-import { VApp, VBtn, VSelect } from 'vuetify/components'
-import { AuthApi, RoleApi, UserApi, type RoleDto, type UserDto } from 'api'
+import { AuthApi, RoleApi, UserApi } from 'api'
 import type { Router } from 'vue-router'
 import AddUserDialog from '../partials/AddUserDialog.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { mountDialog, overlayText, setOverlayInput, submitOverlayForm } from '@/__tests__/support.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
+import { roles, signedIn } from '../../__tests__/userFixtures.ts'
 
 const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
 
@@ -21,197 +19,91 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
 
 vi.stubGlobal('visualViewport', null)
 
-const roles: RoleDto[] = [
-    { roleId: 1, name: 'Super Admin', type: 'super_admin', permissions: [] },
-    { roleId: 2, name: 'Admin', type: 'admin', permissions: [] },
-    { roleId: 3, name: 'User', type: 'user', permissions: [] },
-]
-
-function buildCaller(type: UserDto['role']['type']): UserDto {
-    return {
-        userId: 1,
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        email: 'ada@example.com',
-        role: { roleId: type === 'super_admin' ? 1 : 2, name: 'Caller', type },
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-    }
-}
-
-const created: UserDto = {
-    userId: 7,
-    firstName: 'Grace',
-    lastName: 'Hopper',
-    email: 'grace@example.com',
-    role: { roleId: 3, name: 'User', type: 'user' },
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-}
-
-const DialogHost = defineComponent({
-    setup: () => () =>
-        h(VApp, () =>
-            h(AddUserDialog, null, {
-                default: ({ props }: { props: Record<string, unknown> }) =>
-                    h(VBtn, { ...props, class: 'open-dialog' }, () => 'Add'),
-            }),
-        ),
-})
-
-async function openDialog(callerRole: UserDto['role']['type'] = 'admin') {
-    vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
-    vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(buildCaller(callerRole))
-    const wrapper = mountView(DialogHost)
-    await wrapper.get('.open-dialog').trigger('click')
-    await vi.waitFor(() => expect(document.body.querySelector('input[name="firstName"]')).not.toBeNull())
-    await flushPromises()
-    return wrapper
-}
-
-function input(name: string) {
-    return document.body.querySelector<HTMLInputElement>(`input[name="${name}"]`)!
-}
-
-async function fill(values: Record<string, string>) {
-    for (const [name, value] of Object.entries(values)) {
-        input(name).value = value
-        input(name).dispatchEvent(new Event('input'))
-    }
-    await flushPromises()
-}
-
-async function fillValid() {
-    await fill({ firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', password: 'cobol-1959' })
-}
-
-async function submit() {
-    document.body.querySelector('form')!.dispatchEvent(new Event('submit'))
-    await flushPromises()
-}
-
-function dialogText() {
-    return document.body.querySelector('.v-overlay-container')?.textContent ?? ''
-}
-
-function offeredRoles(wrapper: ReturnType<typeof mountView>) {
-    return wrapper.findComponent(VSelect).props('items')
-}
-
 afterEach(() => {
     vi.restoreAllMocks()
-    push.mockClear()
+    push.mockReset()
     document.body.innerHTML = ''
 })
 
+async function openDialog(as: 'super_admin' | 'admin' = 'super_admin') {
+    vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+    vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(signedIn(as))
+    const result = mountDialog(AddUserDialog)
+    await vi.waitFor(() => expect(document.body.querySelector('input[name="firstName"]')).not.toBeNull())
+    await vi.waitFor(() => expect(overlayText()).toContain('No permissions of its own'))
+    return result
+}
+
+async function fillForm() {
+    await setOverlayInput('firstName', 'Nina')
+    await setOverlayInput('lastName', 'Roth')
+    await setOverlayInput('email', 'nina@acme.com')
+    await setOverlayInput('password', 'correct-horse')
+}
+
+async function roleOptions() {
+    document.body
+        .querySelector<HTMLElement>('.v-overlay-container .v-select .v-field')!
+        .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await vi.waitFor(() => expect(document.body.querySelectorAll('.v-list-item').length).toBeGreaterThan(0))
+    return [...document.body.querySelectorAll('.v-list-item-title')].map((title) => title.textContent?.trim())
+}
+
 describe('AddUserDialog', () => {
-    it('opens with the form and intro', async () => {
-        const wrapper = await openDialog()
+    it('preselects the User role and explains it', async () => {
+        await openDialog()
 
-        expect(dialogText()).toContain('New User')
-        expect(dialogText()).toContain('share the initial password')
-        expect(input('password').type).toBe('password')
-        wrapper.unmount()
+        expect(overlayText()).toContain('No permissions of its own')
     })
 
-    it('hides the super admin role from an admin', async () => {
-        const wrapper = await openDialog('admin')
+    it('hides the Super admin role from admins', async () => {
+        await openDialog('admin')
 
-        await vi.waitFor(() => expect(offeredRoles(wrapper)).toEqual(roles.slice(1)))
-        wrapper.unmount()
+        expect(await roleOptions()).toEqual(['Admin', 'User'])
     })
 
-    it('offers the super admin role to a super admin', async () => {
-        const wrapper = await openDialog('super_admin')
+    it('offers the Super admin role to Super admins', async () => {
+        await openDialog('super_admin')
 
-        await vi.waitFor(() => expect(offeredRoles(wrapper)).toEqual(roles))
-        wrapper.unmount()
+        expect(await roleOptions()).toEqual(['Super admin', 'Admin', 'User'])
     })
 
-    it('does not create a user from an empty form', async () => {
-        const create = vi.spyOn(UserApi, 'createUser')
-        const wrapper = await openDialog()
+    it('creates the user and opens the detail page', async () => {
+        push.mockResolvedValue(undefined)
+        const create = vi.spyOn(UserApi, 'createUser').mockResolvedValue(signedIn('user', 9))
+        const { open } = await openDialog()
 
-        await submit()
+        await fillForm()
+        submitOverlayForm()
 
-        await vi.waitFor(() => expect(document.body.querySelectorAll('.v-input--error')).toHaveLength(4))
-        expect(create).not.toHaveBeenCalled()
-        wrapper.unmount()
-    })
-
-    it.each([
-        ['an invalid email', { email: 'grace-at-example' }, 'email'],
-        ['a password shorter than 8 characters', { password: 'short' }, 'password'],
-    ])('rejects %s', async (_, override, field) => {
-        const create = vi.spyOn(UserApi, 'createUser')
-        const wrapper = await openDialog()
-
-        await fillValid()
-        await fill(override)
-        await submit()
-
-        await vi.waitFor(() => expect(input(field).closest('.v-input--error')).not.toBeNull())
-        expect(document.body.querySelectorAll('.v-input--error')).toHaveLength(1)
-        expect(create).not.toHaveBeenCalled()
-        wrapper.unmount()
-    })
-
-    it('creates the user with the chosen role and opens the detail page', async () => {
-        const create = vi.spyOn(UserApi, 'createUser').mockResolvedValue(created)
-        const wrapper = await openDialog()
-
-        await fillValid()
-        await wrapper.findComponent(VSelect).setValue(3)
-        await submit()
-
-        await vi.waitFor(() => {
-            expect(push).toHaveBeenCalledWith({ name: RouteNames.USER_DETAILS, params: { userId: 7 } })
-        })
+        await vi.waitFor(() =>
+            expect(push).toHaveBeenCalledWith({ name: RouteNames.USER_DETAILS, params: { userId: 9 } }),
+        )
         expect(create).toHaveBeenCalledWith({
-            body: {
-                firstName: 'Grace',
-                lastName: 'Hopper',
-                email: 'grace@example.com',
-                password: 'cobol-1959',
-                roleId: 3,
-            },
+            body: { firstName: 'Nina', lastName: 'Roth', email: 'nina@acme.com', password: 'correct-horse', roleId: 3 },
         })
-        wrapper.unmount()
+        expect(open.value).toBe(false)
     })
 
-    it('creates a user without a role so the server default applies', async () => {
-        const create = vi.spyOn(UserApi, 'createUser').mockResolvedValue(created)
-        const wrapper = await openDialog()
+    it('does not create a user from an incomplete form', async () => {
+        const create = vi.spyOn(UserApi, 'createUser')
+        await openDialog()
 
-        await fillValid()
-        await submit()
+        await setOverlayInput('firstName', 'Nina')
+        submitOverlayForm()
 
-        await vi.waitFor(() => expect(create).toHaveBeenCalled())
-        expect(create.mock.calls[0]![0].body).not.toHaveProperty('roleId', expect.anything())
-        wrapper.unmount()
+        await vi.waitFor(() => expect(document.body.querySelector('.v-input--error')).not.toBeNull())
+        expect(create).not.toHaveBeenCalled()
     })
 
-    it('shows the API error message and stays open', async () => {
-        vi.spyOn(UserApi, 'createUser').mockRejectedValue({ message: 'Email already taken' })
-        const wrapper = await openDialog()
+    it('keeps the dialog open with the error when creating fails', async () => {
+        vi.spyOn(UserApi, 'createUser').mockRejectedValue({ message: 'Email already in use' })
+        const { open } = await openDialog()
 
-        await fillValid()
-        await submit()
+        await fillForm()
+        submitOverlayForm()
 
-        await vi.waitFor(() => expect(dialogText()).toContain('Email already taken'))
-        expect(push).not.toHaveBeenCalled()
-        expect(input('firstName').value).toBe('Grace')
-        wrapper.unmount()
-    })
-
-    it('falls back to a generic error without a message', async () => {
-        vi.spyOn(UserApi, 'createUser').mockRejectedValue(new Response(null, { status: 500 }))
-        const wrapper = await openDialog()
-
-        await fillValid()
-        await submit()
-
-        await vi.waitFor(() => expect(dialogText()).toContain('The user could not be created'))
-        wrapper.unmount()
+        await vi.waitFor(() => expect(overlayText()).toContain('Email already in use'))
+        expect(open.value).toBe(true)
     })
 })

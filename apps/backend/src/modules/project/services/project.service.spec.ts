@@ -17,6 +17,13 @@ import { PermissionCacheService } from '../../permission/services/permission-cac
 import { ProjectMemberModel } from '../../permission/models/project-member.model.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
+import {
+    DomainDnsRecord,
+    DomainDnsRecordStatus,
+    DomainDnsRecordType,
+    DomainDnsRecordUse,
+} from '../../domain/interfaces/domain-dns.interface.js'
+import { ProjectMember } from '../../permission/interfaces/project-member.interface.js'
 import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface.js'
 import { Project } from '../interfaces/project.interface.js'
 import { User } from '../../user/interfaces/user.interface.js'
@@ -28,6 +35,40 @@ const domain: Domain = {
     activeDkimId: 7,
     dnsRecords: [],
     lastCheckedAt: null,
+}
+
+const validSpf: DomainDnsRecord = {
+    dnsId: 51,
+    domainId: 3,
+    type: DomainDnsRecordType.TXT,
+    use: DomainDnsRecordUse.SPF,
+    status: DomainDnsRecordStatus.VALID,
+    host: 'mail.example.com',
+    value: 'v=spf1 include:mail.sending.example ~all',
+    current: 'v=spf1 include:mail.sending.example ~all',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+}
+
+const invalidDkim: DomainDnsRecord = {
+    ...validSpf,
+    dnsId: 52,
+    use: DomainDnsRecordUse.DKIM,
+    status: DomainDnsRecordStatus.INVALID,
+    host: 'mail._domainkey.mail.example.com',
+    value: 'v=DKIM1; k=rsa; p=abc',
+    current: null,
+}
+
+function membership(projectId: number, userId: number, permission: ProjectMember['permission']): ProjectMember {
+    return {
+        projectMemberId: projectId * 100 + userId,
+        projectId,
+        userId,
+        permission,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
 }
 
 const inboundForm: InboundForm = {
@@ -112,6 +153,7 @@ describe('ProjectService', () => {
     let formCount: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let getDomainById: Mock<DomainService['getDomainById']>
     let memberBulkCreate: Mock<(rows: object[], options?: object) => Promise<object[]>>
+    let memberFindAll: Mock<(options: object) => Promise<ProjectMember[]>>
     let hasAllProjectsAccess: Mock<AbilityFactory['hasAllProjectsAccess']>
     let getProjectIdsFor: Mock<AbilityFactory['getProjectIdsFor']>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
@@ -129,6 +171,7 @@ describe('ProjectService', () => {
         formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
         memberBulkCreate = vi.fn<typeof memberBulkCreate>().mockResolvedValue([])
+        memberFindAll = vi.fn<typeof memberFindAll>().mockResolvedValue([])
         hasAllProjectsAccess = vi.fn<typeof hasAllProjectsAccess>().mockResolvedValue(false)
         getProjectIdsFor = vi.fn<typeof getProjectIdsFor>().mockResolvedValue([1])
         invalidateUser = vi.fn<typeof invalidateUser>().mockResolvedValue(undefined)
@@ -152,7 +195,10 @@ describe('ProjectService', () => {
                     },
                 },
                 { provide: getModelToken(InboundFormModel), useValue: { count: formCount } },
-                { provide: getModelToken(ProjectMemberModel), useValue: { bulkCreate: memberBulkCreate } },
+                {
+                    provide: getModelToken(ProjectMemberModel),
+                    useValue: { bulkCreate: memberBulkCreate, findAll: memberFindAll },
+                },
                 { provide: DomainService, useValue: { getDomainById } },
                 { provide: AbilityFactory, useValue: { hasAllProjectsAccess, getProjectIdsFor } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
@@ -229,7 +275,77 @@ describe('ProjectService', () => {
 
             expect(getProjectIdsFor).toHaveBeenCalledWith(principal, 'read')
             expect(projectFindAll).toHaveBeenCalledWith({ where: undefined, include: [DomainModel, InboundFormModel] })
-            expect(projects).toEqual([{ ...project, domainCount: 1, inboundFormCount: 1 }])
+            expect(projects).toEqual([
+                { ...project, domainCount: 1, inboundFormCount: 1, memberCount: 0, domainsHealthy: true },
+            ])
+        })
+
+        it('counts distinct members per project in one query', async () => {
+            getProjectIdsFor.mockResolvedValue('all')
+            projectFindAll.mockResolvedValue([
+                projectRow({ domains: [], inboundForms: [] }),
+                projectRow({ projectId: 2, name: 'Beta', domains: [], inboundForms: [] }),
+            ])
+            memberFindAll.mockResolvedValue([
+                membership(1, 5, 'read'),
+                membership(1, 5, 'update'),
+                membership(1, 6, 'read'),
+            ])
+
+            const projects = await service.getProjects(principal)
+
+            expect(memberFindAll).toHaveBeenCalledWith({
+                attributes: ['projectId', 'userId'],
+                where: { projectId: { [Op.in]: [1, 2] } },
+            })
+            expect(projects.map((entry) => entry.memberCount)).toEqual([2, 0])
+        })
+
+        it('skips the member query without visible projects', async () => {
+            getProjectIdsFor.mockResolvedValue([])
+
+            await expect(service.getProjects(principal)).resolves.toEqual([])
+            expect(memberFindAll).not.toHaveBeenCalled()
+        })
+
+        it('reports domains as healthy when the project has no domains', async () => {
+            projectFindAll.mockResolvedValue([projectRow({ domains: [], inboundForms: [] })])
+
+            const [listed] = await service.getProjects(principal)
+
+            expect(listed?.domainsHealthy).toBe(true)
+        })
+
+        it('reports domains as healthy when every record of every domain is valid', async () => {
+            projectFindAll.mockResolvedValue([
+                projectRow({
+                    domains: [
+                        { ...domain, dnsRecords: [validSpf] },
+                        { ...domain, domainId: 4, dnsRecords: [{ ...validSpf, dnsId: 53, domainId: 4 }] },
+                    ],
+                    inboundForms: [],
+                }),
+            ])
+
+            const [listed] = await service.getProjects(principal)
+
+            expect(listed?.domainsHealthy).toBe(true)
+        })
+
+        it('reports domains as unhealthy when any domain has an invalid record', async () => {
+            projectFindAll.mockResolvedValue([
+                projectRow({
+                    domains: [
+                        { ...domain, dnsRecords: [validSpf] },
+                        { ...domain, domainId: 4, dnsRecords: [validSpf, invalidDkim] },
+                    ],
+                    inboundForms: [],
+                }),
+            ])
+
+            const [listed] = await service.getProjects(principal)
+
+            expect(listed?.domainsHealthy).toBe(false)
         })
 
         it('filters by readable membership ids otherwise', async () => {

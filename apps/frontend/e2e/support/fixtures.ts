@@ -39,6 +39,16 @@ export function requireEnv(key: 'E2E_API_URL' | 'E2E_MAILHOG_URL'): string {
 const sessionTokens = new Map<string, string>()
 const jwtStorageKey = 'mailer::jwt'
 
+export function input(scope: Page | Locator, name: string): Locator {
+    return scope.locator(`input[name="${name}"], textarea[name="${name}"]`).first()
+}
+
+export async function submitLogin(page: Page, credentials: Credentials): Promise<void> {
+    await input(page, 'email').fill(credentials.email)
+    await input(page, 'password').fill(credentials.password)
+    await page.getByRole('button', { name: 'Log in', exact: true }).click()
+}
+
 export async function login(page: Page, credentials: Credentials): Promise<void> {
     await page.goto('/login')
 
@@ -47,12 +57,10 @@ export async function login(page: Page, credentials: Credentials): Promise<void>
         await page.evaluate(([key, value]) => localStorage.setItem(key, value), [jwtStorageKey, token] as const)
         await page.goto('/')
     } else {
-        await page.getByLabel('Email Address', { exact: true }).fill(credentials.email)
-        await page.getByLabel('Password', { exact: true }).fill(credentials.password)
-        await page.getByRole('button', { name: 'Login' }).click()
+        await submitLogin(page, credentials)
     }
 
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 
     const issued = await jwt(page)
     if (issued) {
@@ -60,16 +68,24 @@ export async function login(page: Page, credentials: Credentials): Promise<void>
     }
 }
 
+export function navigation(page: Page): Locator {
+    return page.getByRole('navigation', { name: 'Main navigation' })
+}
+
 export async function selectOption(scope: Locator, label: string, option: string): Promise<void> {
-    await scope
-        .locator('.v-select')
-        .filter({ has: scope.page().getByLabel(label, { exact: true }) })
-        .click()
-    await scope.page().getByRole('option', { name: option, exact: true }).click()
+    const combobox = scope.page().getByRole('combobox', { name: new RegExp(`^${label}`) })
+    await scope.locator('.v-field').filter({ has: combobox }).first().click()
+    await scope.page().getByRole('option', { name: option }).first().click()
 }
 
 export function card(page: Page, title: string): Locator {
-    return page.locator('.v-card').filter({ has: page.locator('.v-card-title').getByText(title, { exact: true }) })
+    return page
+        .locator('section.section-card')
+        .filter({ has: page.getByRole('heading', { level: 2, name: new RegExp(`^${title}`) }) })
+}
+
+export function dialog(page: Page): Locator {
+    return page.getByRole('dialog').last()
 }
 
 export function jwt(page: Page): Promise<string | null> {

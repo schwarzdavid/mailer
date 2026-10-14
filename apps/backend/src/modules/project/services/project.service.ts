@@ -19,6 +19,7 @@ import { PROJECT_PERMISSIONS } from '../../permission/permission.constants.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { DomainDnsRecordStatus } from '../../domain/interfaces/domain-dns.interface.js'
 import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface.js'
 import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface.js'
 
@@ -75,6 +76,7 @@ export class ProjectService {
         const where = scope === 'all' ? undefined : { projectId: { [Op.in]: scope } }
 
         const rows = await this.projectModel.findAll({ where, include: [DomainModel, InboundFormModel] })
+        const memberCounts = await this.countMembers(rows.map((row) => row.projectId))
 
         return rows.map((row) => {
             const plain = row.get({ plain: true }) as Project & { domains: Domain[]; inboundForms: InboundForm[] }
@@ -84,6 +86,10 @@ export class ProjectService {
                 ...projectFields,
                 inboundFormCount: inboundForms.length,
                 domainCount: domains.length,
+                memberCount: memberCounts.get(plain.projectId) ?? 0,
+                domainsHealthy: domains.every((domain) =>
+                    domain.dnsRecords.every((record) => record.status === DomainDnsRecordStatus.VALID),
+                ),
             }
         })
     }
@@ -177,6 +183,30 @@ export class ProjectService {
 
     async assertProjectExists(projectId: number): Promise<void> {
         await this.loadProject(projectId)
+    }
+
+    private async countMembers(projectIds: number[]): Promise<Map<number, number>> {
+        const counts = new Map<number, number>()
+        if (projectIds.length === 0) {
+            return counts
+        }
+
+        const memberships = await this.projectMemberModel.findAll({
+            attributes: ['projectId', 'userId'],
+            where: { projectId: { [Op.in]: projectIds } },
+        })
+
+        const usersByProject = new Map<number, Set<number>>()
+        for (const membership of memberships) {
+            const users = usersByProject.get(membership.projectId) ?? new Set<number>()
+            users.add(membership.userId)
+            usersByProject.set(membership.projectId, users)
+        }
+        for (const [projectId, users] of usersByProject) {
+            counts.set(projectId, users.size)
+        }
+
+        return counts
     }
 
     private assertCanReadDomains(ability: AppAbility): void {

@@ -7,6 +7,8 @@ import { SetupStatusDto } from '../dtos/setup-status.dto.js'
 import { RegisterUserDto } from '../dtos/register-user.dto.js'
 import { AuthenticationDto } from '../../auth/dtos/authentication.dto.js'
 import { JwtHelperService } from '../../auth/services/jwt-helper.service.js'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 
 @ApiTags('setup')
 @UseGuards(ThrottlerGuard)
@@ -21,7 +23,16 @@ export class SetupController {
     @ResponseDto(SetupStatusDto)
     @Get('status')
     async getStatus(): Promise<SetupStatusDto> {
-        return { needsSetup: await this.setupService.needsSetup() }
+        return SetupStatusDto.fromStep(await this.setupService.getStep())
+    }
+
+    @JwtAuth()
+    @RequireAbility({ action: 'update', subject: 'Settings' })
+    @HttpCode(HttpStatus.OK)
+    @ResponseDto(SetupStatusDto)
+    @Post('finish')
+    async finishSetup(): Promise<SetupStatusDto> {
+        return SetupStatusDto.fromStep(await this.setupService.finishSetup())
     }
 
     @HttpCode(HttpStatus.OK)

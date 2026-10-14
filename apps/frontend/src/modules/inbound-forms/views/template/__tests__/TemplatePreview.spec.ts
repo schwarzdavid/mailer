@@ -23,13 +23,35 @@ describe('TemplatePreview', () => {
         expect(wrapper.get('iframe').attributes('srcdoc')).toBe('<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>')
     })
 
-    it('shows a template error instead of the frame for invalid syntax', () => {
+    it('renders the envelope with placeholders filled in', () => {
         const wrapper = mountView(TemplatePreview, {
-            props: { template: '{{#if firstName}}unclosed', sampleData: { firstName: 'Ada' } },
+            props: {
+                template: '<p></p>',
+                subject: 'Request from {{firstName}}',
+                from: 'noreply@forms.acme.com',
+                to: 'sales@acme.com',
+                replyTo: '{{email}}',
+                sampleData: { firstName: 'Ada', email: 'ada@example.com' },
+            },
         })
 
-        expect(wrapper.find('iframe').exists()).toBe(false)
-        expect(wrapper.text()).toContain('Template error:')
+        expect(wrapper.text()).toContain('Request from Ada')
+        expect(wrapper.text()).toContain('noreply@forms.acme.com')
+        expect(wrapper.text()).toContain('ada@example.com')
+    })
+
+    it('names the error line and keeps the last good render', async () => {
+        const template = ref('<p>{{firstName}}</p>')
+        const host = defineComponent({
+            setup: () => () => h(TemplatePreview, { template: template.value, sampleData: { firstName: 'Ada' } }),
+        })
+        const wrapper = mountView(host)
+
+        template.value = '<p>ok</p>\n{{#if firstName}unclosed'
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Template error on line 2'))
+        expect(wrapper.get('iframe').attributes('srcdoc')).toBe('<p>Ada</p>')
+        expect(wrapper.text()).toContain('Showing the last version that compiled.')
     })
 
     it('re-renders after the template changes', async () => {

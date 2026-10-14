@@ -51,11 +51,11 @@ describe('LoginView', () => {
     it('renders the localized heading, fields and submit button', () => {
         const wrapper = mountView(LoginView)
 
-        expect(wrapper.get('h1').text()).toBe('Welcome Back')
-        expect(wrapper.text()).toContain('Enter your credentials to access the admin panel')
+        expect(wrapper.get('h1').text()).toBe('Log in')
+        expect(wrapper.text()).toContain('Use the account an administrator created for you.')
         expect(wrapper.find('input[type="email"]').exists()).toBe(true)
         expect(wrapper.find('input[type="password"]').exists()).toBe(true)
-        expect(wrapper.get('button[type="submit"]').text()).toContain('Login')
+        expect(wrapper.get('button[type="submit"]').text()).toContain('Log in')
     })
 
     it('does not call the API or navigate when the form is empty', async () => {
@@ -146,7 +146,9 @@ describe('LoginView', () => {
         await submitCredentials(wrapper)
 
         await vi.waitFor(() => {
-            expect(wrapper.get('.v-alert').text()).toContain('Invalid email or password')
+            expect(wrapper.get('.inline-alert').text()).toContain(
+                'Email or password is wrong. Check both and try again.',
+            )
         })
         expect(push).not.toHaveBeenCalled()
         expect(localStorage.getItem(JWT_KEY)).toBeNull()
@@ -159,7 +161,7 @@ describe('LoginView', () => {
         await submitCredentials(wrapper)
 
         await vi.waitFor(() => {
-            expect(wrapper.get('.v-alert').text()).toContain('Too Many Requests')
+            expect(wrapper.get('.inline-alert').text()).toContain('Too Many Requests')
         })
         expect(push).not.toHaveBeenCalled()
     })
@@ -171,7 +173,9 @@ describe('LoginView', () => {
         await submitCredentials(wrapper)
 
         await vi.waitFor(() => {
-            expect(wrapper.get('.v-alert').text()).toContain('Login failed, please try again')
+            expect(wrapper.get('.inline-alert').text()).toContain(
+                "Couldn't log in. Check your connection and try again.",
+            )
         })
     })
 
@@ -182,11 +186,11 @@ describe('LoginView', () => {
         const wrapper = mountView(LoginView)
 
         await submitCredentials(wrapper)
-        await vi.waitFor(() => expect(wrapper.find('.v-alert').exists()).toBe(true))
+        await vi.waitFor(() => expect(wrapper.find('.inline-alert').exists()).toBe(true))
         await wrapper.get('form').trigger('submit')
 
         await vi.waitFor(() => expect(push).toHaveBeenCalled())
-        expect(wrapper.find('.v-alert').exists()).toBe(false)
+        expect(wrapper.find('.inline-alert').exists()).toBe(false)
     })
 
     it('returns to the internal page that required the login', async () => {
@@ -215,4 +219,15 @@ describe('LoginView', () => {
             })
         },
     )
+})
+
+describe('LoginView after a 401', () => {
+    it('explains that the session expired', () => {
+        route.query = { expired: '1', redirect: '/projects' }
+        const wrapper = mountView(LoginView)
+
+        expect(wrapper.get('.inline-alert').text()).toContain(
+            'Your session expired. Log in again to continue where you left off.',
+        )
+    })
 })

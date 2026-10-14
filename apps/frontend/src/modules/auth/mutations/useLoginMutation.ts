@@ -5,7 +5,7 @@ import { JWT_KEY } from '@/constants/jwtKey.ts'
 
 export function useLoginMutation() {
     const client = useQueryClient()
-    const jwt = useLocalStorage<string | null>(JWT_KEY, null)
+    const jwt = useLocalStorage<string | null>(JWT_KEY, null, { flush: 'sync' })
 
     return useMutation({
         mutationFn: (credentials: CredentialsDto) =>

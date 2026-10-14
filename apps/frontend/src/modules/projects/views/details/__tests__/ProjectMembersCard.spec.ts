@@ -1,112 +1,84 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ProjectApi, UserApi, type ProjectMemberDto } from 'api'
+import { ProjectApi } from 'api'
 import ProjectMembersCard from '../partials/ProjectMembersCard.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { mountInApp } from '@/__tests__/support.ts'
+import { member, projectDetail } from '@/__tests__/fixtures.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
 
-vi.mock('@/helper/waitAtleast.ts', () => ({
-    waitAtleast: <T>(promise: Promise<T>) => promise,
-}))
+vi.stubGlobal('visualViewport', null)
 
-const members: ProjectMemberDto[] = [
-    { userId: 2, firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', permissions: ['read', 'update'] },
-]
+const notifications = useNotificationHost()
 
 afterEach(() => {
     vi.restoreAllMocks()
+    notifications.dismiss()
+    document.body.innerHTML = ''
 })
 
+function mockMembers() {
+    vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue([member({ permissions: ['update', 'read'] })])
+    vi.spyOn(ProjectApi, 'getProjectImplicitAccess').mockResolvedValue({ superAdminCount: 1, allProjectsUserCount: 2 })
+}
+
 describe('ProjectMembersCard', () => {
-    it('lists members with their levels for managers', async () => {
-        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
-        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([])
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } })
+    it('lists members with their permissions in a fixed order', async () => {
+        mockMembers()
+        const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
 
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
-        expect(wrapper.text()).toContain('Members')
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Lisa Schneider'))
+        expect(wrapper.text()).toContain('lisa@acme.com')
+        const tags = wrapper.findAll('.tag-label').map((tag) => tag.text())
+        expect(tags).toEqual(['Read', 'Update'])
     })
 
-    it('renders nothing without manage rights', () => {
-        const membersSpy = vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } }, [
-            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
-        ])
+    it('names who else can open the project', async () => {
+        mockMembers()
+        const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
 
-        expect(wrapper.text()).toBe('')
-        expect(membersSpy).not.toHaveBeenCalled()
+        await vi.waitFor(() =>
+            expect(wrapper.text()).toContain(
+                'Also open to 1 Super admin and 2 users with “Access all projects”, without membership.',
+            ),
+        )
+        expect(wrapper.text()).toContain('Manage in Users')
     })
 
-    it('removes a member', async () => {
-        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
+    it('removes a member after the undo window', async () => {
+        mockMembers()
         const removeSpy = vi.spyOn(ProjectApi, 'removeProjectMember').mockResolvedValue(undefined)
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } })
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
+        const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Lisa Schneider'))
 
-        const remove = wrapper.findAll('button').find((button) => button.find('.mdi-delete').exists())
-        await remove!.trigger('click')
+        await wrapper.get('button[aria-label="Remove Lisa Schneider"]').trigger('click')
 
-        await vi.waitFor(() => {
-            expect(removeSpy).toHaveBeenCalledWith({ path: { projectId: 1, userId: 2 } })
-        })
+        expect(wrapper.find('button[aria-label="Remove Lisa Schneider"]').exists()).toBe(false)
+        expect(notifications.current.value?.text).toBe('Lisa Schneider removed')
+        notifications.dismiss()
+        await vi.waitFor(() => expect(removeSpy).toHaveBeenCalledWith({ path: { projectId: 1, userId: 2 } }))
     })
 
-    it('shows the api error when removing a member fails', async () => {
-        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
-        vi.spyOn(ProjectApi, 'removeProjectMember').mockRejectedValue({ message: 'Cannot remove the last owner' })
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } })
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
+    it('brings the member back with a retry when removing fails', async () => {
+        mockMembers()
+        vi.spyOn(ProjectApi, 'removeProjectMember').mockRejectedValue({ message: 'Forbidden' })
+        const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Lisa Schneider'))
 
-        const remove = wrapper.findAll('button').find((button) => button.find('.mdi-delete').exists())
-        await remove!.trigger('click')
+        await wrapper.get('button[aria-label="Remove Lisa Schneider"]').trigger('click')
+        notifications.dismiss()
 
-        await vi.waitFor(() => {
-            expect(wrapper.get('.v-alert').text()).toContain('Cannot remove the last owner')
-        })
+        await vi.waitFor(() => expect(notifications.current.value?.text).toBe("Couldn't remove Lisa Schneider"))
+        expect(notifications.current.value?.retry).toBeDefined()
+        expect(wrapper.find('button[aria-label="Remove Lisa Schneider"]').exists()).toBe(true)
     })
 
-    it('falls back to a generic message when removing a member fails without one', async () => {
-        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
-        vi.spyOn(ProjectApi, 'removeProjectMember').mockRejectedValue(new Response(null, { status: 500 }))
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } })
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
-
-        const remove = wrapper.findAll('button').find((button) => button.find('.mdi-delete').exists())
-        await remove!.trigger('click')
-
-        await vi.waitFor(() => {
-            expect(wrapper.get('.v-alert').text()).toContain('The member could not be removed')
-        })
-    })
-
-    it('lets project editors manage members but only offers adding to those who can list users', async () => {
-        vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue(members)
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } }, [
-            { action: ['read', 'update'], subject: 'Project', conditions: { projectId: 1 } },
-        ])
-
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
-        expect(wrapper.text()).toContain('Read')
-        expect(wrapper.text()).toContain('Update')
-        expect(wrapper.findAll('button').map((button) => button.text())).not.toContain('Add member')
-    })
-
-    it('shows the empty hint without members', async () => {
+    it('explains an empty member list', async () => {
         vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue([])
-        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([])
-        const wrapper = mountView(ProjectMembersCard, { props: { projectId: 1 } })
-
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('No members yet.')
+        vi.spyOn(ProjectApi, 'getProjectImplicitAccess').mockResolvedValue({
+            superAdminCount: 0,
+            allProjectsUserCount: 0,
         })
-        expect(wrapper.findAll('button').map((button) => button.text())).toContain('Add member')
+        const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No members yet'))
     })
 })

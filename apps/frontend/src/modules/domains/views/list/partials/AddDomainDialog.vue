@@ -1,93 +1,97 @@
 <template>
-    <VDialog max-width="600" v-model="model" @after-leave="onAfterLeave" :persistent="isPending">
-        <template #activator="props">
-            <slot v-bind="props" />
-        </template>
-        <VCard :title="t('module.domains.add.title')">
-            <template #append>
-                <VIconBtn icon="mdi-close" @click="model = false" :disabled="isPending" />
-            </template>
-            <form @submit.prevent="onSubmit">
-                <VCardItem>
-                    <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
-                    <p>{{ t('module.domains.add.intro') }}</p>
-                    <VExpandTransition>
-                        <div v-if="isApexDomain">
-                            <VAlert class="mb-4" color="warning" icon="mdi-alert">
-                                <p class="text-black">{{ t('module.domains.add.invalidSubdomain', { fqdn }) }}</p>
-                            </VAlert>
-                        </div>
-                    </VExpandTransition>
-                    <VTextField
-                        name="fqdn"
-                        :label="t('field.domain')"
-                        placeholder="mail.example.com"
-                        v-model="fqdn"
-                        :error-messages="errors.fqdn"
-                    />
-                </VCardItem>
-                <VCardActions>
-                    <VSpacer />
-                    <VBtn color="error" :text="t('cta.abort')" :disabled="isPending" @click="model = false" />
-                    <VBtn color="primary" variant="elevated" :text="t('cta.save')" :loading="isPending" type="submit" />
-                </VCardActions>
-            </form>
-        </VCard>
-    </VDialog>
+    <FormDialog
+        v-model="model"
+        :title="t('module.domains.add.title')"
+        :submit-label="t('module.domains.add.submit')"
+        :pending="isPending"
+        :error="errorMessage"
+        :dirty="meta.dirty"
+        @submit="onSubmit"
+    >
+        <i18n-t keypath="module.domains.add.intro" tag="p">
+            <template #example><code>forms.example.com</code></template>
+        </i18n-t>
+        <VTextField
+            v-model="fqdn"
+            name="fqdn"
+            class="mono-field"
+            :label="requiredLabel(t('field.domain'))"
+            placeholder="forms.example.com"
+            :error-messages="errors.fqdn"
+            aria-required="true"
+        />
+        <InlineAlert v-if="apexDomain" tone="warning" :title="t('module.domains.add.apex.title')">
+            {{ t('module.domains.add.apex.text', { fqdn: apexDomain, example: `mail.${apexDomain}` }) }}
+        </InlineAlert>
+    </FormDialog>
 </template>
 
 <script lang="ts" setup>
-    import { computed, ref } from 'vue'
+    import { computed, ref, watch } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { parse } from 'tldts'
     import { useI18n } from 'vue-i18n'
-    import { useDomainCreateMutation } from '@/modules/domains/mutations/useDomainCreateMutation.ts'
     import { useRouter } from 'vue-router'
+    import FormDialog from '@/components/FormDialog.vue'
+    import InlineAlert from '@/components/InlineAlert.vue'
+    import { useNotify } from '@/composables/useNotify.ts'
+    import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
+    import { useDomainCreateMutation } from '@/modules/domains/mutations/useDomainCreateMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
-    const model = ref<undefined | boolean>()
+    const model = defineModel<boolean>({ required: true })
     const errorMessage = ref<string | null>(null)
     const { t } = useI18n()
+    const requiredLabel = useRequiredLabel()
+    const notify = useNotify()
     const { mutateAsync, isPending } = useDomainCreateMutation()
     const router = useRouter()
 
-    const { defineField, handleSubmit, errors, resetForm } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                fqdn: z.string().and(
-                    z.custom((value) => !!parse(value as string).isIcann, {
-                        error: t('validation.hostname'),
-                    }),
-                ),
+                fqdn: z
+                    .string()
+                    .trim()
+                    .min(1)
+                    .refine((value) => !!parse(value).isIcann, { error: () => t('validation.hostname') }),
             }),
         ),
     })
 
     const [fqdn] = defineField('fqdn')
 
-    const isApexDomain = computed(() => {
+    const apexDomain = computed(() => {
         if (!fqdn.value) {
-            return false
+            return undefined
         }
-        const { isIcann, domain, hostname } = parse(fqdn.value)
-        return !!isIcann && domain === hostname
+        const { isIcann, domain, hostname } = parse(fqdn.value.trim())
+        return isIcann && domain === hostname ? (domain ?? undefined) : undefined
     })
+
+    watch(
+        model,
+        (open) => {
+            if (open) {
+                errorMessage.value = null
+                resetForm()
+            }
+        },
+        { immediate: true },
+    )
 
     const onSubmit = handleSubmit(async (values) => {
         errorMessage.value = null
         try {
-            const { domainId } = await mutateAsync(values)
-            void router.push({ name: RouteNames.DOMAIN_DETAILS, params: { domainId } })
+            const { domainId } = await mutateAsync({ fqdn: values.fqdn })
+            model.value = false
+            await router.push({ name: RouteNames.DOMAIN_DETAILS, params: { domainId } })
+            notify.success(t('module.domains.add.success', { fqdn: values.fqdn }))
         } catch (error) {
             errorMessage.value = apiErrorMessage(error, t('module.domains.add.error'))
         }
     })
-
-    function onAfterLeave() {
-        errorMessage.value = null
-        resetForm()
-    }
 </script>

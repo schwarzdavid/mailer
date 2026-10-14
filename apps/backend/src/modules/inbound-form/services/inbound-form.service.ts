@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { Op, UniqueConstraintError } from 'sequelize'
+import { Op, UniqueConstraintError, type OrderItem, type WhereOptions } from 'sequelize'
 import { InboundFormModel } from '../models/inbound-form.model.js'
 import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
 import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
@@ -9,7 +9,8 @@ import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.
 import { DomainService } from '../../domain/services/domain.service.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
 import { ProjectService } from '../../project/services/project.service.js'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { InboundForm, InboundFormFull, InboundFormWithReceivers } from '../interfaces/inbound-form.interface.js'
 import {
     InboundFormField,
     InboundFormFieldType,
@@ -34,6 +35,11 @@ import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+export const FORM_LIST_ORDER: OrderItem[] = [
+    ['inboundFormId', 'ASC'],
+    [{ model: InboundFormReceiverModel, as: 'inboundFormReceivers' }, 'inboundFormReceiverId', 'ASC'],
+]
 
 export interface InboundFormCreateRequest {
     name: string
@@ -94,20 +100,24 @@ export class InboundFormService {
         }
     }
 
-    async getForms(principal: User, ability: AppAbility, projectId?: number): Promise<InboundForm[]> {
-        let query: { where: { projectId: number | { [Op.in]: number[] } } } | undefined
+    async getForms(principal: User, ability: AppAbility, projectId?: number): Promise<InboundFormWithReceivers[]> {
+        let where: WhereOptions<InboundForm> | undefined
 
         if (projectId !== undefined) {
             assertProjectReadable(ability, projectId)
-            query = { where: { projectId } }
+            where = { projectId }
         } else {
             const scope = await this.abilityFactory.getProjectIdsFor(principal, 'read')
-            query = scope === 'all' ? undefined : { where: { projectId: { [Op.in]: scope } } }
+            where = scope === 'all' ? undefined : { projectId: { [Op.in]: scope } }
         }
 
-        const forms = await this.formModel.findAll(query)
+        const forms = await this.formModel.findAll({
+            where,
+            include: [InboundFormReceiverModel, { model: ProjectModel, attributes: [], required: true }],
+            order: FORM_LIST_ORDER,
+        })
 
-        return forms.map((form) => form.get({ plain: true }))
+        return forms.map((form) => form.get({ plain: true }) as InboundFormWithReceivers)
     }
 
     async getFormById(inboundFormId: number, ability: AppAbility): Promise<InboundFormFull> {

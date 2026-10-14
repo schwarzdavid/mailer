@@ -12,6 +12,8 @@ import { fetchMessagesTo, header, waitForMessagesTo } from './support/mailhog.js
 import { BounceMailboxService } from '../src/modules/bounce/services/bounce-mailbox.service.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
 import { DAY_MS } from '../src/modules/bounce/bounce.constants.js'
+import { BounceModel } from '../src/modules/bounce/models/bounce.model.js'
+import { BounceType } from '../src/modules/bounce/interfaces/bounce.interface.js'
 
 interface BounceBody {
     bounceId: number
@@ -21,6 +23,11 @@ interface BounceBody {
     reason: string
     receivedAt: string
     messageId?: string
+}
+
+interface BouncePageBody {
+    items: BounceBody[]
+    total: number
 }
 
 interface EmailBlockBody {
@@ -100,9 +107,18 @@ describe('Bounce (e2e)', () => {
         })
     }
 
+    async function getBouncePage(query: Record<string, string | number>): Promise<BouncePageBody> {
+        const response = await http()
+            .get('/api/bounce')
+            .query(query)
+            .set('Authorization', bearer(superToken))
+            .expect(200)
+        return response.body as BouncePageBody
+    }
+
     async function getBounces(address: string): Promise<BounceBody[]> {
-        const response = await http().get('/api/bounce').set('Authorization', bearer(superToken)).expect(200)
-        return (response.body as BounceBody[]).filter((bounce) => bounce.emailAddress === address)
+        const page = await getBouncePage({ search: address, itemsPerPage: 100 })
+        return page.items.filter((bounce) => bounce.emailAddress === address)
     }
 
     async function getBlock(address: string): Promise<EmailBlockBody | undefined> {
@@ -254,6 +270,121 @@ describe('Bounce (e2e)', () => {
         })
     })
 
+    describe('GET /bounce paging and filtering', () => {
+        const marker = 'paging-e2e.test'
+        const base = new Date('2026-03-01T12:00:00.000Z')
+        const at = (hours: number) => new Date(base.getTime() + hours * 60 * 60 * 1000)
+
+        beforeAll(async () => {
+            await app.get<typeof BounceModel>(getModelToken(BounceModel)).bulkCreate([
+                {
+                    emailAddress: `alpha@${marker}`,
+                    type: BounceType.PERMANENT,
+                    statusCode: '5.1.1',
+                    reason: 'User unknown',
+                    messageId: `<paging-1@${marker}>`,
+                    receivedAt: at(0),
+                },
+                {
+                    emailAddress: `beta@${marker}`,
+                    type: BounceType.TRANSIENT,
+                    statusCode: '4.2.2',
+                    reason: 'Mailbox FULL on 100%_quota',
+                    messageId: `<paging-2@${marker}>`,
+                    receivedAt: at(1),
+                },
+                {
+                    emailAddress: `gamma@${marker}`,
+                    type: BounceType.PERMANENT,
+                    statusCode: '5.2.1',
+                    reason: 'Mailbox disabled',
+                    messageId: `<paging-3@${marker}>`,
+                    receivedAt: at(2),
+                },
+                {
+                    emailAddress: `delta@${marker}`,
+                    type: BounceType.TRANSIENT,
+                    statusCode: '4.4.1',
+                    reason: 'Connection timed out',
+                    messageId: `<paging-4@${marker}>`,
+                    receivedAt: at(3),
+                },
+            ])
+        })
+
+        const addresses = (page: BouncePageBody) => page.items.map((bounce) => bounce.emailAddress.split('@')[0])
+
+        it('returns the newest bounces first with the total of all matches', async () => {
+            const page = await getBouncePage({ search: marker })
+
+            expect(page.total).toBe(4)
+            expect(addresses(page)).toEqual(['delta', 'gamma', 'beta', 'alpha'])
+            expect(page.items[0]).toEqual({
+                bounceId: expect.any(Number) as number,
+                emailAddress: `delta@${marker}`,
+                type: 'transient',
+                statusCode: '4.4.1',
+                reason: 'Connection timed out',
+                receivedAt: at(3).toISOString(),
+            })
+        })
+
+        it('pages through the matches', async () => {
+            const first = await getBouncePage({ search: marker, itemsPerPage: 3, page: 1 })
+            const second = await getBouncePage({ search: marker, itemsPerPage: 3, page: 2 })
+            const beyond = await getBouncePage({ search: marker, itemsPerPage: 3, page: 3 })
+
+            expect(addresses(first)).toEqual(['delta', 'gamma', 'beta'])
+            expect(addresses(second)).toEqual(['alpha'])
+            expect(beyond).toEqual({ items: [], total: 4 })
+            expect(first.total).toBe(4)
+        })
+
+        it('searches the address and the reason case-insensitively and literally', async () => {
+            expect(addresses(await getBouncePage({ search: `GAMMA@${marker.toUpperCase()}` }))).toEqual(['gamma'])
+            expect(addresses(await getBouncePage({ search: 'mailbox full on' }))).toEqual(['beta'])
+            expect(addresses(await getBouncePage({ search: '100%_quota' }))).toEqual(['beta'])
+            expect(await getBouncePage({ search: `%@${marker}` })).toEqual({ items: [], total: 0 })
+        })
+
+        it('filters by type and received-after timestamp', async () => {
+            expect(addresses(await getBouncePage({ search: marker, type: 'transient' }))).toEqual(['delta', 'beta'])
+            expect(addresses(await getBouncePage({ search: marker, receivedAfter: at(1).toISOString() }))).toEqual([
+                'delta',
+                'gamma',
+            ])
+        })
+
+        it('sorts by type or ascending receive date', async () => {
+            expect(addresses(await getBouncePage({ search: marker, sortBy: 'type', sortOrder: 'asc' }))).toEqual([
+                'gamma',
+                'alpha',
+                'delta',
+                'beta',
+            ])
+            expect(addresses(await getBouncePage({ search: marker, sortOrder: 'asc' }))).toEqual([
+                'alpha',
+                'beta',
+                'gamma',
+                'delta',
+            ])
+        })
+
+        it.each([
+            ['a page size above the maximum', { itemsPerPage: 101 }],
+            ['a page below 1', { page: 0 }],
+            ['an unknown type', { type: 'soft' }],
+            ['an unknown sort field', { sortBy: 'emailAddress' }],
+            ['an unknown sort order', { sortOrder: 'sideways' }],
+            ['a malformed timestamp', { receivedAfter: 'last tuesday' }],
+            ['an unknown parameter', { limit: 5 }],
+        ])('rejects %s with 400', async (_case, query) => {
+            const response = await http().get('/api/bounce').query(query).set('Authorization', bearer(superToken))
+
+            expect(response.status).toBe(400)
+        })
+    })
+
     describe('delivery before any bounce', () => {
         it('sends to the receiver with the bounce envelope sender', async () => {
             await submitForm()
@@ -314,11 +445,7 @@ describe('Bounce (e2e)', () => {
         })
 
         it('ignores mailbox messages that are not delivery reports', async () => {
-            const countBounces = async () =>
-                (
-                    (await http().get('/api/bounce').set('Authorization', bearer(superToken)).expect(200))
-                        .body as BounceBody[]
-                ).length
+            const countBounces = async () => (await getBouncePage({})).total
             const before = await countBounces()
 
             await injectMail(

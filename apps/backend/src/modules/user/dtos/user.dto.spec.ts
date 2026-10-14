@@ -1,6 +1,6 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { describe, expect, it } from 'vitest'
-import { UserDto } from './user.dto.js'
+import { UserDto, UserListDto } from './user.dto.js'
 
 describe('UserDto serialization', () => {
     // Mirrors what the global ClassSerializerInterceptor does for responses: only the
@@ -28,6 +28,27 @@ describe('UserDto serialization', () => {
             role: { roleId: 3, name: 'User', type: 'user' },
         })
         expect('roleId' in serialized).toBe(false)
+        expect('password' in serialized).toBe(false)
+    })
+
+    it('adds the membership count to list entries without leaking the password', () => {
+        const row = {
+            userId: 2,
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            email: 'grace@example.com',
+            password: 'super-secret-hash',
+            role: { roleId: 3, name: 'User', type: 'user' },
+            membershipCount: 4,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+
+        const serialized = instanceToPlain(plainToInstance(UserListDto, row, { excludeExtraneousValues: true }), {
+            excludeExtraneousValues: true,
+        })
+
+        expect(serialized).toMatchObject({ userId: 2, membershipCount: 4 })
         expect('password' in serialized).toBe(false)
     })
 })

@@ -6,7 +6,7 @@ import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { UserService } from '../services/user.service.js'
-import { UserDetailDto, UserDto } from '../dtos/user.dto.js'
+import { UserDetailDto, UserDto, UserListDto } from '../dtos/user.dto.js'
 import { UserCreateDto, UserPermissionsPutDto, UserUpdateDto } from '../dtos/user-create.dto.js'
 import type { UserWithRole } from '../interfaces/user.interface.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
@@ -18,9 +18,9 @@ export class UserController {
     constructor(private readonly userService: UserService) {}
 
     @RequireAbility({ action: 'read', subject: 'User' })
-    @SerializeOptions({ type: UserDto })
+    @SerializeOptions({ type: UserListDto })
     @Get()
-    async getUsers(): Promise<UserDto[]> {
+    async getUsers(): Promise<UserListDto[]> {
         return await this.userService.getUsers()
     }
 

@@ -1,24 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper, flushPromises } from '@vue/test-utils'
-import { InboundFormApi, type InboundFormDetailDto, type InboundFormTemplateDto } from 'api'
-import type { Router } from 'vue-router'
+import { InboundFormApi, ProjectApi } from 'api'
 import InboundFormTemplateView from '../InboundFormTemplateView.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { findButton, mountInApp, overlayButton, overlayText } from '@/__tests__/support.ts'
+import { formDetail, projectDetail, receiver, template } from '@/__tests__/fixtures.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
 
-vi.stubGlobal('visualViewport', undefined)
+vi.stubGlobal('visualViewport', null)
 
 vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
 }))
 
-const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
-
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()
     return {
         ...actual,
-        useRoute: () => ({ params: { inboundFormId: '1', inboundFormReceiverId: '31' } }),
-        useRouter: () => ({ push }),
+        useRoute: () => ({ params: { inboundFormId: '9', inboundFormReceiverId: '1' }, meta: {} }),
+        onBeforeRouteLeave: vi.fn<typeof actual.onBeforeRouteLeave>(),
     }
 })
 
@@ -27,363 +25,184 @@ const { insertText } = vi.hoisted(() => ({ insertText: vi.fn<(text: string) => v
 vi.mock('@/modules/inbound-forms/views/template/partials/MonacoEditor.vue', () => ({
     default: {
         name: 'MonacoEditor',
-        props: ['modelValue', 'fieldKeys'],
-        emits: ['update:modelValue'],
-        methods: {
-            insertText,
-        },
+        props: ['modelValue', 'fieldKeys', 'readOnly', 'errorLine'],
+        emits: ['update:modelValue', 'save', 'cursor'],
+        methods: { insertText },
         template:
-            '<textarea class="monaco-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+            '<textarea class="monaco-stub" :value="modelValue" :readonly="readOnly" @input="$emit(\'update:modelValue\', $event.target.value)" />',
     },
 }))
 
-const detail: InboundFormDetailDto = {
-    inboundFormId: 1,
-    projectId: 5,
-    domainId: 3,
-    name: 'Contact',
-    slug: 'contact',
-    isActive: true,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    fields: [
-        {
-            inboundFormFieldId: 21,
-            key: 'firstName',
-            label: 'First name',
-            type: 'text',
-            defaultValue: null,
-            validation: null,
-        },
-        {
-            inboundFormFieldId: 22,
-            key: 'email',
-            label: 'Email',
-            type: 'email',
-            defaultValue: null,
-            validation: { required: true },
-        },
-    ],
-    security: [],
-    receivers: [
-        {
-            inboundFormReceiverId: 31,
-            emailFrom: 'noreply@mail.example.com',
-            emailReceiver: 'owner@business.com',
-            emailReplyTo: null,
-            isActive: true,
-            draftVersion: 2,
-            publishedVersion: 1,
-        },
-    ],
-}
+const notifications = useNotificationHost()
 
-const draft: InboundFormTemplateDto = {
-    inboundFormTemplateId: 42,
-    inboundFormReceiverId: 31,
-    subject: 'Message from {{firstName}}',
-    template: '<p>{{firstName}} wrote in</p>',
-    status: 'draft',
-    version: 2,
-    updatedAt: new Date('2026-01-03T00:00:00.000Z'),
-}
-
-const published: InboundFormTemplateDto = {
-    ...draft,
-    inboundFormTemplateId: 41,
+const published = template({
+    inboundFormTemplateId: 60,
     status: 'published',
     version: 1,
-    subject: 'Old subject',
-    template: '<p>Old</p>',
+    subject: 'Live',
+    template: '<p>live</p>',
+})
+const draft = template()
+
+function mockApis(versions = [draft, published], form = formDetail({ receivers: [receiver({ draftVersion: 2 })] })) {
+    vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(form)
+    vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue(versions)
+    vi.spyOn(ProjectApi, 'getProject').mockResolvedValue(projectDetail())
+}
+
+function editor(wrapper: ReturnType<typeof mountInApp>) {
+    return wrapper.get<HTMLTextAreaElement>('.monaco-stub')
 }
 
 afterEach(() => {
     vi.restoreAllMocks()
-    push.mockClear()
-    insertText.mockClear()
+    insertText.mockReset()
+    notifications.dismiss()
+    document.body.innerHTML = ''
+    localStorage.removeItem('template-editor-layout')
 })
 
 describe('InboundFormTemplateView', () => {
-    it('loads the draft into subject and editor and lists field chips', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const wrapper = mountView(InboundFormTemplateView)
+    it('loads the draft and shows its version, route and the live version', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormTemplateView)
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await vi.waitFor(() => expect(editor(wrapper).element.value).toBe('<p>{{name}}</p>'))
+        expect((wrapper.get('input[name="subject"]').element as HTMLInputElement).value).toBe('New contact request')
+        expect(wrapper.get('.page-header').text()).toContain('Draft v2')
+        expect(wrapper.get('.page-header').text()).toContain('forms@acme.com → sales@acme.com')
+        expect(wrapper.get('.page-header').text()).toContain('Live: v1')
+        expect(wrapper.get('.page-header').text()).toContain('Contact request')
+    })
 
-        expect((wrapper.get('input[name="subject"]').element as HTMLInputElement).value).toBe(
-            'Message from {{firstName}}',
+    it('marks unsaved changes and saves a draft', async () => {
+        mockApis()
+        const save = vi
+            .spyOn(InboundFormApi, 'saveInboundFormTemplateDraft')
+            .mockResolvedValue(template({ template: '<p>new</p>' }))
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.find('.monaco-stub').exists()).toBe(true))
+
+        await editor(wrapper).setValue('<p>new</p>')
+        expect(wrapper.text()).toContain('Unsaved changes')
+        await wrapper.get('[data-testid="save-draft"]').trigger('click')
+
+        await vi.waitFor(() =>
+            expect(save).toHaveBeenCalledWith({
+                path: { inboundFormId: 9, inboundFormReceiverId: 1 },
+                body: { subject: 'New contact request', template: '<p>new</p>' },
+            }),
         )
-        expect((wrapper.get('.monaco-stub').element as HTMLTextAreaElement).value).toBe('<p>{{firstName}} wrote in</p>')
-        expect(wrapper.text()).toContain('firstName')
-        expect(wrapper.text()).toContain('email')
+        await vi.waitFor(() => expect(wrapper.text()).not.toContain('Unsaved changes'))
     })
 
-    it('saves the draft through the api', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const saveSpy = vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockResolvedValue(draft)
-        const wrapper = mountView(InboundFormTemplateView)
+    it('inserts a field placeholder', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Insert field email"]').exists()).toBe(true))
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await wrapper.get('button[aria-label="Insert field email"]').trigger('click')
 
-        await wrapper.get('button[data-testid="save-draft"]').trigger('click')
-
-        await vi.waitFor(() => {
-            expect(saveSpy).toHaveBeenCalledWith({
-                path: { inboundFormId: 1, inboundFormReceiverId: 31 },
-                body: { subject: 'Message from {{firstName}}', template: '<p>{{firstName}} wrote in</p>' },
-            })
-        })
+        expect(insertText).toHaveBeenCalledWith('{{email}}')
     })
 
-    it('inserts a field placeholder into the editor when its chip is clicked', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const wrapper = mountView(InboundFormTemplateView)
+    it('publishes after confirming and saving the draft', async () => {
+        mockApis()
+        const save = vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockResolvedValue(draft)
+        const publish = vi
+            .spyOn(InboundFormApi, 'publishInboundFormTemplate')
+            .mockResolvedValue(template({ status: 'published', version: 2 }))
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.find('[data-testid="publish"]').exists()).toBe(true))
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await wrapper.get('[data-testid="publish"]').trigger('click')
+        await vi.waitFor(() => expect(overlayText()).toContain('Publish draft v2?'))
+        overlayButton('Publish').click()
 
-        await wrapper.get('[role="button"][aria-label="Insert field firstName"]').trigger('click')
-
-        expect(insertText).toHaveBeenCalledWith('{{firstName}}')
+        await vi.waitFor(() => expect(publish).toHaveBeenCalled())
+        expect(save).toHaveBeenCalled()
+        await vi.waitFor(() => expect(notifications.current.value?.text).toBe('Published as v2'))
     })
 
-    it('exposes field chips as focusable buttons that insert on Enter and Space', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const wrapper = mountView(InboundFormTemplateView)
+    it('keeps the content and offers a retry when saving fails', async () => {
+        mockApis()
+        vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockRejectedValue({ message: 'Connection lost' })
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.find('.monaco-stub').exists()).toBe(true))
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await editor(wrapper).setValue('<p>keep me</p>')
+        await wrapper.get('[data-testid="save-draft"]').trigger('click')
 
-        const chip = wrapper.get('[aria-label="Insert field email"]')
-        expect(chip.attributes('role')).toBe('button')
-        expect(chip.attributes('tabindex')).toBe('0')
-        await chip.trigger('keydown', { key: 'Enter' })
-        await chip.trigger('keydown', { key: ' ' })
-
-        expect(insertText.mock.calls).toEqual([['{{email}}'], ['{{email}}']])
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't save the draft"))
+        expect(wrapper.text()).toContain('Connection lost')
+        expect(editor(wrapper).element.value).toBe('<p>keep me</p>')
     })
 
-    it('shows a generic error when saving fails without a message', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockRejectedValue(new Response(null, { status: 500 }))
-        const wrapper = mountView(InboundFormTemplateView)
+    it('offers a field layout when there is no template yet', async () => {
+        mockApis([], formDetail({ receivers: [receiver({ publishedVersion: null })] }))
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No template yet'))
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await findButton(wrapper, 'Use field layout')!.trigger('click')
 
-        await wrapper.get('button[data-testid="save-draft"]').trigger('click')
-
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Saving failed: Unknown error')
-        })
+        await vi.waitFor(() => expect(editor(wrapper).element.value).toContain('{{email}}'))
+        expect(editor(wrapper).element.value).toContain('Full name')
     })
 
-    it('publishes after saving the draft', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const saveSpy = vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockResolvedValue(draft)
-        const publishSpy = vi.spyOn(InboundFormApi, 'publishInboundFormTemplate').mockResolvedValue(published)
-        const wrapper = mountView(InboundFormTemplateView)
+    it('loads an older version from the versions menu as unsaved changes', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(findButton(wrapper, 'Versions')).toBeDefined())
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
+        await findButton(wrapper, 'Versions')!.trigger('click')
+        await vi.waitFor(() => expect(overlayText()).toContain('Versions of this template'))
+        ;[...document.body.querySelectorAll<HTMLButtonElement>('.versions-menu__item')]
+            .find((item) => item.textContent?.includes('Published v1'))!
+            .click()
 
-        await wrapper.get('button[data-testid="publish"]').trigger('click')
-
-        await vi.waitFor(
-            () => {
-                expect(saveSpy).toHaveBeenCalledWith({
-                    path: { inboundFormId: 1, inboundFormReceiverId: 31 },
-                    body: { subject: 'Message from {{firstName}}', template: '<p>{{firstName}} wrote in</p>' },
-                })
-                expect(publishSpy).toHaveBeenCalledWith({
-                    path: { inboundFormId: 1, inboundFormReceiverId: 31 },
-                })
-            },
-            { timeout: 3000 },
-        )
+        await vi.waitFor(() => expect(editor(wrapper).element.value).toBe('<p>live</p>'))
+        expect(wrapper.text()).toContain('Unsaved changes')
     })
 
-    it('shows an error alert when saving fails', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockRejectedValue(new Error('boom'))
-        const wrapper = mountView(InboundFormTemplateView)
+    it('opens read-only without update rights', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormTemplateView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        await wrapper.get('button[data-testid="save-draft"]').trigger('click')
-
-        await vi.waitFor(
-            () => {
-                expect(wrapper.text()).toContain('Saving failed: boom')
-            },
-            { timeout: 3000 },
-        )
+        await vi.waitFor(() => expect(wrapper.find('.monaco-stub').exists()).toBe(true))
+        expect(editor(wrapper).attributes('readonly')).toBeDefined()
+        expect(wrapper.find('[data-testid="save-draft"]').exists()).toBe(false)
+        expect(wrapper.find('[data-testid="publish"]').exists()).toBe(false)
     })
 
-    it('shows the receiver routing in the header', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const wrapper = mountView(InboundFormTemplateView)
+    it('explains a receiver that does not belong to the form', async () => {
+        mockApis([], formDetail({ receivers: [] }))
+        const wrapper = mountInApp(InboundFormTemplateView)
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('h1').exists()).toBe(true)
-        })
-
-        expect(wrapper.get('h1').text()).toBe('Email template')
-        expect(wrapper.text()).toContain('noreply@mail.example.com → owner@business.com')
+        await vi.waitFor(() => expect(wrapper.text()).toContain("This receiver doesn't exist"))
     })
 
-    it('renders nothing for a receiver that does not belong to the form', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue({ ...detail, receivers: [] })
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([])
-        const wrapper = mountView(InboundFormTemplateView)
+    it('switches between editor, split and preview and remembers the choice', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormTemplateView)
+        await vi.waitFor(() => expect(wrapper.find('.monaco-stub').exists()).toBe(true))
+        const panes = () =>
+            wrapper.findAll('.template-pane').map((pane) => !(pane.attributes('style') ?? '').includes('display: none'))
 
-        await flushPromises()
+        expect(panes()).toEqual([true, true])
 
-        expect(wrapper.find('h1').exists()).toBe(false)
-        expect(wrapper.find('.monaco-stub').exists()).toBe(false)
-    })
+        await wrapper
+            .findAll('.template-view__layout button')
+            .find((button) => button.text() === 'Preview')!
+            .trigger('click')
+        await vi.waitFor(() => expect(panes()).toEqual([false, true]))
 
-    it('starts from the published version when there is no draft', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([published])
-        const wrapper = mountView(InboundFormTemplateView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        expect((wrapper.get('input[name="subject"]').element as HTMLInputElement).value).toBe('Old subject')
-        expect((wrapper.get('.monaco-stub').element as HTMLTextAreaElement).value).toBe('<p>Old</p>')
-    })
-
-    it('starts empty for a receiver without any template', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([])
-        const wrapper = mountView(InboundFormTemplateView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        expect((wrapper.get('input[name="subject"]').element as HTMLInputElement).value).toBe('')
-        expect(wrapper.text()).not.toContain('Versions')
-    })
-
-    it('loads an older version from the versions menu into the editor', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        const wrapper = mountView(InboundFormTemplateView, { attachTo: document.body })
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        const versionsButton = wrapper.findAll('button').find((button) => button.text() === 'Versions')
-        await versionsButton!.trigger('click')
-        await flushPromises()
-        const menuEntry = new DOMWrapper(document.body)
-            .findAll('.v-list-item')
-            .find((item) => item.text() === 'v1 (Published)')
-        expect(menuEntry).toBeDefined()
-        await menuEntry!.trigger('click')
-
-        expect((wrapper.get('input[name="subject"]').element as HTMLInputElement).value).toBe('Old subject')
-        expect((wrapper.get('.monaco-stub').element as HTMLTextAreaElement).value).toBe('<p>Old</p>')
-        wrapper.unmount()
-    })
-
-    it('saves the edited subject and template rather than the loaded ones', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft])
-        const saveSpy = vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockResolvedValue(draft)
-        const wrapper = mountView(InboundFormTemplateView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        await wrapper.get('input[name="subject"]').setValue('New subject')
-        await wrapper.get('.monaco-stub').setValue('<p>New body</p>')
-        await wrapper.get('button[data-testid="save-draft"]').trigger('click')
-
-        await vi.waitFor(() => {
-            expect(saveSpy).toHaveBeenCalledWith({
-                path: { inboundFormId: 1, inboundFormReceiverId: 31 },
-                body: { subject: 'New subject', template: '<p>New body</p>' },
-            })
-        })
-    })
-
-    it('does not publish when saving the draft fails', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockRejectedValue(new Error('invalid template'))
-        const publishSpy = vi.spyOn(InboundFormApi, 'publishInboundFormTemplate')
-        const wrapper = mountView(InboundFormTemplateView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        await wrapper.get('button[data-testid="publish"]').trigger('click')
-
-        await vi.waitFor(
-            () => {
-                expect(wrapper.text()).toContain('Saving failed: invalid template')
-            },
-            { timeout: 3000 },
-        )
-        expect(publishSpy).not.toHaveBeenCalled()
-    })
-
-    it('shows an error alert when publishing fails', async () => {
-        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
-        vi.spyOn(InboundFormApi, 'getInboundFormTemplates').mockResolvedValue([draft, published])
-        vi.spyOn(InboundFormApi, 'saveInboundFormTemplateDraft').mockResolvedValue(draft)
-        vi.spyOn(InboundFormApi, 'publishInboundFormTemplate').mockRejectedValue(new Error('publish denied'))
-        const wrapper = mountView(InboundFormTemplateView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.monaco-stub').exists()).toBe(true)
-        })
-        await flushPromises()
-
-        await wrapper.get('button[data-testid="publish"]').trigger('click')
-
-        await vi.waitFor(
-            () => {
-                expect(wrapper.text()).toContain('Saving failed: publish denied')
-            },
-            { timeout: 3000 },
-        )
+        await wrapper
+            .findAll('.template-view__layout button')
+            .find((button) => button.text() === 'Editor')!
+            .trigger('click')
+        await vi.waitFor(() => expect(panes()).toEqual([true, false]))
+        expect(localStorage.getItem('template-editor-layout')).toBe('editor')
     })
 })

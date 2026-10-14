@@ -1,4 +1,4 @@
-export function waitAtleast<T>(fn: Promise<T>, ms = 1000): Promise<T> {
+export function waitAtleast<T>(fn: Promise<T>, ms = 300): Promise<T> {
     return Promise.all([fn, timeout(ms)]).then(([result]) => result)
 }
 

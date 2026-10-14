@@ -9,6 +9,7 @@ export function useInboundFormCreateMutation() {
         mutationFn: (body: InboundFormCreateDto) => waitAtleast(InboundFormApi.createInboundForm({ body })),
         onSuccess() {
             void client.invalidateQueries({ queryKey: ['projects'] })
+            void client.invalidateQueries({ queryKey: ['inboundForms'] })
         },
     })
 }

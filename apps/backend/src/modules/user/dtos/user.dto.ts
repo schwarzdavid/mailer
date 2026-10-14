@@ -40,6 +40,12 @@ export class UserDto implements Omit<User, 'roleId'> {
     updatedAt!: Date
 }
 
+export class UserListDto extends UserDto {
+    @Expose()
+    @ApiProperty({ type: Number })
+    membershipCount!: number
+}
+
 export class UserMembershipDto {
     @Expose()
     projectId!: number

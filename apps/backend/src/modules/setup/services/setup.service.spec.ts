@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
-import { ForbiddenException } from '@nestjs/common'
+import { ConflictException, ForbiddenException } from '@nestjs/common'
 import { Sequelize } from 'sequelize-typescript'
 import type { Transaction } from 'sequelize'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -11,6 +11,8 @@ import { RoleService } from '../../permission/services/role.service.js'
 import { Role } from '../../permission/interfaces/role.interface.js'
 import { UserWithRole } from '../../user/interfaces/user.interface.js'
 import { SETUP_LOCK_KEY } from '../setup.constants.js'
+import { SettingsService } from '../../settings/services/settings.service.js'
+import { Settings } from '../../settings/interfaces/settings.interface.js'
 
 describe('SetupService', () => {
     let service: SetupService
@@ -19,6 +21,18 @@ describe('SetupService', () => {
     let getRoleByType: Mock<RoleService['getRoleByType']>
     let query: Mock<Sequelize['query']>
     let transaction: Mock<Sequelize['transaction']>
+    let getSettings: Mock<SettingsService['getSettings']>
+    let finishSetup: Mock<SettingsService['finishSetup']>
+
+    const settings: Settings = {
+        settingId: 1,
+        sendingDomainId: 10,
+        serverIpv4: '203.0.113.10',
+        serverIpv6: null,
+        setupFinishedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
 
     const transactionStub = {} as Transaction
 
@@ -53,6 +67,8 @@ describe('SetupService', () => {
         createUser = vi.fn<typeof createUser>().mockResolvedValue(user)
         getRoleByType = vi.fn<typeof getRoleByType>().mockResolvedValue(superAdminRole)
         query = vi.fn<typeof query>().mockResolvedValue([[], 0])
+        getSettings = vi.fn<typeof getSettings>().mockResolvedValue(null)
+        finishSetup = vi.fn<typeof finishSetup>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation((callback) => (callback as (t: Transaction) => Promise<unknown>)(transactionStub))
@@ -63,6 +79,7 @@ describe('SetupService', () => {
                 { provide: Sequelize, useValue: { transaction, query } },
                 { provide: UserService, useValue: { createUser } },
                 { provide: RoleService, useValue: { getRoleByType } },
+                { provide: SettingsService, useValue: { getSettings, finishSetup } },
                 { provide: getModelToken(UserModel), useValue: { count } },
             ],
         }).compile()
@@ -70,15 +87,58 @@ describe('SetupService', () => {
         service = module.get(SetupService)
     })
 
-    describe('needsSetup', () => {
-        it('is true while no user exists', async () => {
-            await expect(service.needsSetup()).resolves.toBe(true)
+    describe('getStep', () => {
+        it('asks for the account while no user exists', async () => {
+            await expect(service.getStep()).resolves.toBe('account')
+            expect(getSettings).not.toHaveBeenCalled()
         })
 
-        it('is false once a user exists', async () => {
+        it('asks for the sending domain once a user exists but no settings row does', async () => {
             count.mockResolvedValue(1)
 
-            await expect(service.needsSetup()).resolves.toBe(false)
+            await expect(service.getStep()).resolves.toBe('sendingDomain')
+        })
+
+        it('asks for the sending domain while the settings carry none', async () => {
+            count.mockResolvedValue(1)
+            getSettings.mockResolvedValue({ ...settings, sendingDomainId: null })
+
+            await expect(service.getStep()).resolves.toBe('sendingDomain')
+        })
+
+        it('shows the records until the setup is finished', async () => {
+            count.mockResolvedValue(1)
+            getSettings.mockResolvedValue(settings)
+
+            await expect(service.getStep()).resolves.toBe('records')
+        })
+
+        it('is finished once the finish time is stored', async () => {
+            count.mockResolvedValue(1)
+            getSettings.mockResolvedValue({ ...settings, setupFinishedAt: new Date() })
+
+            await expect(service.getStep()).resolves.toBe('finished')
+        })
+    })
+
+    describe('finishSetup', () => {
+        it('marks the setup finished and reports the resulting step', async () => {
+            count.mockResolvedValue(1)
+            finishSetup.mockImplementation(() => {
+                getSettings.mockResolvedValue({ ...settings, setupFinishedAt: new Date() })
+                return Promise.resolve()
+            })
+
+            await expect(service.finishSetup()).resolves.toBe('finished')
+            expect(finishSetup).toHaveBeenCalledOnce()
+        })
+
+        it('propagates a refusal from the settings', async () => {
+            finishSetup.mockRejectedValue(
+                new ConflictException('Configure a sending domain before finishing the setup.'),
+            )
+
+            await expect(service.finishSetup()).rejects.toBeInstanceOf(ConflictException)
         })
     })
 

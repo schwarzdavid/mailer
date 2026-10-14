@@ -2,6 +2,7 @@ import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { ArrayNotEmpty, IsArray, IsIn } from 'class-validator'
 import { PROJECT_PERMISSIONS, ProjectPermission } from '../../permission/permission.constants.js'
+import { ProjectImplicitAccess } from '../interfaces/project.interface.js'
 
 export class ProjectMemberPutDto {
     @Expose()
@@ -28,4 +29,21 @@ export class ProjectMemberDto {
     @Expose()
     @ApiProperty({ enum: PROJECT_PERMISSIONS, enumName: 'ProjectPermission', isArray: true })
     permissions!: ProjectPermission[]
+}
+
+export class ProjectImplicitAccessDto {
+    @Expose()
+    @ApiProperty({ type: Number })
+    superAdminCount!: number
+
+    @Expose()
+    @ApiProperty({ type: Number })
+    allProjectsUserCount!: number
+
+    static fromImplicitAccess(access: ProjectImplicitAccess): ProjectImplicitAccessDto {
+        return {
+            superAdminCount: access.superAdminCount,
+            allProjectsUserCount: access.allProjectsUserCount,
+        }
+    }
 }

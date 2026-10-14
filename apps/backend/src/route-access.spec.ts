@@ -107,7 +107,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
 
     'POST /domain': { guards: jwt, abilities: ['create:Domain'], scopedByPrincipal: false },
     'GET /domain': { guards: jwt, abilities: ['read:Domain'], scopedByPrincipal: false },
-    'GET /domain/:domainId': { guards: jwt, abilities: ['read:Domain'], scopedByPrincipal: false },
+    'GET /domain/:domainId': { guards: jwt, abilities: ['read:Domain'], scopedByPrincipal: true },
     'POST /domain/:domainId/refresh': { guards: jwt, abilities: ['update:Domain'], scopedByPrincipal: false },
     'DELETE /domain/:domainId': { guards: jwt, abilities: ['delete:Domain'], scopedByPrincipal: false },
 
@@ -159,6 +159,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'POST /project/:projectId/domains': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'DELETE /project/:projectId/domains/:domainId': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /project/:projectId/members': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'GET /project/:projectId/implicit-access': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'PUT /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'DELETE /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
@@ -172,6 +173,11 @@ const expectedRoutes: Record<string, RouteAccess> = {
 
     'GET /setup/status': { guards: throttled, abilities: [], scopedByPrincipal: false },
     'POST /setup/user': { guards: throttled, abilities: [], scopedByPrincipal: false },
+    'POST /setup/finish': {
+        guards: [...throttled, ...jwt],
+        abilities: ['update:Settings'],
+        scopedByPrincipal: false,
+    },
 
     'GET /user': { guards: jwt, abilities: ['read:User'], scopedByPrincipal: false },
     'POST /user': { guards: jwt, abilities: ['create:User'], scopedByPrincipal: true },

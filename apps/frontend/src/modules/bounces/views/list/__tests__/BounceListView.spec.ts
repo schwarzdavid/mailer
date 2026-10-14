@@ -1,79 +1,133 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BounceApi, type BounceDto, type EmailBlockDto } from 'api'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import BounceListView from '../BounceListView.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
+import { RouteNames } from '@/router/RouteNames.ts'
 
-vi.mock('@/helper/waitAtleast.ts', () => ({
-    waitAtleast: <T>(promise: Promise<T>) => promise,
-}))
+const { route } = vi.hoisted(() => {
+    const route: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> = { name: '', meta: {} }
+    return { route }
+})
+
+vi.mock('vue-router', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('vue-router')>()
+    return { ...actual, useRoute: () => route }
+})
+
+vi.stubGlobal('visualViewport', null)
+
+const notifications = useNotificationHost()
 
 const bounces: BounceDto[] = [
     {
         bounceId: 1,
-        emailAddress: 'missing@example.org',
+        emailAddress: 'j.smith@gmial.com',
         type: 'permanent',
         statusCode: '5.1.1',
         reason: 'User unknown',
-        receivedAt: new Date('2026-07-13T10:00:00.000Z'),
+        receivedAt: new Date('2026-10-01T10:00:00.000Z'),
     },
     {
         bounceId: 2,
-        emailAddress: 'full@example.org',
+        emailAddress: 'sarah@outlook.com',
         type: 'transient',
-        statusCode: '4.2.2',
+        statusCode: null,
         reason: 'Mailbox full',
-        receivedAt: new Date('2026-07-12T10:00:00.000Z'),
+        receivedAt: new Date('2026-09-30T10:00:00.000Z'),
     },
 ]
 
 const blocked: EmailBlockDto[] = [
     {
-        emailBlockId: 5,
-        emailAddress: 'missing@example.org',
-        blockCount: 2,
-        blockedUntil: new Date('2026-08-13T10:00:00.000Z'),
+        emailBlockId: 7,
+        emailAddress: 'j.smith@gmial.com',
+        blockCount: 3,
+        blockedUntil: new Date('2026-10-21T00:00:00.000Z'),
     },
 ]
 
 afterEach(() => {
     vi.restoreAllMocks()
+    notifications.dismiss()
+    document.body.innerHTML = ''
 })
 
 describe('BounceListView', () => {
-    it('lists bounce events with type and reason', async () => {
-        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue(bounces)
+    it('lists bounces with type, status and counts on the tabs', async () => {
+        route.name = RouteNames.BOUNCE_LIST
+        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue({ items: bounces, total: 312 })
         vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue(blocked)
-        const wrapper = mountView(BounceListView)
+        const wrapper = mountInApp(BounceListView)
 
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('missing@example.org')
-        })
-        expect(wrapper.text()).toContain('User unknown')
+        await vi.waitFor(() => expect(wrapper.text()).toContain('j.smith@gmial.com'))
         expect(wrapper.text()).toContain('Permanent')
         expect(wrapper.text()).toContain('Transient')
-        expect(wrapper.get('h1').text()).toBe('Bounces')
+        expect(wrapper.text()).toContain('—')
+        expect(wrapper.text()).toContain('312 bounces')
+        expect(wrapper.text()).toContain('1–25 of 312')
     })
 
-    it('unblocks an address from the blocked tab', async () => {
-        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue(bounces)
+    it('asks the server for the selected type', async () => {
+        route.name = RouteNames.BOUNCE_LIST
+        const getBounces = vi.spyOn(BounceApi, 'getBounces').mockResolvedValue({ items: bounces, total: 2 })
+        vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue([])
+        const wrapper = mountInApp(BounceListView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('j.smith@gmial.com'))
+
+        await wrapper
+            .findAll('.filter-chip')
+            .find((chip) => chip.text() === 'Permanent')!
+            .trigger('click')
+
+        await vi.waitFor(() =>
+            expect(getBounces).toHaveBeenCalledWith({ query: expect.objectContaining({ type: 'permanent', page: 1 }) }),
+        )
+    })
+
+    it('treats an empty list as good news', async () => {
+        route.name = RouteNames.BOUNCE_LIST
+        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue({ items: [], total: 0 })
+        vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue([])
+        const wrapper = mountInApp(BounceListView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Every message so far was accepted'))
+    })
+
+    it('shows a load error instead of an empty list', async () => {
+        route.name = RouteNames.BOUNCE_LIST
+        vi.spyOn(BounceApi, 'getBounces').mockRejectedValue(new Error('offline'))
+        vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue([])
+        const wrapper = mountInApp(BounceListView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load bounces"))
+        expect(wrapper.text()).not.toContain('No bounces')
+    })
+
+    it('unblocks an address after the undo window', async () => {
+        route.name = RouteNames.BOUNCE_BLOCKED
+        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue({ items: [], total: 0 })
         vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue(blocked)
-        const unblock = vi.spyOn(BounceApi, 'unblock').mockResolvedValue({ ...blocked[0]!, blockedUntil: null })
-        const wrapper = mountView(BounceListView)
+        const unblock = vi.spyOn(BounceApi, 'unblock').mockResolvedValue(blocked[0])
+        const wrapper = mountInApp(BounceListView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('3'))
 
-        const blockedTab = wrapper.findAll('.v-tab').find((tab) => tab.text().includes('Blocked addresses'))
-        expect(blockedTab).toBeDefined()
-        await blockedTab!.trigger('click')
+        await findButton(wrapper, 'Unblock')!.trigger('click')
 
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Unblock')
-        })
+        expect(notifications.current.value?.text).toBe('Unblocked j.smith@gmial.com')
+        expect(unblock).not.toHaveBeenCalled()
+        notifications.dismiss()
+        await vi.waitFor(() => expect(unblock).toHaveBeenCalledWith({ path: { emailBlockId: 7 } }))
+    })
 
-        const unblockButton = wrapper.findAll('button').find((button) => button.text() === 'Unblock')
-        expect(unblockButton).toBeDefined()
-        await unblockButton!.trigger('click')
+    it('hides unblocking without the permission', async () => {
+        route.name = RouteNames.BOUNCE_BLOCKED
+        vi.spyOn(BounceApi, 'getBounces').mockResolvedValue({ items: [], total: 0 })
+        vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue(blocked)
+        const wrapper = mountInApp(BounceListView, {}, [{ action: 'read', subject: 'Bounce' }])
 
-        await vi.waitFor(() => {
-            expect(unblock).toHaveBeenCalledWith({ path: { emailBlockId: 5 } })
-        })
+        await vi.waitFor(() => expect(wrapper.text()).toContain('j.smith@gmial.com'))
+        expect(findButton(wrapper, 'Unblock')).toBeUndefined()
     })
 })

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { h } from 'vue'
-import { DOMWrapper, enableAutoUnmount, flushPromises } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { ProjectApi, type ProjectDto } from 'api'
 import type { Router } from 'vue-router'
 import AddProjectDialog from '../partials/AddProjectDialog.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { mountDialog, overlayText, setOverlayInput, submitOverlayForm } from '@/__tests__/support.ts'
+import { useNotificationHost } from '@/composables/useNotify.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 
 const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
@@ -18,8 +18,7 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
 }))
 
-vi.stubGlobal('visualViewport', undefined)
-enableAutoUnmount(afterEach)
+vi.stubGlobal('visualViewport', null)
 
 const project: ProjectDto = {
     projectId: 4,
@@ -28,74 +27,58 @@ const project: ProjectDto = {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 }
 
+const notifications = useNotificationHost()
+
 afterEach(() => {
     vi.restoreAllMocks()
-    push.mockClear()
+    push.mockReset()
+    notifications.dismiss()
+    document.body.innerHTML = ''
 })
 
-function dialog() {
-    return new DOMWrapper(document.body).get('.v-overlay__content')
-}
-
 async function openDialog() {
-    const wrapper = mountView(AddProjectDialog, {
-        slots: {
-            default: (scope: { props: Record<string, unknown> }) => h('button', { class: 'open', ...scope.props }),
-        },
-    })
-    await wrapper.get('button.open').trigger('click')
-    await flushPromises()
-    return wrapper
+    const result = mountDialog(AddProjectDialog)
+    await vi.waitFor(() => expect(document.body.querySelector('input[name="name"]')).not.toBeNull())
+    return result
 }
 
 describe('AddProjectDialog', () => {
-    it('creates the project and opens its details', async () => {
+    it('creates the project, opens it and confirms', async () => {
+        push.mockResolvedValue(undefined)
         const createSpy = vi.spyOn(ProjectApi, 'createProject').mockResolvedValue(project)
-        await openDialog()
+        const { open } = await openDialog()
 
-        await dialog().get('input[name="name"]').setValue('Acme')
-        await dialog().get('form').trigger('submit')
+        await setOverlayInput('name', 'Acme')
+        submitOverlayForm()
 
-        await vi.waitFor(() => {
-            expect(push).toHaveBeenCalledWith({ name: RouteNames.PROJECT_DETAILS, params: { projectId: 4 } })
-        })
+        await vi.waitFor(() =>
+            expect(push).toHaveBeenCalledWith({ name: RouteNames.PROJECT_DETAILS, params: { projectId: 4 } }),
+        )
         expect(createSpy).toHaveBeenCalledWith({ body: { name: 'Acme' } })
+        expect(open.value).toBe(false)
+        await vi.waitFor(() => expect(notifications.current.value?.text).toBe('Project created'))
     })
 
-    it('requires a name', async () => {
+    it('asks for a name before creating', async () => {
         const createSpy = vi.spyOn(ProjectApi, 'createProject')
         await openDialog()
 
-        await dialog().get('form').trigger('submit')
+        submitOverlayForm()
+        await flushPromises()
 
-        await vi.waitFor(() => {
-            expect(dialog().find('.v-input--error input[name="name"]').exists()).toBe(true)
-        })
+        await vi.waitFor(() => expect(overlayText()).toContain('Enter a name for the project.'))
         expect(createSpy).not.toHaveBeenCalled()
     })
 
-    it('shows the api error and stays on the page when creation fails', async () => {
-        vi.spyOn(ProjectApi, 'createProject').mockRejectedValue({ message: 'Project limit reached' })
-        await openDialog()
+    it('keeps the input and shows the error when creating fails', async () => {
+        vi.spyOn(ProjectApi, 'createProject').mockRejectedValue({ message: 'Name already taken' })
+        const { open } = await openDialog()
 
-        await dialog().get('input[name="name"]').setValue('Acme')
-        await dialog().get('form').trigger('submit')
+        await setOverlayInput('name', 'Acme')
+        submitOverlayForm()
 
-        await vi.waitFor(() => {
-            expect(dialog().get('.v-alert').text()).toContain('Project limit reached')
-        })
+        await vi.waitFor(() => expect(overlayText()).toContain('Name already taken'))
+        expect(open.value).toBe(true)
         expect(push).not.toHaveBeenCalled()
-    })
-
-    it('falls back to a generic error message', async () => {
-        vi.spyOn(ProjectApi, 'createProject').mockRejectedValue(null)
-        await openDialog()
-
-        await dialog().get('input[name="name"]').setValue('Acme')
-        await dialog().get('form').trigger('submit')
-
-        await vi.waitFor(() => {
-            expect(dialog().get('.v-alert').text()).toContain('The project could not be created')
-        })
     })
 })

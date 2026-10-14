@@ -1,132 +1,65 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AuthApi, UserApi, RoleApi, type RoleDto, type UserDetailDto, type UserDto } from 'api'
-import type { Router } from 'vue-router'
+import { AuthApi, RoleApi, UserApi } from 'api'
 import UserDetailView from '../UserDetailView.vue'
-import { mountView } from '@/__tests__/support.ts'
-import { RouteNames } from '@/router/RouteNames.ts'
-
-const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
+import { findButton, mountInApp } from '@/__tests__/support.ts'
+import { roles, signedIn, userDetail } from '../../__tests__/userFixtures.ts'
 
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()
-    return { ...actual, useRoute: () => ({ params: { userId: '7' } }), useRouter: () => ({ push }) }
+    return {
+        ...actual,
+        useRoute: () => ({ params: { userId: '4' }, meta: {} }),
+        onBeforeRouteLeave: vi.fn<typeof actual.onBeforeRouteLeave>(),
+    }
 })
 
-const detail: UserDetailDto = {
-    userId: 7,
-    firstName: 'Grace',
-    lastName: 'Hopper',
-    email: 'grace@example.com',
-    role: { roleId: 3, name: 'User', type: 'user' },
-    permissions: ['domains.read'],
-    memberships: [{ projectId: 1, projectName: 'Acme', permissions: ['read'] }],
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-}
-
-const roles: RoleDto[] = [
-    { roleId: 1, name: 'Super Admin', type: 'super_admin', permissions: [] },
-    { roleId: 2, name: 'Admin', type: 'admin', permissions: [] },
-    { roleId: 3, name: 'User', type: 'user', permissions: [] },
-]
-
-const superAdminCaller: UserDto = {
-    userId: 1,
-    firstName: 'Ada',
-    lastName: 'Lovelace',
-    email: 'ada@example.com',
-    role: { roleId: 1, name: 'Super Admin', type: 'super_admin' },
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-}
+vi.stubGlobal('visualViewport', null)
 
 afterEach(() => {
     vi.restoreAllMocks()
-    push.mockClear()
+    document.body.innerHTML = ''
 })
 
+function mockApis(user = userDetail(), as = signedIn()) {
+    vi.spyOn(UserApi, 'getUser').mockResolvedValue(user)
+    vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(as)
+    vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+}
+
 describe('UserDetailView', () => {
-    it('shows a skeleton while the user loads', () => {
-        vi.spyOn(UserApi, 'getUser').mockReturnValue(new Promise(() => {}))
-        const wrapper = mountView(UserDetailView)
+    it('shows the user with role, email, memberships and every card', async () => {
+        mockApis()
+        const wrapper = mountInApp(UserDetailView)
 
-        expect(wrapper.find('.v-skeleton-loader').exists()).toBe(true)
-        expect(wrapper.find('h1').exists()).toBe(false)
+        await vi.waitFor(() => expect(wrapper.get('h1').text()).toContain('Max Mustermann'))
+        expect(wrapper.get('.page-header').text()).toContain('User')
+        expect(wrapper.get('.page-header').text()).toContain('Member of 1 project')
+        const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
+        expect(titles).toEqual(['Profile', 'Permissions', 'Project memberships', 'Delete user'])
     })
 
-    it('shows the API error instead of a blank page when the user cannot be loaded', async () => {
-        vi.spyOn(UserApi, 'getUser').mockRejectedValue({ message: 'User not found', statusCode: 404 })
-        const wrapper = mountView(UserDetailView)
+    it('explains Super admins instead of a permissions grid', async () => {
+        mockApis(userDetail({ role: { roleId: 1, type: 'super_admin', name: 'Super Admin' } }))
+        const wrapper = mountInApp(UserDetailView)
 
-        await vi.waitFor(() => expect(wrapper.get('.v-alert').text()).toContain('User not found'))
-        expect(wrapper.find('h1').exists()).toBe(false)
-        expect(wrapper.find('.v-skeleton-loader').exists()).toBe(false)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Super admins have every permission'))
+        expect(wrapper.text()).not.toContain('Project memberships')
     })
 
-    it('falls back to a generic load error and links back to the user list', async () => {
-        vi.spyOn(UserApi, 'getUser').mockRejectedValue(null)
-        const wrapper = mountView(UserDetailView)
+    it('locks the role and hides deletion on your own page', async () => {
+        mockApis(userDetail({ userId: 4 }), signedIn('admin', 4))
+        const wrapper = mountInApp(UserDetailView)
 
-        await vi.waitFor(() => expect(wrapper.get('.v-alert').text()).toContain('The user could not be loaded'))
-        const back = wrapper.findAll('button').find((button) => button.text() === 'Back')
-        await back!.trigger('click')
-
-        expect(push).toHaveBeenCalledWith({ name: RouteNames.USER_LIST })
+        await vi.waitFor(() => expect(wrapper.text()).toContain("You can't change your own role."))
+        expect(wrapper.findAll('h2').map((heading) => heading.text())).not.toContain('Delete user')
     })
 
-    it('loads the user from the route and shows the role', async () => {
-        const getUser = vi.spyOn(UserApi, 'getUser').mockResolvedValue(detail)
-        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
-        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(superAdminCaller)
-        const wrapper = mountView(UserDetailView)
+    it('shows the not-found state', async () => {
+        vi.spyOn(UserApi, 'getUser').mockRejectedValue({ statusCode: 404 })
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(signedIn())
+        const wrapper = mountInApp(UserDetailView)
 
-        await vi.waitFor(() => expect(wrapper.get('h1').text()).toBe('Grace Hopper'))
-        expect(getUser).toHaveBeenCalledWith({ path: { userId: 7 } })
-        expect(wrapper.findAll('.v-chip').some((chip) => chip.text() === 'User')).toBe(true)
-    })
-
-    it('renders profile, permissions, and memberships', async () => {
-        vi.spyOn(UserApi, 'getUser').mockResolvedValue(detail)
-        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
-        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(superAdminCaller)
-        const wrapper = mountView(UserDetailView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Grace Hopper')
-        })
-        expect(wrapper.text()).toContain('Profile')
-        expect(wrapper.text()).toContain('Direct permissions')
-        expect(wrapper.text()).toContain('Acme')
-
-        await vi.waitFor(() => {
-            const roleSelect = wrapper.findComponent({ name: 'VSelect' })
-            expect(roleSelect.props('items')).toContainEqual(expect.objectContaining({ name: 'Super Admin' }))
-        })
-    })
-
-    it('saves toggled permissions', async () => {
-        vi.spyOn(UserApi, 'getUser').mockResolvedValue(detail)
-        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
-        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(superAdminCaller)
-        const replaceSpy = vi.spyOn(UserApi, 'replaceUserPermissions').mockResolvedValue({ permissions: [] })
-        const wrapper = mountView(UserDetailView)
-
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Direct permissions')
-        })
-
-        const checkbox = wrapper.find('input[value="domains.create"]')
-        await checkbox.setValue(true)
-        const saveButton = wrapper
-            .findAll('button')
-            .find((button) => button.text() === 'Save' && button.element.closest('.permissions-card'))
-        await saveButton!.trigger('click')
-
-        await vi.waitFor(() => {
-            expect(replaceSpy).toHaveBeenCalledWith({
-                path: { userId: 7 },
-                body: { permissions: ['domains.read', 'domains.create'] },
-            })
-        })
+        await vi.waitFor(() => expect(wrapper.text()).toContain("This user doesn't exist"))
+        expect(findButton(wrapper, 'Back to users')).toBeDefined()
     })
 })

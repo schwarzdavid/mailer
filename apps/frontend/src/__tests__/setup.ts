@@ -27,3 +27,7 @@ if (typeof window.matchMedia !== 'function') {
 if (typeof document.queryCommandSupported !== 'function') {
     document.queryCommandSupported = () => false
 }
+
+if (typeof globalThis.CSS?.escape !== 'function') {
+    globalThis.CSS = { ...globalThis.CSS, escape: (value: string) => value.replace(/([^\w-])/g, '\\$1') }
+}

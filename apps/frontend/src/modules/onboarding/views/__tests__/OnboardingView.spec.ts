@@ -1,16 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Router } from 'vue-router'
-import { defineComponent, h } from 'vue'
-import { VApp } from 'vuetify/components'
-import { SettingsApi, SetupApi, type AuthenticationDto } from 'api'
+import { SettingsApi, SetupApi, AuthApi, type AuthenticationDto, type SendingDomainDto } from 'api'
 import OnboardingView from '../OnboardingView.vue'
-import { mountView } from '@/__tests__/support.ts'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
+import { dnsRecord } from '@/__tests__/fixtures.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 import { JWT_KEY } from '@/constants/jwtKey.ts'
-
-const OnboardingHost = defineComponent({
-    setup: () => () => h(VApp, () => h(OnboardingView)),
-})
 
 const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
 
@@ -23,6 +18,8 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
 }))
 
+vi.stubGlobal('visualViewport', null)
+
 const authentication: AuthenticationDto = {
     token: 'jwt-token',
     user: {
@@ -30,87 +27,117 @@ const authentication: AuthenticationDto = {
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'ada@example.com',
-        role: {
-            type: 'super_admin',
-            roleId: 1,
-            name: 'Super Admin',
-        },
+        role: { type: 'super_admin', roleId: 1, name: 'Super Admin' },
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     },
 }
 
-async function fillAccountStep(wrapper: ReturnType<typeof mountView>) {
-    await wrapper.get('input[name="firstName"]').setValue('Ada')
-    await wrapper.get('input[name="lastName"]').setValue('Lovelace')
-    await wrapper.get('input[type="email"]').setValue('ada@example.com')
-    await wrapper.get('input[type="password"]').setValue('correct-horse-battery-staple')
-    await wrapper.get('form').trigger('submit')
-}
-
-function domainForm(wrapper: ReturnType<typeof mountView>) {
-    return wrapper.findAll('form').find((form) => form.find('input[name="fqdn"]').exists())
+const sendingDomain: SendingDomainDto = {
+    fqdn: 'mail.acme-mailer.com',
+    serverIpv4: '203.0.113.10',
+    serverIpv6: null,
+    lastCheckedAt: null,
+    records: [dnsRecord({ use: 'a', type: 'a' }), dnsRecord({ use: 'dkim', status: 'invalid' })],
 }
 
 afterEach(() => {
     vi.restoreAllMocks()
-    push.mockClear()
+    push.mockReset()
     localStorage.removeItem(JWT_KEY)
+    document.body.innerHTML = ''
 })
 
 describe('OnboardingView', () => {
-    it('starts on the account step', () => {
-        const wrapper = mountView(OnboardingHost)
+    it('starts with the admin account on a fresh installation', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        const wrapper = mountInApp(OnboardingView)
 
-        expect(wrapper.text()).toContain('Create your account')
-        expect(wrapper.find('input[name="firstName"]').exists()).toBe(true)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Create the admin account'))
+        expect(wrapper.get('h1').text()).toBe('Welcome to Mail Admin')
+        expect(wrapper.text()).not.toContain('Log out')
     })
 
-    it('advances to the domain step after a successful registration', async () => {
-        vi.spyOn(SetupApi, 'registerUser').mockResolvedValue(authentication)
+    it('creates the account and moves on to the sending domain', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        const register = vi.spyOn(SetupApi, 'registerUser').mockResolvedValue(authentication)
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(authentication.user)
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-        const wrapper = mountView(OnboardingHost)
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="firstName"]').exists()).toBe(true))
 
-        await fillAccountStep(wrapper)
+        await wrapper.get('input[name="firstName"]').setValue('Ada')
+        await wrapper.get('input[name="lastName"]').setValue('Lovelace')
+        await wrapper.get('input[name="email"]').setValue('ada@example.com')
+        await wrapper.get('input[name="password"]').setValue('correct-horse-battery-staple')
+        await wrapper.get('form').trigger('submit')
 
-        await vi.waitFor(() => {
-            expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true)
-        })
+        await vi.waitFor(() => expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true))
+        expect(register).toHaveBeenCalled()
+        await vi.waitFor(() => expect(localStorage.getItem(JWT_KEY)).toBe('jwt-token'))
+        expect(wrapper.text()).toContain('Signed in as Ada Lovelace')
     })
 
-    it('advances to the DNS records step after the domain is saved, then routes to the dashboard', async () => {
-        vi.spyOn(SetupApi, 'registerUser').mockResolvedValue(authentication)
-        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
-        vi.spyOn(SettingsApi, 'configureSendingDomain').mockResolvedValue({
-            fqdn: 'mail.sending-domain.org',
-            serverIpv4: '203.0.113.10',
-            serverIpv6: null,
-            lastCheckedAt: null,
-            records: [],
-        })
-        const wrapper = mountView(OnboardingHost)
+    it('shows a failed registration inside the card', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        vi.spyOn(SetupApi, 'registerUser').mockRejectedValue({ message: 'Setup already completed' })
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="firstName"]').exists()).toBe(true))
 
-        await fillAccountStep(wrapper)
-        await vi.waitFor(() => {
-            expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true)
-        })
+        await wrapper.get('input[name="firstName"]').setValue('Ada')
+        await wrapper.get('input[name="lastName"]').setValue('Lovelace')
+        await wrapper.get('input[name="email"]').setValue('ada@example.com')
+        await wrapper.get('input[name="password"]').setValue('correct-horse-battery-staple')
+        await wrapper.get('form').trigger('submit')
 
-        await wrapper.get('input[name="fqdn"]').setValue('mail.sending-domain.org')
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Setup already completed'))
+    })
+
+    it('saves the sending domain and continues to the records', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'sendingDomain' })
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(authentication.user)
+        const getSettings = vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+        vi.spyOn(SettingsApi, 'configureSendingDomain').mockImplementation(() => {
+            getSettings.mockResolvedValue({ sendingDomain })
+            return Promise.resolve(sendingDomain)
+        })
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true))
+
+        await wrapper.get('input[name="fqdn"]').setValue('mail.acme-mailer.com')
         await wrapper.get('input[name="serverIpv4"]').setValue('203.0.113.10')
-        await domainForm(wrapper)!.trigger('submit')
+        await wrapper.get('form').trigger('submit')
 
-        await vi.waitFor(() => {
-            expect(wrapper.text()).toContain('Publish these DNS records')
-        })
+        await vi.waitFor(() => expect(wrapper.get('h1').text()).toBe('Publish the DNS records'))
+        await vi.waitFor(() => expect(wrapper.text()).toContain('1 of 2 records are valid.'))
+    })
 
-        const finishButton = () => wrapper.findAll('button').find((button) => button.text().includes('Finish'))
+    it('lets the admin go back to correct the sending domain', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'records' })
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(authentication.user)
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain })
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Finish setup'))
 
-        await vi.waitFor(() => {
-            expect(finishButton()).toBeTruthy()
-        })
+        await findButton(wrapper, 'Sending domain')!.trigger('click')
 
-        await finishButton()!.trigger('click')
+        await vi.waitFor(() =>
+            expect((wrapper.get('input[name="fqdn"]').element as HTMLInputElement).value).toBe('mail.acme-mailer.com'),
+        )
+    })
 
-        expect(push).toHaveBeenCalledWith({ name: RouteNames.DASHBOARD })
+    it('finishes setup with open records and opens the dashboard', async () => {
+        push.mockResolvedValue(undefined)
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'records' })
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(authentication.user)
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain })
+        const finish = vi.spyOn(SetupApi, 'finishSetup').mockResolvedValue({ needsSetup: false, step: 'finished' })
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(findButton(wrapper, 'Finish setup')).toBeDefined())
+
+        await findButton(wrapper, 'Finish setup')!.trigger('click')
+
+        await vi.waitFor(() => expect(push).toHaveBeenCalledWith({ name: RouteNames.DASHBOARD }))
+        expect(finish).toHaveBeenCalled()
     })
 })

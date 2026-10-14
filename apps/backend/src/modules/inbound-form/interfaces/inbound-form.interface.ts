@@ -13,6 +13,10 @@ export interface InboundForm {
     updatedAt: Date
 }
 
+export interface InboundFormWithReceivers extends InboundForm {
+    inboundFormReceivers: InboundFormReceiver[]
+}
+
 export interface InboundFormFull extends InboundForm {
     inboundFormFields: InboundFormField[]
     inboundFormReceivers: InboundFormReceiver[]

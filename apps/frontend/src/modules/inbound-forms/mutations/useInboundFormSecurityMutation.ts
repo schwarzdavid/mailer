@@ -20,7 +20,11 @@ export function useInboundFormSecurityMutation() {
                 }),
             ),
         onSuccess(_security, { inboundFormId }) {
-            void client.invalidateQueries({ queryKey: ['inboundForms', inboundFormId] })
+            return Promise.all([
+                client.invalidateQueries({ queryKey: ['inboundForms', inboundFormId] }),
+                client.invalidateQueries({ queryKey: ['inboundForms'], exact: true }),
+                client.invalidateQueries({ queryKey: ['projects'] }),
+            ])
         },
     })
 }
