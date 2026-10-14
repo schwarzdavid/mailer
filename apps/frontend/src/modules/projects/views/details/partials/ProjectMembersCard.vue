@@ -17,41 +17,43 @@
             :title="t('module.projects.members.empty.title')"
             :text="t('module.projects.members.empty.text')"
         />
-        <ListRow v-for="member in visibleMembers" v-else :key="member.userId" :subtitle="member.email" lead-tone="none">
-            <template #lead>
-                <UserAvatar :first-name="member.firstName" :last-name="member.lastName" />
-            </template>
-            <template #title>
-                <RouterLink
-                    v-if="canReadUsers"
-                    :to="{ name: RouteNames.USER_DETAILS, params: { userId: member.userId } }"
-                    class="row-link"
-                >
-                    {{ member.firstName }} {{ member.lastName }}
-                </RouterLink>
-                <span v-else>{{ member.firstName }} {{ member.lastName }}</span>
-            </template>
-            <template #meta>
-                <TagLabel
-                    v-for="permission in sortedPermissions(member.permissions)"
-                    :key="permission"
-                    :label="t(`permissions.project.${permission}`)"
-                />
-            </template>
-            <template #actions>
-                <IconButton
-                    :icon="mdiPencilOutline"
-                    :label="t('module.projects.members.editLabel', { name: fullName(member) })"
-                    @click="openDialog(member)"
-                />
-                <IconButton
-                    :icon="mdiDeleteOutline"
-                    :label="t('module.projects.members.removeLabel', { name: fullName(member) })"
-                    danger
-                    @click="removeMember(member)"
-                />
-            </template>
-        </ListRow>
+        <VExpandTransition v-else group>
+            <ListRow v-for="member in visibleMembers" :key="member.userId" :subtitle="member.email" lead-tone="none">
+                <template #lead>
+                    <UserAvatar :first-name="member.firstName" :last-name="member.lastName" />
+                </template>
+                <template #title>
+                    <RouterLink
+                        v-if="canReadUsers"
+                        :to="{ name: RouteNames.USER_DETAILS, params: { userId: member.userId } }"
+                        class="row-link"
+                    >
+                        {{ member.firstName }} {{ member.lastName }}
+                    </RouterLink>
+                    <span v-else>{{ member.firstName }} {{ member.lastName }}</span>
+                </template>
+                <template #meta>
+                    <TagLabel
+                        v-for="permission in sortedPermissions(member.permissions)"
+                        :key="permission"
+                        :label="t(`permissions.project.${permission}`)"
+                    />
+                </template>
+                <template #actions>
+                    <IconButton
+                        :icon="mdiPencilOutline"
+                        :label="t('module.projects.members.editLabel', { name: fullName(member) })"
+                        @click="openDialog(member)"
+                    />
+                    <IconButton
+                        :icon="mdiDeleteOutline"
+                        :label="t('module.projects.members.removeLabel', { name: fullName(member) })"
+                        danger
+                        @click="removeMember(member)"
+                    />
+                </template>
+            </ListRow>
+        </VExpandTransition>
         <template v-if="implicitAccessNote" #note>
             <VIcon :icon="mdiInformationOutline" size="16" aria-hidden="true" />
             <span>

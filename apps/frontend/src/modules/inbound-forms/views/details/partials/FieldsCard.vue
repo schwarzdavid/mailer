@@ -19,7 +19,7 @@
             :title="t('module.inboundForms.details.fields.empty.title')"
             :text="t('module.inboundForms.details.fields.empty.text')"
         />
-        <template v-else-if="xs">
+        <VExpandTransition v-else-if="xs" group>
             <ListRow
                 v-for="field in visibleFields"
                 :key="field.key"
@@ -53,7 +53,7 @@
                     </VMenu>
                 </template>
             </ListRow>
-        </template>
+        </VExpandTransition>
         <VDataTable
             v-else
             :headers="headers"

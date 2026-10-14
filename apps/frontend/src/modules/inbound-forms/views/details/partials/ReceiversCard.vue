@@ -19,79 +19,85 @@
             :title="t('module.inboundForms.details.receivers.empty.title')"
             :text="t('module.inboundForms.details.receivers.empty.text')"
         />
-        <ListRow
-            v-for="receiver in visibleReceivers"
-            :key="receiver.inboundFormReceiverId"
-            :icon="mdiEmailArrowRightOutline"
-            :pending="togglingId === receiver.inboundFormReceiverId"
-        >
-            <template #title>
-                <span class="mono receivers-card__route">{{ receiver.emailFrom }} → {{ receiver.emailReceiver }}</span>
-            </template>
-            <template #subtitle>
-                <template v-if="receiver.emailReplyTo">
-                    {{ t('module.inboundForms.details.receivers.replyTo') }}
-                    <span class="mono">{{ receiver.emailReplyTo }}</span>
+        <VExpandTransition group>
+            <ListRow
+                v-for="receiver in visibleReceivers"
+                :key="receiver.inboundFormReceiverId"
+                :icon="mdiEmailArrowRightOutline"
+                :pending="togglingId === receiver.inboundFormReceiverId"
+            >
+                <template #title>
+                    <span class="mono receivers-card__route"
+                        >{{ receiver.emailFrom }} → {{ receiver.emailReceiver }}</span
+                    >
                 </template>
-                <template v-else>{{ t('module.inboundForms.details.receivers.noReplyTo') }}</template>
-            </template>
-            <template #meta>
-                <StatusBadge v-bind="templateBadge(receiver)" />
-                <StatusBadge v-bind="activityBadge(receiver.isActive)" />
-            </template>
-            <template #actions>
-                <VBtn
-                    v-if="!xs"
-                    size="small"
-                    variant="text"
-                    :prepend-icon="mdiCodeTags"
-                    :text="templateAction(receiver)"
-                    :to="templateRoute(receiver)"
-                />
-                <VMenu v-if="canUpdate || xs">
-                    <template #activator="{ props: activator }">
-                        <IconButton
-                            v-bind="activator"
-                            :icon="mdiDotsVertical"
-                            :label="
-                                t('module.inboundForms.details.receivers.actions', { email: receiver.emailReceiver })
-                            "
-                            small
-                        />
+                <template #subtitle>
+                    <template v-if="receiver.emailReplyTo">
+                        {{ t('module.inboundForms.details.receivers.replyTo') }}
+                        <span class="mono">{{ receiver.emailReplyTo }}</span>
                     </template>
-                    <VList density="compact">
-                        <VListItem
-                            v-if="xs"
-                            :prepend-icon="mdiCodeTags"
-                            :title="templateAction(receiver)"
-                            :to="templateRoute(receiver)"
-                        />
-                        <template v-if="canUpdate">
-                            <VListItem
-                                :prepend-icon="mdiPencilOutline"
-                                :title="t('module.inboundForms.details.receivers.edit')"
-                                @click="openDialog(receiver)"
-                            />
-                            <VListItem
-                                :prepend-icon="receiver.isActive ? mdiPauseCircleOutline : mdiPlayCircleOutline"
-                                :title="
-                                    receiver.isActive
-                                        ? t('module.inboundForms.details.receivers.deactivate')
-                                        : t('module.inboundForms.details.receivers.activate')
+                    <template v-else>{{ t('module.inboundForms.details.receivers.noReplyTo') }}</template>
+                </template>
+                <template #meta>
+                    <StatusBadge v-bind="templateBadge(receiver)" />
+                    <StatusBadge v-bind="activityBadge(receiver.isActive)" />
+                </template>
+                <template #actions>
+                    <VBtn
+                        v-if="!xs"
+                        size="small"
+                        variant="text"
+                        :prepend-icon="mdiCodeTags"
+                        :text="templateAction(receiver)"
+                        :to="templateRoute(receiver)"
+                    />
+                    <VMenu v-if="canUpdate || xs">
+                        <template #activator="{ props: activator }">
+                            <IconButton
+                                v-bind="activator"
+                                :icon="mdiDotsVertical"
+                                :label="
+                                    t('module.inboundForms.details.receivers.actions', {
+                                        email: receiver.emailReceiver,
+                                    })
                                 "
-                                @click="toggleActive(receiver)"
-                            />
-                            <VListItem
-                                class="text-error"
-                                :prepend-icon="mdiDeleteOutline"
-                                :title="t('module.inboundForms.details.receivers.remove')"
-                                @click="removeReceiver(receiver)"
+                                small
                             />
                         </template>
-                    </VList>
-                </VMenu>
-            </template>
-        </ListRow>
+                        <VList density="compact">
+                            <VListItem
+                                v-if="xs"
+                                :prepend-icon="mdiCodeTags"
+                                :title="templateAction(receiver)"
+                                :to="templateRoute(receiver)"
+                            />
+                            <template v-if="canUpdate">
+                                <VListItem
+                                    :prepend-icon="mdiPencilOutline"
+                                    :title="t('module.inboundForms.details.receivers.edit')"
+                                    @click="openDialog(receiver)"
+                                />
+                                <VListItem
+                                    :prepend-icon="receiver.isActive ? mdiPauseCircleOutline : mdiPlayCircleOutline"
+                                    :title="
+                                        receiver.isActive
+                                            ? t('module.inboundForms.details.receivers.deactivate')
+                                            : t('module.inboundForms.details.receivers.activate')
+                                    "
+                                    @click="toggleActive(receiver)"
+                                />
+                                <VListItem
+                                    class="text-error"
+                                    :prepend-icon="mdiDeleteOutline"
+                                    :title="t('module.inboundForms.details.receivers.remove')"
+                                    @click="removeReceiver(receiver)"
+                                />
+                            </template>
+                        </VList>
+                    </VMenu>
+                </template>
+            </ListRow>
+        </VExpandTransition>
     </SectionCard>
     <ReceiverDialog
         v-if="canUpdate"

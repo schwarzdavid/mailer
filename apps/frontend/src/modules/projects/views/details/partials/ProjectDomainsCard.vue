@@ -20,31 +20,39 @@
                 :text="t('module.projects.details.domains.empty.text')"
             />
         </div>
-        <ListRow v-for="domain in visibleDomains" :key="domain.domainId" :icon="mdiWeb" :title="domain.fqdn" mono-title>
-            <template #subtitle>
-                <template v-if="domainStatus.invalidSummary(domainRecords(domain))">
-                    {{ domainStatus.invalidSummary(domainRecords(domain)) }}
-                    <span class="row-sep">·</span>
+        <VExpandTransition group>
+            <ListRow
+                v-for="domain in visibleDomains"
+                :key="domain.domainId"
+                :icon="mdiWeb"
+                :title="domain.fqdn"
+                mono-title
+            >
+                <template #subtitle>
+                    <template v-if="domainStatus.invalidSummary(domainRecords(domain))">
+                        {{ domainStatus.invalidSummary(domainRecords(domain)) }}
+                        <span class="row-sep">·</span>
+                    </template>
+                    <RouterLink
+                        :to="{ name: RouteNames.DOMAIN_DETAILS, params: { domainId: domain.domainId } }"
+                        class="row-link"
+                    >
+                        {{ t('module.projects.details.domains.viewRecords') }}
+                    </RouterLink>
                 </template>
-                <RouterLink
-                    :to="{ name: RouteNames.DOMAIN_DETAILS, params: { domainId: domain.domainId } }"
-                    class="row-link"
-                >
-                    {{ t('module.projects.details.domains.viewRecords') }}
-                </RouterLink>
-            </template>
-            <template #meta>
-                <StatusBadge v-bind="domainStatus.domainBadge(domain)" />
-            </template>
-            <template v-if="canUpdate" #actions>
-                <IconButton
-                    :icon="mdiLinkVariantOff"
-                    :label="t('module.projects.details.domains.unassign', { domain: domain.fqdn })"
-                    danger
-                    @click="unassign(domain)"
-                />
-            </template>
-        </ListRow>
+                <template #meta>
+                    <StatusBadge v-bind="domainStatus.domainBadge(domain)" />
+                </template>
+                <template v-if="canUpdate" #actions>
+                    <IconButton
+                        :icon="mdiLinkVariantOff"
+                        :label="t('module.projects.details.domains.unassign', { domain: domain.fqdn })"
+                        danger
+                        @click="unassign(domain)"
+                    />
+                </template>
+            </ListRow>
+        </VExpandTransition>
     </SectionCard>
     <AssignDomainDialog v-if="canUpdate" v-model="assignOpen" :project="project" />
 </template>

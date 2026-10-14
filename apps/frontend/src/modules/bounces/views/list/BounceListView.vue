@@ -13,8 +13,14 @@
             </VTabs>
         </template>
     </PageHeader>
-    <BlockedTable v-if="route.name === RouteNames.BOUNCE_BLOCKED" />
-    <BounceTable v-else />
+    <VWindow :model-value="route.name" :touch="false">
+        <VWindowItem :value="RouteNames.BOUNCE_LIST">
+            <BounceTable />
+        </VWindowItem>
+        <VWindowItem :value="RouteNames.BOUNCE_BLOCKED">
+            <BlockedTable />
+        </VWindowItem>
+    </VWindow>
 </template>
 
 <script setup lang="ts">

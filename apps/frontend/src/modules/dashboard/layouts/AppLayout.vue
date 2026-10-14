@@ -28,13 +28,19 @@
                     <VBtn variant="text" :to="{ name: RouteNames.DASHBOARD }" :text="t('nav.backToDashboard')" />
                 </template>
             </ErrorState>
-            <RouterView v-else />
+            <RouterView v-else v-slot="{ Component }">
+                <VFadeTransition mode="out-in">
+                    <div :key="viewKey(Component)" class="app-view">
+                        <component :is="Component" />
+                    </div>
+                </VFadeTransition>
+            </RouterView>
         </div>
     </VMain>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref, watch } from 'vue'
+    import { computed, ref, watch, type VNode } from 'vue'
     import { useI18n } from 'vue-i18n'
     import { useRoute } from 'vue-router'
     import { useDisplay } from 'vuetify'
@@ -66,6 +72,18 @@
         const required = route.meta.ability
         return required ? t(`nav.permission.${required.subject}`) : undefined
     })
+
+    const viewKeys = new WeakMap<object, number>()
+    let nextViewKey = 1
+    function viewKey(view: VNode | undefined) {
+        if (!view || typeof view.type !== 'object') {
+            return 0
+        }
+        if (!viewKeys.has(view.type)) {
+            viewKeys.set(view.type, nextViewKey++)
+        }
+        return viewKeys.get(view.type)
+    }
 
     watch(xs, (isPhone) => {
         drawer.value = !isPhone

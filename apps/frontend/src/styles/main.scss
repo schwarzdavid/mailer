@@ -458,3 +458,15 @@ pre,
 .v-btn-group .v-btn--active > .v-btn__overlay {
     opacity: 0;
 }
+
+.app-view {
+    min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [class*='-transition-enter-active'],
+    [class*='-transition-leave-active'],
+    .v-window__container {
+        transition-duration: 0s !important;
+    }
+}

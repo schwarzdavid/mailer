@@ -19,37 +19,41 @@
             :title="t('module.inboundForms.details.security.empty.title')"
             :text="t('module.inboundForms.details.security.empty.text')"
         />
-        <ListRow
-            v-for="check in visibleChecks"
-            :key="check.inboundFormSecurityId"
-            :icon="mdiShieldCheckOutline"
-            :title="t(`module.inboundForms.details.security.typeOptions.${check.type}`)"
-        >
-            <template #subtitle>
-                {{ t(`module.inboundForms.details.security.locationOptions.${check.location}`) }}
-                <span class="row-sep">·</span>
-                <span class="mono">{{ check.key }}</span>
-                <template v-if="check.config?.minScore !== undefined">
+        <VExpandTransition group>
+            <ListRow
+                v-for="check in visibleChecks"
+                :key="check.inboundFormSecurityId"
+                :icon="mdiShieldCheckOutline"
+                :title="t(`module.inboundForms.details.security.typeOptions.${check.type}`)"
+            >
+                <template #subtitle>
+                    {{ t(`module.inboundForms.details.security.locationOptions.${check.location}`) }}
                     <span class="row-sep">·</span>
-                    {{ t('module.inboundForms.details.security.minScoreShort', { score: n(check.config.minScore) }) }}
+                    <span class="mono">{{ check.key }}</span>
+                    <template v-if="check.config?.minScore !== undefined">
+                        <span class="row-sep">·</span>
+                        {{
+                            t('module.inboundForms.details.security.minScoreShort', { score: n(check.config.minScore) })
+                        }}
+                    </template>
                 </template>
-            </template>
-            <template v-if="canUpdate" #actions>
-                <IconButton
-                    :icon="mdiPencilOutline"
-                    :label="t('module.inboundForms.details.security.editLabel', { type: typeLabel(check) })"
-                    small
-                    @click="openDialog(check)"
-                />
-                <IconButton
-                    :icon="mdiDeleteOutline"
-                    :label="t('module.inboundForms.details.security.removeLabel', { type: typeLabel(check) })"
-                    small
-                    danger
-                    @click="removeCheck(check)"
-                />
-            </template>
-        </ListRow>
+                <template v-if="canUpdate" #actions>
+                    <IconButton
+                        :icon="mdiPencilOutline"
+                        :label="t('module.inboundForms.details.security.editLabel', { type: typeLabel(check) })"
+                        small
+                        @click="openDialog(check)"
+                    />
+                    <IconButton
+                        :icon="mdiDeleteOutline"
+                        :label="t('module.inboundForms.details.security.removeLabel', { type: typeLabel(check) })"
+                        small
+                        danger
+                        @click="removeCheck(check)"
+                    />
+                </template>
+            </ListRow>
+        </VExpandTransition>
     </SectionCard>
     <SecurityDialog
         v-if="canUpdate"
