@@ -8,6 +8,7 @@ import { InboundFormTemplateModel } from './models/inbound-form-template.model.j
 import { InboundFormSubmissionModel } from './models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from './models/inbound-form-delivery.model.js'
 import { DomainModule } from '../domain/domain.module.js'
+import { EncryptionModule } from '../encryption/encryption.module.js'
 import { ProjectModule } from '../project/project.module.js'
 import { MailModule } from '../mail/mail.module.js'
 import { InboundFormController } from './controller/inbound-form.controller.js'
@@ -31,6 +32,7 @@ import { InboundFormSubmissionService } from './services/inbound-form-submission
         DomainModule,
         ProjectModule,
         MailModule,
+        EncryptionModule,
     ],
     controllers: [InboundFormController, PublicInboundFormController],
     providers: [

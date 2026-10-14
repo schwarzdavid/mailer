@@ -5,7 +5,7 @@ import type { Transporter } from 'nodemailer'
 import { MailService, SendMail } from './mail.service.js'
 import { MAIL_TRANSPORTER } from '../mail.constants.js'
 import { DomainService } from '../../domain/services/domain.service.js'
-import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { Domain, DomainWithActiveDkim } from '../../domain/interfaces/domain.interface.js'
 import { DomainDkimAlgorithm } from '../../domain/interfaces/domain-dkim.interface.js'
 import { EmailBlockService } from '../../bounce/services/email-block.service.js'
@@ -18,7 +18,7 @@ describe('MailService', () => {
     let sendMail: Mock<Transporter['sendMail']>
     let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
     let getConfiguredSendingDomain: Mock<DomainService['getConfiguredSendingDomain']>
-    let decryptDkimPrivateKey: Mock<DkimEncryptionService['decryptDkimPrivateKey']>
+    let decrypt: Mock<SecretEncryptionService['decrypt']>
     let assertNotBlocked: Mock<EmailBlockService['assertNotBlocked']>
     let recordBounce: Mock<BounceService['recordBounce']>
 
@@ -55,7 +55,7 @@ describe('MailService', () => {
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue({})
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
         getConfiguredSendingDomain = vi.fn<typeof getConfiguredSendingDomain>().mockResolvedValue(null)
-        decryptDkimPrivateKey = vi.fn<typeof decryptDkimPrivateKey>().mockResolvedValue('-----BEGIN PRIVATE KEY-----')
+        decrypt = vi.fn<typeof decrypt>().mockResolvedValue('-----BEGIN PRIVATE KEY-----')
         assertNotBlocked = vi.fn<typeof assertNotBlocked>().mockResolvedValue(undefined)
         recordBounce = vi.fn<typeof recordBounce>().mockResolvedValue(undefined)
 
@@ -64,7 +64,7 @@ describe('MailService', () => {
                 MailService,
                 { provide: MAIL_TRANSPORTER, useValue: { sendMail } },
                 { provide: DomainService, useValue: { getSendingDomainByFqdn, getConfiguredSendingDomain } },
-                { provide: DkimEncryptionService, useValue: { decryptDkimPrivateKey } },
+                { provide: SecretEncryptionService, useValue: { decrypt } },
                 { provide: EmailBlockService, useValue: { assertNotBlocked } },
                 { provide: BounceService, useValue: { recordBounce } },
             ],
@@ -81,7 +81,7 @@ describe('MailService', () => {
         await service.sendMail(mail)
 
         expect(getSendingDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
-        expect(decryptDkimPrivateKey).toHaveBeenCalledWith('v1.encrypted-key')
+        expect(decrypt).toHaveBeenCalledWith('v1.encrypted-key')
         expect(sendMail).toHaveBeenCalledWith({
             from: 'noreply@mail.example.com',
             to: 'owner@business.com',
@@ -181,7 +181,7 @@ describe('MailService', () => {
     })
 
     it('never sends unsigned mail when the DKIM key cannot be decrypted', async () => {
-        decryptDkimPrivateKey.mockRejectedValue(new Error('Unsupported state or unable to authenticate data'))
+        decrypt.mockRejectedValue(new Error('Unsupported state or unable to authenticate data'))
 
         await expect(service.sendMail(mail)).rejects.toThrow('Unsupported state or unable to authenticate data')
         expect(sendMail).not.toHaveBeenCalled()

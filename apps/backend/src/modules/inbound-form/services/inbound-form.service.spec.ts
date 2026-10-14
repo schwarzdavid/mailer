@@ -17,6 +17,7 @@ import { ProjectService } from '../../project/services/project.service.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
 import {
     InboundFormField,
@@ -25,6 +26,7 @@ import {
 } from '../interfaces/inbound-form-field.interface.js'
 import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface.js'
 import {
+    InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
     InboundFormSecurityUpsert,
@@ -141,6 +143,7 @@ describe('InboundFormService', () => {
     let assertDomainInProject: Mock<ProjectService['assertDomainInProject']>
     let getProjectIdsFor: Mock<AbilityFactory['getProjectIdsFor']>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
+    let encrypt: Mock<SecretEncryptionService['encrypt']>
 
     beforeEach(async () => {
         formFindAll = vi.fn<typeof formFindAll>().mockResolvedValue([])
@@ -158,6 +161,7 @@ describe('InboundFormService', () => {
         assertProjectExists = vi.fn<typeof assertProjectExists>().mockResolvedValue(undefined)
         assertDomainInProject = vi.fn<typeof assertDomainInProject>().mockResolvedValue(undefined)
         getProjectIdsFor = vi.fn<typeof getProjectIdsFor>().mockResolvedValue('all')
+        encrypt = vi.fn<SecretEncryptionService['encrypt']>((plaintext) => Promise.resolve(`encrypted(${plaintext})`))
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
@@ -189,6 +193,7 @@ describe('InboundFormService', () => {
                 { provide: DomainService, useValue: { getDomainById } },
                 { provide: ProjectService, useValue: { assertProjectExists, assertDomainInProject } },
                 { provide: AbilityFactory, useValue: { getProjectIdsFor } },
+                { provide: SecretEncryptionService, useValue: { encrypt } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
         }).compile()
@@ -560,19 +565,30 @@ describe('InboundFormService', () => {
             ).rejects.toThrow(BadRequestException)
         })
 
-        it('rejects recaptcha without a secret', async () => {
+        const storedRecaptcha: InboundFormSecurity = {
+            inboundFormSecurityId: 41,
+            inboundFormId: 1,
+            type: InboundFormSecurityType.RECAPTCHA,
+            location: InboundFormSecurityLocation.BODY,
+            key: 'recaptcha-token',
+            config: { encryptedSecret: 'v1.stored-ciphertext', minScore: 0.3 },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+
+        it.each([
+            ['without a config', null],
+            ['with a config lacking the secret', { minScore: 0.5 }],
+        ])('rejects a new recaptcha scheme %s', async (_case, config) => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await expect(
-                service.replaceSecurity(
-                    1,
-                    [scheme({ type: InboundFormSecurityType.RECAPTCHA, config: null })],
-                    manageAll,
-                ),
-            ).rejects.toThrow(BadRequestException)
+                service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.RECAPTCHA, config })], manageAll),
+            ).rejects.toThrow(new BadRequestException('Recaptcha requires a secret'))
+            expect(securityBulkCreate).not.toHaveBeenCalled()
         })
 
-        it('replaces all schemes in a transaction', async () => {
+        it('replaces all schemes in a transaction and stores only the encrypted secret', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await service.replaceSecurity(
@@ -588,12 +604,98 @@ describe('InboundFormService', () => {
                 manageAll,
             )
 
+            expect(encrypt).toHaveBeenCalledWith('s3cret')
             expect(securityDestroy).toHaveBeenCalledWith(expect.objectContaining({ where: { inboundFormId: 1 } }))
             expect(securityBulkCreate).toHaveBeenCalledWith(
                 [
-                    expect.objectContaining({ inboundFormId: 1, type: InboundFormSecurityType.HONEYPOT }),
-                    expect.objectContaining({ inboundFormId: 1, type: InboundFormSecurityType.RECAPTCHA }),
+                    {
+                        inboundFormId: 1,
+                        type: InboundFormSecurityType.HONEYPOT,
+                        location: InboundFormSecurityLocation.BODY,
+                        key: 'website',
+                        config: null,
+                    },
+                    {
+                        inboundFormId: 1,
+                        type: InboundFormSecurityType.RECAPTCHA,
+                        location: InboundFormSecurityLocation.BODY,
+                        key: 'recaptcha-token',
+                        config: { encryptedSecret: 'encrypted(s3cret)', minScore: 0.5 },
+                    },
                 ],
+                expect.anything(),
+            )
+        })
+
+        it('keeps the stored secret when an existing recaptcha scheme is resent without one', async () => {
+            formFindByPk.mockResolvedValue(
+                formRow({ inboundFormSecurity: [storedRecaptcha] }) as unknown as InboundFormModel,
+            )
+
+            await service.replaceSecurity(
+                1,
+                [
+                    scheme({
+                        type: InboundFormSecurityType.RECAPTCHA,
+                        location: InboundFormSecurityLocation.HEADER,
+                        key: 'X-Captcha',
+                        config: { minScore: 0.7 },
+                    }),
+                ],
+                manageAll,
+            )
+
+            expect(encrypt).not.toHaveBeenCalled()
+            expect(securityBulkCreate).toHaveBeenCalledWith(
+                [
+                    expect.objectContaining({
+                        location: InboundFormSecurityLocation.HEADER,
+                        key: 'X-Captcha',
+                        config: { encryptedSecret: 'v1.stored-ciphertext', minScore: 0.7 },
+                    }),
+                ],
+                expect.anything(),
+            )
+        })
+
+        it('keeps the stored secret and drops the minimum score when the config is omitted', async () => {
+            formFindByPk.mockResolvedValue(
+                formRow({ inboundFormSecurity: [storedRecaptcha] }) as unknown as InboundFormModel,
+            )
+
+            await service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.RECAPTCHA })], manageAll)
+
+            expect(securityBulkCreate).toHaveBeenCalledWith(
+                [expect.objectContaining({ config: { encryptedSecret: 'v1.stored-ciphertext' } })],
+                expect.anything(),
+            )
+        })
+
+        it('replaces the stored secret when a new one is sent', async () => {
+            formFindByPk.mockResolvedValue(
+                formRow({ inboundFormSecurity: [storedRecaptcha] }) as unknown as InboundFormModel,
+            )
+
+            await service.replaceSecurity(
+                1,
+                [scheme({ type: InboundFormSecurityType.RECAPTCHA, config: { secret: 'rotated' } })],
+                manageAll,
+            )
+
+            expect(securityBulkCreate).toHaveBeenCalledWith(
+                [expect.objectContaining({ config: { encryptedSecret: 'encrypted(rotated)' } })],
+                expect.anything(),
+            )
+        })
+
+        it('does not attach config to non-recaptcha schemes', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await service.replaceSecurity(1, [scheme({ config: { secret: 'stray' } })], manageAll)
+
+            expect(encrypt).not.toHaveBeenCalled()
+            expect(securityBulkCreate).toHaveBeenCalledWith(
+                [expect.objectContaining({ type: InboundFormSecurityType.HONEYPOT, config: null })],
                 expect.anything(),
             )
         })

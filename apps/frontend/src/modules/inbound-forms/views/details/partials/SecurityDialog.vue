@@ -28,8 +28,14 @@
                     <template v-if="type === 'google-recaptcha'">
                         <VTextField
                             name="secret"
+                            type="password"
+                            autocomplete="off"
                             :label="t('module.inboundForms.details.security.secret')"
                             v-model="secret"
+                            :hint="
+                                hasStoredSecret ? t('module.inboundForms.details.security.secretKeepHint') : undefined
+                            "
+                            :persistent-hint="hasStoredSecret"
                             :error-messages="errors.secret"
                         />
                         <VNumberInput
@@ -60,7 +66,7 @@
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
-    import type { InboundFormRecaptchaConfigDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
+    import type { InboundFormRecaptchaConfigUpsertDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
 
     const props = defineProps<{
         modelValue: boolean
@@ -90,6 +96,10 @@
         })),
     )
 
+    const hasStoredSecret = computed(
+        () => props.scheme?.type === 'google-recaptcha' && props.scheme.config?.hasSecret === true,
+    )
+
     const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z
@@ -100,7 +110,7 @@
                     secret: z.string().optional(),
                     minScore: z.number().min(0).max(1).nullable().optional(),
                 })
-                .refine((values) => values.type !== 'google-recaptcha' || !!values.secret, {
+                .refine((values) => values.type !== 'google-recaptcha' || !!values.secret || hasStoredSecret.value, {
                     path: ['secret'],
                     error: t('validation.required'),
                 }),
@@ -128,7 +138,7 @@
                     type: toEditableType(props.scheme?.type),
                     location: props.scheme?.location ?? 'body',
                     key: props.scheme?.key ?? '',
-                    secret: props.scheme?.config?.secret ?? undefined,
+                    secret: undefined,
                     minScore: props.scheme?.config?.minScore ?? null,
                 },
             })
@@ -136,9 +146,11 @@
     )
 
     const onSubmit = handleSubmit((values) => {
-        let config: InboundFormRecaptchaConfigDto | null = null
-        if (values.type === 'google-recaptcha' && values.secret) {
-            config = { secret: values.secret, minScore: values.minScore ?? undefined }
+        let config: InboundFormRecaptchaConfigUpsertDto | null = null
+        if (values.type === 'google-recaptcha') {
+            config = values.secret
+                ? { secret: values.secret, minScore: values.minScore ?? undefined }
+                : { minScore: values.minScore ?? undefined }
         }
 
         emit('save', {

@@ -7,7 +7,7 @@ import { envSchema, type Env } from '../config/env.schema.js'
 
 const requiredEnv = {
     BACKEND_JWT_SECRET: 'jwt-secret',
-    BACKEND_DKIM_SECRET: 'dkim-secret',
+    BACKEND_ENCRYPTION_SECRET: 'encryption-secret',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',
 }

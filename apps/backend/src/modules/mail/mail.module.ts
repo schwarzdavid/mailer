@@ -5,11 +5,12 @@ import { MAIL_TRANSPORTER } from './mail.constants.js'
 import { MailService } from './services/mail.service.js'
 import { TemplateRendererService } from './services/template-renderer.service.js'
 import { DomainModule } from '../domain/domain.module.js'
+import { EncryptionModule } from '../encryption/encryption.module.js'
 import { BounceModule } from '../bounce/bounce.module.js'
 import type { Env } from '../../config/env.schema.js'
 
 @Module({
-    imports: [DomainModule, BounceModule],
+    imports: [DomainModule, BounceModule, EncryptionModule],
     providers: [
         {
             provide: MAIL_TRANSPORTER,

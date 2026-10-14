@@ -9,6 +9,8 @@ import { configureSendingDomain } from './support/sending-domain.js'
 import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './support/mailhog.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
+import { InboundFormSecurityModel } from '../src/modules/inbound-form/models/inbound-form-security.model.js'
+import { decryptSecret } from '../src/helpers/secret-encryption.js'
 
 interface FormBody {
     inboundFormId: number
@@ -57,6 +59,7 @@ describe('InboundForm management + delivery (e2e)', () => {
     let captchaFormId: number
 
     const mailhogUrl = inject('e2eEnv').MAILHOG_URL
+    const encryptionSecret = inject('e2eEnv').BACKEND_ENCRYPTION_SECRET
     const slug = 'e2e-ifm-contact'
     const captchaSlug = 'e2e-ifm-captcha'
     const ownerAddress = 'owner@ifm-e2e.test'
@@ -713,6 +716,24 @@ describe('InboundForm management + delivery (e2e)', () => {
     })
 
     describe('captcha protected form', () => {
+        const captchaSecret = 'e2e-recaptcha-server-secret'
+        let securityResponse: unknown
+
+        const securityModel = () => app.get<typeof InboundFormSecurityModel>(getModelToken(InboundFormSecurityModel))
+
+        async function storedRecaptcha(): Promise<InboundFormSecurityModel> {
+            return (await securityModel().findOne({
+                where: { inboundFormId: captchaFormId, type: 'google-recaptcha' },
+            }))!
+        }
+
+        function expectNoSecretMaterial(body: unknown, encryptedSecret: string) {
+            const serialized = JSON.stringify(body)
+            expect(serialized).not.toContain(captchaSecret)
+            expect(serialized).not.toContain(encryptedSecret)
+            expect(serialized).not.toContain('encryptedSecret')
+        }
+
         beforeAll(async () => {
             const form = await http()
                 .post('/api/inbound-form')
@@ -727,7 +748,7 @@ describe('InboundForm management + delivery (e2e)', () => {
                 .send({ security: [{ type: 'google-recaptcha', location: 'body', key: 'captcha' }] })
                 .expect(400)
 
-            await http()
+            const response = await http()
                 .put(`/api/inbound-form/${captchaFormId}/security`)
                 .set('Authorization', asOwner())
                 .send({
@@ -737,11 +758,55 @@ describe('InboundForm management + delivery (e2e)', () => {
                             type: 'google-recaptcha',
                             location: 'body',
                             key: 'captcha',
-                            config: { secret: 'e2e-secret', minScore: 0.5 },
+                            config: { secret: captchaSecret, minScore: 0.5 },
                         },
                     ],
                 })
                 .expect(200)
+            securityResponse = response.body
+        })
+
+        it('stores the reCAPTCHA secret only as ciphertext', async () => {
+            const config = (await storedRecaptcha()).config!
+
+            expect(Object.keys(config).sort()).toEqual(['encryptedSecret', 'minScore'])
+            expect(config.encryptedSecret).not.toContain(captchaSecret)
+            await expect(decryptSecret(config.encryptedSecret, encryptionSecret)).resolves.toBe(captchaSecret)
+        })
+
+        it('never returns the secret or its ciphertext to owners or read-only members', async () => {
+            const { encryptedSecret } = (await storedRecaptcha()).config!
+            const owner = await http().get(`/api/inbound-form/${captchaFormId}`).set('Authorization', asOwner())
+            const viewer = await http()
+                .get(`/api/inbound-form/${captchaFormId}`)
+                .set('Authorization', bearer(viewerToken))
+
+            for (const body of [securityResponse, owner.body, viewer.body]) {
+                expectNoSecretMaterial(body, encryptedSecret)
+            }
+            expect((viewer.body as FormDetailBody).security).toContainEqual(
+                expect.objectContaining({ type: 'google-recaptcha', config: { hasSecret: true, minScore: 0.5 } }),
+            )
+        })
+
+        it('keeps the stored secret when the scheme is resent without one', async () => {
+            const before = (await storedRecaptcha()).config!
+
+            const response = await http()
+                .put(`/api/inbound-form/${captchaFormId}/security`)
+                .set('Authorization', asOwner())
+                .send({
+                    security: [
+                        { type: 'honeypot', location: 'header', key: 'X-Trap' },
+                        { type: 'google-recaptcha', location: 'body', key: 'captcha', config: { minScore: 0.6 } },
+                    ],
+                })
+                .expect(200)
+
+            const after = (await storedRecaptcha()).config!
+            expect(after).toEqual({ encryptedSecret: before.encryptedSecret, minScore: 0.6 })
+            await expect(decryptSecret(after.encryptedSecret, encryptionSecret)).resolves.toBe(captchaSecret)
+            expectNoSecretMaterial(response.body, after.encryptedSecret)
         })
 
         it('rejects a submission without a captcha token', async () => {
@@ -755,6 +820,23 @@ describe('InboundForm management + delivery (e2e)', () => {
             await http().post(`/api/public/form/${captchaSlug}`).set('X-Trap', 'filled').send({ data: {} }).expect(201)
 
             expect((await latestSubmission(captchaFormId))?.status).toBe('spam')
+        })
+
+        it('requires a secret again once the reCAPTCHA scheme was removed', async () => {
+            await http()
+                .put(`/api/inbound-form/${captchaFormId}/security`)
+                .set('Authorization', asOwner())
+                .send({ security: [] })
+                .expect(200)
+
+            const response = await http()
+                .put(`/api/inbound-form/${captchaFormId}/security`)
+                .set('Authorization', asOwner())
+                .send({ security: [{ type: 'google-recaptcha', location: 'body', key: 'captcha' }] })
+
+            expect(response.status).toBe(400)
+            expect((response.body as { message: string }).message).toBe('Recaptcha requires a secret')
+            expect(await securityModel().count({ where: { inboundFormId: captchaFormId } })).toBe(0)
         })
     })
 

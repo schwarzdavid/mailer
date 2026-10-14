@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Transporter } from 'nodemailer'
 import { MAIL_TRANSPORTER } from '../mail.constants.js'
 import { DomainService } from '../../domain/services/domain.service.js'
-import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { EmailBlockService } from '../../bounce/services/email-block.service.js'
 import { BounceService } from '../../bounce/services/bounce.service.js'
 import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
@@ -22,7 +22,7 @@ export class MailService {
     constructor(
         @Inject(MAIL_TRANSPORTER) private readonly transporter: Transporter,
         private readonly domainService: DomainService,
-        private readonly dkimEncryptionService: DkimEncryptionService,
+        private readonly secretEncryptionService: SecretEncryptionService,
         private readonly emailBlockService: EmailBlockService,
         private readonly bounceService: BounceService,
     ) {}
@@ -40,7 +40,7 @@ export class MailService {
             throw new Error(`No sending domain configured for ${fqdn}`)
         }
 
-        const privateKey = await this.dkimEncryptionService.decryptDkimPrivateKey(domain.activeDkim.privateKey)
+        const privateKey = await this.secretEncryptionService.decrypt(domain.activeDkim.privateKey)
         const sendingDomain = await this.domainService.getConfiguredSendingDomain()
 
         try {

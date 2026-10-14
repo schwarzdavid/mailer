@@ -1,22 +1,24 @@
 import { ForbiddenException, Logger } from '@nestjs/common'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { Test } from '@nestjs/testing'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import {
     InboundFormSecurityService,
     SecurityCheckResult,
     SecurityRequestContext,
 } from './inbound-form-security.service.js'
 import {
-    InboundFormRecaptchaConfig,
+    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
 } from '../interfaces/inbound-form-security.interface.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 
 function scheme(
     type: InboundFormSecurityType,
     location: InboundFormSecurityLocation,
     key: string,
-    config: InboundFormRecaptchaConfig | null = null,
+    config: InboundFormRecaptchaStoredConfig | null = null,
 ): InboundFormSecurity {
     return {
         inboundFormSecurityId: 1,
@@ -41,13 +43,24 @@ function expectUrlSearchParamsBody(body: BodyInit | null | undefined): URLSearch
     return body
 }
 
+const encryptedSecret = 'v1.salt.iv.tag.ciphertext'
+
 describe('InboundFormSecurityService', () => {
     let service: InboundFormSecurityService
     let fetchSpy: MockInstance<typeof fetch>
+    let decrypt: Mock<SecretEncryptionService['decrypt']>
+    let errorSpy: MockInstance<Logger['error']>
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
-        service = new InboundFormSecurityService()
+        errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+        decrypt = vi.fn<SecretEncryptionService['decrypt']>().mockResolvedValue('secret-key')
+
+        const module = await Test.createTestingModule({
+            providers: [InboundFormSecurityService, { provide: SecretEncryptionService, useValue: { decrypt } }],
+        }).compile()
+
+        service = module.get(InboundFormSecurityService)
         fetchSpy = vi.spyOn(globalThis, 'fetch')
     })
 
@@ -115,7 +128,7 @@ describe('InboundFormSecurityService', () => {
                 InboundFormSecurityType.RECAPTCHA,
                 InboundFormSecurityLocation.BODY,
                 'recaptcha-token',
-                { secret: 'secret-key' },
+                { encryptedSecret },
             )
 
             await expect(
@@ -133,7 +146,7 @@ describe('InboundFormSecurityService', () => {
             InboundFormSecurityType.RECAPTCHA,
             InboundFormSecurityLocation.BODY,
             'recaptcha-token',
-            { secret: 'secret-key', minScore: 0.5 },
+            { encryptedSecret, minScore: 0.5 },
         )
 
         function mockVerification(payload: { success: boolean; score?: number }) {
@@ -152,8 +165,32 @@ describe('InboundFormSecurityService', () => {
             const [url, init] = fetchSpy.mock.calls[0]!
             expect(url).toBe('https://www.google.com/recaptcha/api/siteverify')
             const body = expectUrlSearchParamsBody(init?.body)
-            expect(body.toString()).toContain('secret=secret-key')
+            expect(body.get('secret')).toBe('secret-key')
             expect(body.toString()).toContain('response=token-123')
+        })
+
+        it('sends the decrypted secret, never the stored ciphertext, to the verifier', async () => {
+            mockVerification({ success: true, score: 0.9 })
+
+            await service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': 'token-123' } }))
+
+            expect(decrypt).toHaveBeenCalledWith(encryptedSecret)
+            const [, init] = fetchSpy.mock.calls[0]!
+            expect(expectUrlSearchParamsBody(init?.body).toString()).not.toContain(encodeURIComponent(encryptedSecret))
+        })
+
+        it('rejects as unconfigured and logs when the stored secret cannot be decrypted', async () => {
+            decrypt.mockRejectedValue(new Error('Unsupported state or unable to authenticate data'))
+
+            const result = service.checkSubmission(
+                [recaptcha],
+                context({ security: { 'recaptcha-token': 'token-123' } }),
+            )
+
+            await expect(result).rejects.toThrow(new ForbiddenException('Captcha is not configured'))
+            expect(fetchSpy).not.toHaveBeenCalled()
+            expect(errorSpy).toHaveBeenCalledTimes(1)
+            expect(String(errorSpy.mock.calls[0]![0])).not.toContain(encryptedSecret)
         })
 
         it('rejects when the token is missing', async () => {
@@ -255,7 +292,7 @@ describe('InboundFormSecurityService', () => {
 
         it('ignores the score when no minimum is configured', async () => {
             mockVerification({ success: true, score: 0 })
-            const lenient = { ...recaptcha, config: { secret: 'secret-key' } }
+            const lenient = { ...recaptcha, config: { encryptedSecret } }
 
             await expect(
                 service.checkSubmission([lenient], context({ security: { 'recaptcha-token': 'token-123' } })),

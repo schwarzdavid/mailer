@@ -2,6 +2,16 @@
 
 Reference input for the visual redesign. This describes the frontend as of 2026-10-13.
 
+> **Update 2026-10-14 (commit `ccbf4ab`).** Some statements below are now outdated. Where they conflict, these points win:
+> - **Mutation errors are now shown inline** (`VAlert type="error"`) in nearly every form, dialog and card: login ("Invalid email or password"), onboarding account, add domain/project/form/user, delete dialogs, project domains and members, form general/fields/security/receivers, the template editor, unblock, restore, sending domain, and user profile/permissions. There is still **no snackbar/toast** and **no success feedback**.
+> - **Load errors:** only `UserDetailView` shows a load-error alert. The other detail pages still stay blank or spin while loading or after a failed load (§5).
+> - **Delete Domain is implemented** (`DeleteDomainDialog.vue`, confirmation plus inline error), and the domain row menu only appears with delete permission. Pain point 3 is resolved.
+> - The **Domain list "Add" button** is now gated by `can('create', 'Domain')`. The domain list still has no empty-state text.
+> - Login now honors a `?redirect=` back to the originally requested page.
+> - Still true: empty Dashboard, the "Logo" placeholder, the `<title>Vite App</title>`, the no-op "Show current" item, and no permission gating on the form detail page.
+>
+> Screenshots of the current state are in `docs/design-input/screens/`.
+
 - **Stack:** Vue 3 SPA, Vuetify 4 (Material components), Vue Router, TanStack Query, vue-i18n (English only), vee-validate + Zod, CASL for permission-gated UI, Monaco editor (template editing).
 - **Paths:** Unless stated otherwise, paths are relative to `apps/frontend/src/`.
 - **Product in one line:** A self-hosted admin panel for transactional mail. Admins verify sending domains through DNS records, group **inbound forms** (public form-submission endpoints) into **projects**, and route each submission as an email to **receivers** using Handlebars templates. Admins also monitor **bounces** and manage **users and permissions**.

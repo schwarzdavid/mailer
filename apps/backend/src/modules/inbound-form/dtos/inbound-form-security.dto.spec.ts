@@ -1,9 +1,13 @@
 import 'reflect-metadata'
-import { plainToInstance } from 'class-transformer'
+import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { validate, type ValidationError } from 'class-validator'
 import { describe, expect, it } from 'vitest'
-import { InboundFormSecurityPutDto } from './inbound-form-security.dto.js'
-import { InboundFormSecurityLocation, InboundFormSecurityType } from '../interfaces/inbound-form-security.interface.js'
+import { InboundFormSecurityDto, InboundFormSecurityPutDto } from './inbound-form-security.dto.js'
+import {
+    InboundFormSecurity,
+    InboundFormSecurityLocation,
+    InboundFormSecurityType,
+} from '../interfaces/inbound-form-security.interface.js'
 
 function flatten(errors: ValidationError[], prefix = ''): string[] {
     return errors.flatMap((error) => {
@@ -60,6 +64,13 @@ describe('InboundFormSecurityPutDto', () => {
         ).resolves.toEqual(['security.0.config.secret'])
     })
 
+    it.each([
+        ['without a config', { ...recaptcha, config: undefined }],
+        ['with only a minimum score', { ...recaptcha, config: { minScore: 0.5 } }],
+    ])('accepts a recaptcha scheme %s so the stored secret can be kept', async (_case, scheme) => {
+        await expect(violations({ security: [scheme] })).resolves.toEqual([])
+    })
+
     it.each([-0.1, 1.1, '0.5'])('rejects a minimum score of %s', async (minScore) => {
         await expect(
             violations({ security: [{ ...recaptcha, config: { secret: 'server-secret', minScore } }] }),
@@ -74,5 +85,57 @@ describe('InboundFormSecurityPutDto', () => {
 
     it('requires the security array', async () => {
         await expect(violations({})).resolves.toEqual(['security'])
+    })
+})
+
+describe('InboundFormSecurityDto', () => {
+    const stored: InboundFormSecurity = {
+        inboundFormSecurityId: 7,
+        inboundFormId: 1,
+        type: InboundFormSecurityType.RECAPTCHA,
+        location: InboundFormSecurityLocation.BODY,
+        key: 'g-recaptcha-response',
+        config: { encryptedSecret: 'v1.salt.iv.tag.ciphertext', minScore: 0.5 },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+
+    function serialize(security: InboundFormSecurity): Record<string, unknown> {
+        return instanceToPlain(
+            plainToInstance(InboundFormSecurityDto, InboundFormSecurityDto.fromSecurity(security), {
+                excludeExtraneousValues: true,
+            }),
+            { excludeExtraneousValues: true },
+        )
+    }
+
+    it('reports that a secret is configured without exposing it or its ciphertext', () => {
+        const serialized = serialize(stored)
+
+        expect(serialized).toEqual({
+            inboundFormSecurityId: 7,
+            type: InboundFormSecurityType.RECAPTCHA,
+            location: InboundFormSecurityLocation.BODY,
+            key: 'g-recaptcha-response',
+            config: { hasSecret: true, minScore: 0.5 },
+        })
+        expect(JSON.stringify(serialized)).not.toContain('ciphertext')
+    })
+
+    it('strips a stray secret even if one reaches the serializer', () => {
+        const serialized = instanceToPlain(
+            plainToInstance(
+                InboundFormSecurityDto,
+                { ...stored, config: { hasSecret: true, secret: 'plain', encryptedSecret: 'v1.x' } },
+                { excludeExtraneousValues: true },
+            ),
+            { excludeExtraneousValues: true },
+        )
+
+        expect(serialized.config).toEqual({ hasSecret: true })
+    })
+
+    it('maps a scheme without config to null', () => {
+        expect(serialize({ ...stored, type: InboundFormSecurityType.HONEYPOT, config: null }).config).toBeNull()
     })
 })

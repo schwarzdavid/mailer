@@ -2,9 +2,27 @@ import { z } from 'zod'
 
 const port = z.coerce.number().int().min(1).max(65535)
 
+const trustProxy = z
+    .string()
+    .trim()
+    .optional()
+    .transform((value): boolean | number | string => {
+        if (!value || value.toLowerCase() === 'false') {
+            return false
+        }
+        if (value.toLowerCase() === 'true') {
+            return true
+        }
+        if (/^\d+$/.test(value)) {
+            return Number(value)
+        }
+        return value
+    })
+
 export const envSchema = z
     .object({
         PORT: port.default(8000),
+        TRUST_PROXY: trustProxy,
 
         DB_HOST: z.string().default('localhost'),
         DB_PORT: port.optional(),
@@ -16,7 +34,7 @@ export const envSchema = z
         REDIS_PORT: port.default(6379),
 
         BACKEND_JWT_SECRET: z.string().min(1),
-        BACKEND_DKIM_SECRET: z.string().min(1),
+        BACKEND_ENCRYPTION_SECRET: z.string().min(1),
 
         SMTP_HOST: z.string().min(1),
         SMTP_PORT: port,

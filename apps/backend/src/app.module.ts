@@ -18,6 +18,9 @@ import { SettingsModule } from './modules/settings/settings.module.js'
 import { SetupModule } from './modules/setup/setup.module.js'
 import { PermissionModule } from './modules/permission/permission.module.js'
 import { Env, envSchema } from './config/env.schema.js'
+import { createRedisClientOptions } from './factories/redis.options.js'
+import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
+import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/fail-open-throttler-storage.service.js'
 
 @Module({
     imports: [
@@ -37,22 +40,7 @@ import { Env, envSchema } from './config/env.schema.js'
             inject: [ConfigService],
             useFactory(configService: ConfigService<Env, true>) {
                 const logger = new Logger('CacheModule')
-                const host = configService.get('REDIS_HOST', { infer: true })
-                const port = configService.get('REDIS_PORT', { infer: true })
-
-                const keyv = createKeyv(
-                    {
-                        url: `redis://${host}:${port}/0`,
-                        socket: {
-                            connectTimeout: 1000,
-                            reconnectStrategy: (retries: number) => Math.min(retries * 200, 2000),
-                        },
-                        // Reject commands immediately when disconnected instead of queueing
-                        // them — a Redis outage must never hang requests (e.g. the JWT guard).
-                        disableOfflineQueue: true,
-                    },
-                    { namespace: 'cache' },
-                )
+                const keyv = createKeyv(createRedisClientOptions(configService), { namespace: 'cache' })
                 keyv.on('error', (error: Error) => logger.error(`Redis cache error: ${error.message}`))
 
                 return {
@@ -74,12 +62,21 @@ import { Env, envSchema } from './config/env.schema.js'
                 }
             },
         }),
-        ThrottlerModule.forRoot([
-            {
-                ttl: 60_000,
-                limit: 10,
+        ThrottlerModule.forRootAsync({
+            imports: [ThrottlerStorageModule],
+            inject: [FailOpenThrottlerStorage],
+            useFactory(storage: FailOpenThrottlerStorage) {
+                return {
+                    throttlers: [
+                        {
+                            ttl: 60_000,
+                            limit: 10,
+                        },
+                    ],
+                    storage,
+                }
             },
-        ]),
+        }),
         ScheduleModule.forRoot(),
         AuthModule,
         UserModule,

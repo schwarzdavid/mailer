@@ -212,6 +212,8 @@
                     "location": "Location",
                     "key": "Key",
                     "secret": "Secret key",
+                    "secretKeepHint": "Leave empty to keep the current secret",
+                    "secretConfigured": "Secret configured",
                     "minScore": "Minimum score (v3)",
                     "typeOptions": {
                         "google-recaptcha": "Google reCAPTCHA",

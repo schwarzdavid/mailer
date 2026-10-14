@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { DomainDkimService } from './domain-dkim.service.js'
 
 type GenerateRsaKeyPair = (
@@ -27,7 +27,7 @@ vi.mock('node:crypto', async (importOriginal) => {
                 : realGenerateKeyPair(type, options, callback)) satisfies GenerateRsaKeyPair,
     }
 })
-import { DkimEncryptionService } from './dkim-encryption.service.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { DomainDkimModel } from '../models/domain-dkim.model.js'
 import { DomainModel } from '../models/domain.model.js'
 import { DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
@@ -35,7 +35,7 @@ import { Domain } from '../interfaces/domain.interface.js'
 
 describe('DomainDkimService', () => {
     let service: DomainDkimService
-    let encrypt: ReturnType<typeof vi.fn>
+    let encrypt: Mock<SecretEncryptionService['encrypt']>
     let transaction: ReturnType<typeof vi.fn>
     let commit: ReturnType<typeof vi.fn>
     let rollback: ReturnType<typeof vi.fn>
@@ -61,7 +61,7 @@ describe('DomainDkimService', () => {
         txHandle = { commit, rollback }
 
         // Marks its input so tests can prove the stored key is the encrypted output.
-        encrypt = vi.fn((pem: string) => Promise.resolve(`encrypted:${pem.length}`))
+        encrypt = vi.fn<SecretEncryptionService['encrypt']>((pem) => Promise.resolve(`encrypted:${pem.length}`))
         transaction = vi.fn().mockResolvedValue(txHandle)
         domainUpdate = vi.fn().mockResolvedValue([1])
         dkimCreate = vi.fn(
@@ -78,7 +78,7 @@ describe('DomainDkimService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 DomainDkimService,
-                { provide: DkimEncryptionService, useValue: { encryptDkimPrivateKey: encrypt } },
+                { provide: SecretEncryptionService, useValue: { encrypt } },
                 { provide: Sequelize, useValue: { transaction } },
                 { provide: getModelToken(DomainDkimModel), useValue: { create: dkimCreate } },
                 { provide: getModelToken(DomainModel), useValue: { update: domainUpdate } },

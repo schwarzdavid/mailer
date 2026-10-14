@@ -3,7 +3,7 @@ import { envSchema } from './env.schema.js'
 
 const requiredEnv: Record<string, string> = {
     BACKEND_JWT_SECRET: 'jwt-secret',
-    BACKEND_DKIM_SECRET: 'dkim-secret',
+    BACKEND_ENCRYPTION_SECRET: 'encryption-secret',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '1025',
 }
@@ -27,7 +27,7 @@ describe('envSchema', () => {
         })
     })
 
-    it.each(['BACKEND_JWT_SECRET', 'BACKEND_DKIM_SECRET', 'SMTP_HOST', 'SMTP_PORT'])('requires %s', (key) => {
+    it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'SMTP_HOST', 'SMTP_PORT'])('requires %s', (key) => {
         const result = envSchema.safeParse({ ...requiredEnv, [key]: undefined })
 
         expect(result.success).toBe(false)
@@ -46,5 +46,27 @@ describe('envSchema', () => {
 
     it('accepts a missing IMAP_HOST without credentials', () => {
         expect(envSchema.safeParse(requiredEnv).success).toBe(true)
+    })
+
+    describe('TRUST_PROXY', () => {
+        it.each([undefined, '', '   '])("keeps Express' untrusted default for %j", (value) => {
+            expect(envSchema.parse({ ...requiredEnv, TRUST_PROXY: value }).TRUST_PROXY).toBe(false)
+        })
+
+        it.each([
+            ['true', true],
+            ['TRUE', true],
+            ['false', false],
+            ['0', 0],
+            ['1', 1],
+            ['2', 2],
+            ['loopback', 'loopback'],
+            ['loopback, 10.0.0.0/8', 'loopback, 10.0.0.0/8'],
+            ['172.16.0.1', '172.16.0.1'],
+            ['-1', '-1'],
+            [' 1 ', 1],
+        ])('maps %j to %j', (value, expected) => {
+            expect(envSchema.parse({ ...requiredEnv, TRUST_PROXY: value }).TRUST_PROXY).toBe(expected)
+        })
     })
 })

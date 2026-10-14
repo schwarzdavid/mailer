@@ -10,8 +10,13 @@ export enum InboundFormSecurityLocation {
     QUERY = 'query',
 }
 
-export interface InboundFormRecaptchaConfig {
-    secret: string
+export interface InboundFormRecaptchaStoredConfig {
+    encryptedSecret: string
+    minScore?: number
+}
+
+export interface InboundFormRecaptchaConfigInput {
+    secret?: string
     minScore?: number
 }
 
@@ -21,11 +26,13 @@ export interface InboundFormSecurity {
     type: InboundFormSecurityType
     location: InboundFormSecurityLocation
     key: string
-    config: InboundFormRecaptchaConfig | null
+    config: InboundFormRecaptchaStoredConfig | null
     createdAt: Date
     updatedAt: Date
 }
 
 export type InboundFormSecurityCreate = Omit<InboundFormSecurity, 'inboundFormSecurityId' | 'createdAt' | 'updatedAt'>
 
-export type InboundFormSecurityUpsert = Omit<InboundFormSecurityCreate, 'inboundFormId'>
+export type InboundFormSecurityUpsert = Omit<InboundFormSecurityCreate, 'inboundFormId' | 'config'> & {
+    config: InboundFormRecaptchaConfigInput | null
+}

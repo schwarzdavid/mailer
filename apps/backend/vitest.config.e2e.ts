@@ -14,7 +14,7 @@ export default defineConfig({
         include: ['test/**/*.e2e-spec.ts'],
         // Shared containers + migrations are started once for the whole run.
         globalSetup: ['./test/support/global-setup.ts'],
-        setupFiles: ['./test/support/env.ts'],
+        setupFiles: ['./test/support/env.ts', './test/support/throttle-reset.ts'],
         // Test files share one database, so run them sequentially to keep the
         // seeded state deterministic (and avoid concurrent bootstrap writes).
         fileParallelism: false,

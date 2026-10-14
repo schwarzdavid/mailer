@@ -4,7 +4,10 @@ import {
     ValidationPipe,
     type ValidationPipeOptions,
 } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { HttpAdapterHost, Reflector } from '@nestjs/core'
+import type { ExpressAdapter } from '@nestjs/platform-express'
+import type { Env } from '../config/env.schema.js'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { SequelizeExceptionFilter } from '../filters/sequelize-exception.filter.js'
 
@@ -18,6 +21,7 @@ export const validationPipeOptions: ValidationPipeOptions = {
 }
 
 export function configureApp(app: INestApplication): void {
+    applyTrustProxy(app)
     app.enableShutdownHooks()
     app.enableCors()
     app.setGlobalPrefix('api')
@@ -29,6 +33,11 @@ export function configureApp(app: INestApplication): void {
             excludeExtraneousValues: true,
         }),
     )
+}
+
+function applyTrustProxy(app: INestApplication): void {
+    const trustProxy = app.get<ConfigService<Env, true>>(ConfigService).get('TRUST_PROXY', { infer: true })
+    app.get<HttpAdapterHost<ExpressAdapter>>(HttpAdapterHost).httpAdapter.set('trust proxy', trustProxy)
 }
 
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {

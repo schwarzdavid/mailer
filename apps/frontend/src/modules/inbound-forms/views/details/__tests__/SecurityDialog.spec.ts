@@ -13,7 +13,7 @@ const recaptcha: InboundFormSecurityDto = {
     type: 'google-recaptcha',
     location: 'header',
     key: 'X-Recaptcha',
-    config: { secret: 's3cret', minScore: 0.7 },
+    config: { hasSecret: true, minScore: 0.7 },
 }
 
 function dialog() {
@@ -51,13 +51,27 @@ describe('SecurityDialog', () => {
         })
     })
 
-    it('prefills a reCAPTCHA scheme, locks its type and keeps its config', async () => {
+    it('prefills a reCAPTCHA scheme, locks its type and keeps the stored secret when left empty', async () => {
         const wrapper = await openDialog(recaptcha)
 
         expect(dialog().text()).toContain('Edit')
         expect(dialog().find('.v-select.v-input--disabled').exists()).toBe(true)
         expect((dialog().get('input[name="key"]').element as HTMLInputElement).value).toBe('X-Recaptcha')
-        expect((dialog().get('input[name="secret"]').element as HTMLInputElement).value).toBe('s3cret')
+        expect((dialog().get('input[name="secret"]').element as HTMLInputElement).value).toBe('')
+        expect(dialog().text()).toContain('Leave empty to keep the current secret')
+        await dialog().get('form').trigger('submit')
+
+        await vi.waitFor(() => {
+            expect(savedSchemes(wrapper)).toEqual([
+                { type: 'google-recaptcha', location: 'header', key: 'X-Recaptcha', config: { minScore: 0.7 } },
+            ])
+        })
+        expect(savedSchemes(wrapper)[0]!.config).not.toHaveProperty('secret')
+    })
+
+    it('sends a newly entered secret to replace the stored one', async () => {
+        const wrapper = await openDialog(recaptcha)
+
         await dialog().get('input[name="secret"]').setValue('rotated')
         await dialog().get('form').trigger('submit')
 
@@ -73,9 +87,16 @@ describe('SecurityDialog', () => {
         })
     })
 
-    it('requires a secret for reCAPTCHA', async () => {
+    it('masks the secret input', async () => {
+        await openDialog(recaptcha)
+
+        expect(dialog().get('input[name="secret"]').attributes('type')).toBe('password')
+    })
+
+    it('requires a secret for reCAPTCHA without a stored one', async () => {
         const wrapper = await openDialog({ ...recaptcha, config: null })
 
+        expect(dialog().text()).not.toContain('Leave empty to keep the current secret')
         await dialog().get('form').trigger('submit')
 
         await vi.waitFor(() => {

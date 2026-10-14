@@ -4,6 +4,7 @@ import {
     InboundFormSecurityLocation,
     InboundFormSecurityType,
 } from '../interfaces/inbound-form-security.interface.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 
 export interface SecurityRequestContext {
     security: Record<string, unknown>
@@ -27,6 +28,8 @@ export class InboundFormSecurityService {
     private static readonly RECAPTCHA_TIMEOUT_MS = 5000
 
     private readonly logger = new Logger(InboundFormSecurityService.name)
+
+    constructor(private readonly secretEncryptionService: SecretEncryptionService) {}
 
     async checkSubmission(
         schemes: InboundFormSecurity[],
@@ -71,16 +74,18 @@ export class InboundFormSecurityService {
         if (typeof value !== 'string' || value === '') {
             throw new ForbiddenException('Missing captcha token')
         }
-        if (!scheme.config?.secret) {
+        if (!scheme.config?.encryptedSecret) {
             throw new ForbiddenException('Captcha is not configured')
         }
+
+        const secret = await this.decryptRecaptchaSecret(scheme, scheme.config.encryptedSecret)
 
         let response: Response
         try {
             response = await fetch(InboundFormSecurityService.RECAPTCHA_VERIFY_URL, {
                 method: 'POST',
                 headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ secret: scheme.config.secret, response: value }),
+                body: new URLSearchParams({ secret, response: value }),
                 signal: AbortSignal.timeout(InboundFormSecurityService.RECAPTCHA_TIMEOUT_MS),
             })
         } catch {
@@ -100,6 +105,17 @@ export class InboundFormSecurityService {
         const minScore = scheme.config.minScore
         if (minScore !== undefined && (verification.score ?? 0) < minScore) {
             throw new ForbiddenException('Captcha score too low')
+        }
+    }
+
+    private async decryptRecaptchaSecret(scheme: InboundFormSecurity, encryptedSecret: string): Promise<string> {
+        try {
+            return await this.secretEncryptionService.decrypt(encryptedSecret)
+        } catch {
+            this.logger.error(
+                `Stored reCAPTCHA secret of form ${scheme.inboundFormId} could not be decrypted; check BACKEND_ENCRYPTION_SECRET`,
+            )
+            throw new ForbiddenException('Captcha is not configured')
         }
     }
 }

@@ -18,7 +18,7 @@ const security: InboundFormSecurityDto[] = [
         type: 'google-recaptcha',
         location: 'header',
         key: 'X-Recaptcha',
-        config: { secret: 's3cret', minScore: 0.5 },
+        config: { hasSecret: true, minScore: 0.5 },
     },
 ]
 
@@ -62,7 +62,15 @@ describe('SecurityCard', () => {
         expect(items[1]!.text()).toContain('Header')
     })
 
-    it('removes a scheme by saving the others with their config', async () => {
+    it('marks a configured reCAPTCHA secret without revealing it', () => {
+        const wrapper = mountView(SecurityCard, { props: { form } })
+
+        const items = wrapper.findAll('.v-list-item')
+        expect(items[0]!.text()).not.toContain('Secret configured')
+        expect(items[1]!.text()).toContain('Secret configured')
+    })
+
+    it('removes a scheme by resending the others without their secret', async () => {
         const updateSpy = vi.spyOn(InboundFormApi, 'updateInboundFormSecurity').mockResolvedValue([security[1]!])
         const wrapper = mountView(SecurityCard, { props: { form } })
 
@@ -77,7 +85,7 @@ describe('SecurityCard', () => {
                             type: 'google-recaptcha',
                             location: 'header',
                             key: 'X-Recaptcha',
-                            config: { secret: 's3cret', minScore: 0.5 },
+                            config: { minScore: 0.5 },
                         },
                     ],
                 },
@@ -127,7 +135,7 @@ describe('SecurityCard', () => {
                             type: 'google-recaptcha',
                             location: 'header',
                             key: 'X-Recaptcha',
-                            config: { secret: 's3cret', minScore: 0.5 },
+                            config: { minScore: 0.5 },
                         },
                         { type: 'honeypot', location: 'body', key: 'homepage', config: null },
                     ],

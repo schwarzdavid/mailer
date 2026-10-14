@@ -16,7 +16,15 @@ const security: InboundFormSecurityUpsertDto[] = [
     },
 ]
 
-const saved: InboundFormSecurityDto[] = [{ ...security[0]!, inboundFormSecurityId: 11 }]
+const saved: InboundFormSecurityDto[] = [
+    {
+        inboundFormSecurityId: 11,
+        type: 'google-recaptcha',
+        location: 'body',
+        key: 'g-recaptcha-response',
+        config: { hasSecret: true, minScore: 0.5 },
+    },
+]
 
 afterEach(() => {
     vi.restoreAllMocks()

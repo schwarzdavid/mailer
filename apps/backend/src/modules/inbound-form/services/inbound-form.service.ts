@@ -16,10 +16,13 @@ import {
     InboundFormFieldUpsert,
 } from '../interfaces/inbound-form-field.interface.js'
 import {
+    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
+    InboundFormSecurityCreate,
     InboundFormSecurityType,
     InboundFormSecurityUpsert,
 } from '../interfaces/inbound-form-security.interface.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface.js'
 import { parsePlaceholder } from '../helpers/placeholder.js'
 import { pickDefined } from '../../../helpers/pick-defined.js'
@@ -67,6 +70,7 @@ export class InboundFormService {
         private readonly domainService: DomainService,
         private readonly projectService: ProjectService,
         private readonly abilityFactory: AbilityFactory,
+        private readonly secretEncryptionService: SecretEncryptionService,
         private readonly sequelize: Sequelize,
     ) {}
 
@@ -226,7 +230,7 @@ export class InboundFormService {
         schemes: InboundFormSecurityUpsert[],
         ability: AppAbility,
     ): Promise<InboundFormSecurity[]> {
-        await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
 
         const types = schemes.map((scheme) => scheme.type)
         if (new Set(types).size !== types.length) {
@@ -237,18 +241,26 @@ export class InboundFormService {
             if (scheme.type === InboundFormSecurityType.CSRF) {
                 throw new BadRequestException('The csrf scheme is not supported yet')
             }
-            if (scheme.type === InboundFormSecurityType.RECAPTCHA && !scheme.config?.secret) {
-                throw new BadRequestException('Recaptcha requires a secret')
-            }
+        }
+
+        const currentRecaptcha = form.inboundFormSecurity.find(
+            (scheme) => scheme.type === InboundFormSecurityType.RECAPTCHA,
+        )
+        const rows: InboundFormSecurityCreate[] = []
+        for (const scheme of schemes) {
+            rows.push({
+                inboundFormId,
+                type: scheme.type,
+                location: scheme.location,
+                key: scheme.key,
+                config: await this.toStoredSecurityConfig(scheme, currentRecaptcha?.config ?? null),
+            })
         }
 
         const created = await this.sequelize.transaction(async (transaction) => {
             await this.securityModel.destroy({ where: { inboundFormId }, transaction })
 
-            return this.securityModel.bulkCreate(
-                schemes.map((scheme) => ({ ...scheme, inboundFormId })),
-                { transaction, returning: true },
-            )
+            return this.securityModel.bulkCreate(rows, { transaction, returning: true })
         })
 
         return created.map((scheme) => scheme.get({ plain: true }))
@@ -300,6 +312,26 @@ export class InboundFormService {
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
 
         return receiver.get({ plain: true })
+    }
+
+    private async toStoredSecurityConfig(
+        scheme: InboundFormSecurityUpsert,
+        currentRecaptcha: InboundFormRecaptchaStoredConfig | null,
+    ): Promise<InboundFormRecaptchaStoredConfig | null> {
+        if (scheme.type !== InboundFormSecurityType.RECAPTCHA) {
+            return null
+        }
+
+        const secret = scheme.config?.secret
+        const encryptedSecret = secret
+            ? await this.secretEncryptionService.encrypt(secret)
+            : currentRecaptcha?.encryptedSecret
+        if (!encryptedSecret) {
+            throw new BadRequestException('Recaptcha requires a secret')
+        }
+
+        const minScore = scheme.config?.minScore
+        return typeof minScore === 'number' ? { encryptedSecret, minScore } : { encryptedSecret }
     }
 
     private async loadForm(inboundFormId: number): Promise<InboundFormModel> {

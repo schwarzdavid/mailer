@@ -12,7 +12,7 @@ import {
     UpdatedAt,
 } from 'sequelize-typescript'
 import {
-    InboundFormRecaptchaConfig,
+    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
     InboundFormSecurityCreate,
     InboundFormSecurityLocation,
@@ -59,7 +59,7 @@ export class InboundFormSecurityModel
 
     @AllowNull
     @Column(DataType.JSONB)
-    declare config: InboundFormRecaptchaConfig | null
+    declare config: InboundFormRecaptchaStoredConfig | null
 
     @CreatedAt
     declare createdAt: Date

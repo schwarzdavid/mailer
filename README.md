@@ -47,7 +47,7 @@ Copy the template to a root `.env`. The defaults already match the local Docker 
 cp .env.example .env
 ```
 
-Change `BACKEND_JWT_SECRET` and `BACKEND_DKIM_SECRET` to any non-trivial values. The DKIM secret encrypts the stored private keys, so if you change it later, existing keys can no longer be decrypted.
+Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
 
 ### 3. Start the infrastructure
 
@@ -96,8 +96,24 @@ pnpm lint                         # ESLint (+ oxlint in the frontend)
 pnpm typecheck                    # tsc / vue-tsc
 pnpm test                         # unit tests across all workspaces
 pnpm --filter backend test:e2e    # backend e2e tests (needs Docker, uses Testcontainers)
+pnpm --filter frontend test:e2e   # full-stack Playwright tests (needs Docker; once: pnpm --filter frontend exec playwright install chromium)
 pnpm check                        # lint + typecheck + test + format check
 ```
+
+## Running behind a reverse proxy
+
+Rate limits (login, public form submissions, setup) are counted per client IP address. Behind a reverse proxy, every request arrives from the proxy's address, so all visitors would share one limit. `TRUST_PROXY` tells the backend which proxies it may trust to report the real client address in `X-Forwarded-For`. The value is passed to Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting:
+
+| Setup                                                      | `TRUST_PROXY`                             |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| No proxy, the backend is reached directly                  | leave unset                               |
+| One reverse proxy (nginx, Traefik, Caddy, a load balancer) | `1`                                       |
+| A chain of N proxies                                       | `N`                                       |
+| Trust proxies by address instead of by position            | `loopback` or a subnet, e.g. `10.0.0.0/8` |
+
+Don't set `TRUST_PROXY=true` unless the backend can only be reached through the proxy: it trusts the left-most address in `X-Forwarded-For`, which any client can forge to get around the rate limits. When `TRUST_PROXY` is unset, `X-Forwarded-For` is ignored.
+
+Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, requests are let through without rate limiting and a warning is logged.
 
 ## Open todos
 

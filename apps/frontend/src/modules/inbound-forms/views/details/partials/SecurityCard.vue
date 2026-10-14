@@ -14,6 +14,9 @@
                     <template #subtitle>
                         {{ t(`module.inboundForms.details.security.locationOptions.${scheme.location}`) }} ·
                         <code>{{ scheme.key }}</code>
+                        <template v-if="scheme.config?.hasSecret">
+                            · {{ t('module.inboundForms.details.security.secretConfigured') }}
+                        </template>
                     </template>
                     <template #append>
                         <VIconBtn icon="mdi-pencil" size="small" @click="openDialog(scheme)" />
@@ -61,7 +64,7 @@
             type: scheme.type,
             location: scheme.location,
             key: scheme.key,
-            config: scheme.config ?? null,
+            config: scheme.config ? { minScore: scheme.config.minScore } : null,
         }
     }
 

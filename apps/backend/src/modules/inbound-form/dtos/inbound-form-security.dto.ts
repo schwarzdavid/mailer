@@ -13,17 +13,24 @@ import {
 } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import {
-    InboundFormRecaptchaConfig,
+    InboundFormRecaptchaConfigInput,
+    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
 } from '../interfaces/inbound-form-security.interface.js'
 
-export class InboundFormRecaptchaConfigDto implements InboundFormRecaptchaConfig {
+export class InboundFormRecaptchaConfigUpsertDto implements InboundFormRecaptchaConfigInput {
     @Expose()
+    @ApiProperty({
+        type: String,
+        required: false,
+        description: 'Write-only. Omit to keep the secret already stored for this form.',
+    })
+    @IsOptional()
     @IsString()
     @IsNotEmpty()
-    secret!: string
+    secret?: string
 
     @Expose()
     @IsOptional()
@@ -31,6 +38,24 @@ export class InboundFormRecaptchaConfigDto implements InboundFormRecaptchaConfig
     @Min(0)
     @Max(1)
     minScore?: number
+}
+
+export class InboundFormRecaptchaConfigDto {
+    @Expose()
+    @ApiProperty({ type: Boolean })
+    hasSecret!: boolean
+
+    @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 0, maximum: 1 })
+    minScore?: number
+
+    static fromConfig(config: InboundFormRecaptchaStoredConfig | null): InboundFormRecaptchaConfigDto | null {
+        if (!config) {
+            return null
+        }
+
+        return { hasSecret: !!config.encryptedSecret, minScore: config.minScore }
+    }
 }
 
 export class InboundFormSecurityUpsertDto {
@@ -53,8 +78,8 @@ export class InboundFormSecurityUpsertDto {
     @Expose()
     @IsOptional()
     @ValidateNested()
-    @Type(() => InboundFormRecaptchaConfigDto)
-    config: InboundFormRecaptchaConfigDto | null = null
+    @Type(() => InboundFormRecaptchaConfigUpsertDto)
+    config: InboundFormRecaptchaConfigUpsertDto | null = null
 }
 
 export class InboundFormSecurityPutDto {
@@ -90,7 +115,7 @@ export class InboundFormSecurityDto {
             type: security.type,
             location: security.location,
             key: security.key,
-            config: security.config,
+            config: InboundFormRecaptchaConfigDto.fromConfig(security.config),
         }
     }
 }

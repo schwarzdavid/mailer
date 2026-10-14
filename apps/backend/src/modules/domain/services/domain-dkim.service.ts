@@ -4,7 +4,7 @@ import { DomainDkim, DomainDkimAlgorithm, DomainDkimKeyBits } from '../interface
 import { InjectModel } from '@nestjs/sequelize'
 import { DomainDkimModel } from '../models/domain-dkim.model.js'
 import { generateKeyPair } from 'node:crypto'
-import { DkimEncryptionService } from './dkim-encryption.service.js'
+import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
 import { Sequelize } from 'sequelize-typescript'
 import { DomainModel } from '../models/domain.model.js'
 
@@ -18,7 +18,7 @@ export class DomainDkimService {
     private static readonly DEFAULT_SELECTOR = 's1'
 
     constructor(
-        private readonly dkimEncryptionService: DkimEncryptionService,
+        private readonly secretEncryptionService: SecretEncryptionService,
         private readonly sequelize: Sequelize,
         @InjectModel(DomainDkimModel) private readonly domainDkimModel: typeof DomainDkimModel,
         @InjectModel(DomainModel) private readonly domainModel: typeof DomainModel,
@@ -26,7 +26,7 @@ export class DomainDkimService {
 
     async createDkimForDomain(domain: Pick<Domain, 'domainId'>, setActive = false): Promise<DomainDkim> {
         const { privateKey, publicKey } = await this.generateDkimKeyPair()
-        const encryptedPrivateKey = await this.dkimEncryptionService.encryptDkimPrivateKey(privateKey)
+        const encryptedPrivateKey = await this.secretEncryptionService.encrypt(privateKey)
 
         const transaction = setActive ? await this.sequelize.transaction() : null
 
