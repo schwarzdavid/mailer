@@ -6,20 +6,20 @@ import type { Transaction } from 'sequelize'
 import { Op, UniqueConstraintError } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { ProjectService } from './project.service'
-import { ProjectModel } from '../models/project.model'
-import { ProjectDomainModel } from '../models/project-domain.model'
-import { DomainModel } from '../../domain/models/domain.model'
-import { InboundFormModel } from '../../inbound-form/models/inbound-form.model'
-import { DomainService } from '../../domain/services/domain.service'
-import { AbilityFactory } from '../../permission/services/ability-factory.service'
-import { PermissionCacheService } from '../../permission/services/permission-cache.service'
-import { ProjectMemberModel } from '../../permission/models/project-member.model'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { Domain } from '../../domain/interfaces/domain.interface'
-import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface'
-import { Project } from '../interfaces/project.interface'
-import { User } from '../../user/interfaces/user.interface'
+import { ProjectService } from './project.service.js'
+import { ProjectModel } from '../models/project.model.js'
+import { ProjectDomainModel } from '../models/project-domain.model.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
+import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
+import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
+import { ProjectMemberModel } from '../../permission/models/project-member.model.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface.js'
+import { Project } from '../interfaces/project.interface.js'
+import { User } from '../../user/interfaces/user.interface.js'
 
 const domain: Domain = {
     domainId: 3,
@@ -202,6 +202,22 @@ describe('ProjectService', () => {
                 new BadRequestException('Name is already in use'),
             )
         })
+
+        it('rethrows unexpected persistence errors without touching memberships or the cache', async () => {
+            projectCreate.mockRejectedValue(new Error('connection lost'))
+
+            await expect(service.createProject('Acme', principal)).rejects.toThrow('connection lost')
+            expect(memberBulkCreate).not.toHaveBeenCalled()
+            expect(invalidateUser).not.toHaveBeenCalled()
+        })
+
+        it('does not invalidate the permission cache when granting the membership fails', async () => {
+            projectCreate.mockResolvedValue(projectRow())
+            memberBulkCreate.mockRejectedValue(new Error('constraint violated'))
+
+            await expect(service.createProject('Acme', principal)).rejects.toThrow('constraint violated')
+            expect(invalidateUser).not.toHaveBeenCalled()
+        })
     })
 
     describe('getProjects', () => {
@@ -308,6 +324,32 @@ describe('ProjectService', () => {
                 new BadRequestException('Name is already in use'),
             )
         })
+
+        it('rethrows unexpected persistence errors', async () => {
+            const row = projectRow()
+            row.update.mockRejectedValue(new Error('connection lost'))
+            projectFindByPk.mockResolvedValue(row)
+
+            await expect(service.updateProject(1, { name: 'Beta' }, manageAll)).rejects.toThrow('connection lost')
+        })
+
+        it('hides projects the caller cannot read behind a 404', async () => {
+            const row = projectRow({ projectId: 2 })
+            projectFindByPk.mockResolvedValue(row)
+
+            await expect(service.updateProject(2, { name: 'Beta' }, memberAbility)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+            expect(row.update).not.toHaveBeenCalled()
+        })
+
+        it('throws not found for unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.updateProject(1, { name: 'Beta' }, manageAll)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+        })
     })
 
     describe('deleteProject', () => {
@@ -324,6 +366,22 @@ describe('ProjectService', () => {
             projectFindByPk.mockResolvedValue(projectRow())
 
             await expect(service.deleteProject(1, memberAbility)).rejects.toThrow(ForbiddenException)
+        })
+
+        it('hides projects the caller cannot read behind a 404 and keeps them', async () => {
+            const row = projectRow({ projectId: 2 })
+            projectFindByPk.mockResolvedValue(row)
+
+            await expect(service.deleteProject(2, memberAbility)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+            expect(row.destroy).not.toHaveBeenCalled()
+        })
+
+        it('throws not found for unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.deleteProject(1, manageAll)).rejects.toThrow(new NotFoundException('Unknown project'))
         })
     })
 
@@ -342,6 +400,20 @@ describe('ProjectService', () => {
             projectFindByPk.mockResolvedValue(projectRow())
 
             await expect(service.restoreProject(1, manageAll)).rejects.toThrow(new NotFoundException('Unknown project'))
+        })
+
+        it('throws not found for unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.restoreProject(1, manageAll)).rejects.toThrow(new NotFoundException('Unknown project'))
+        })
+
+        it('rejects members without the delete level and keeps the project trashed', async () => {
+            const row = projectRow({ deletedAt: new Date() })
+            projectFindByPk.mockResolvedValue(row)
+
+            await expect(service.restoreProject(1, memberAbility)).rejects.toThrow(ForbiddenException)
+            expect(row.restore).not.toHaveBeenCalled()
         })
     })
 
@@ -372,6 +444,25 @@ describe('ProjectService', () => {
                 new BadRequestException('Unknown domain'),
             )
         })
+
+        it('rejects read-only members before looking up the domain', async () => {
+            projectFindByPk.mockResolvedValue(projectRow())
+
+            await expect(service.assignDomain(1, 3, readOnlyAbility)).rejects.toThrow(
+                new ForbiddenException('Missing project permission'),
+            )
+            expect(getDomainById).not.toHaveBeenCalled()
+            expect(projectDomainFindOrCreate).not.toHaveBeenCalled()
+        })
+
+        it('throws not found for unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.assignDomain(1, 3, manageAll)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+            expect(projectDomainFindOrCreate).not.toHaveBeenCalled()
+        })
     })
 
     describe('unassignDomain', () => {
@@ -392,6 +483,22 @@ describe('ProjectService', () => {
                 new BadRequestException('The domain is used by 2 forms in this project'),
             )
         })
+
+        it('rejects editors without domain read access', async () => {
+            projectFindByPk.mockResolvedValue(projectRow())
+
+            await expect(service.unassignDomain(1, 3, noDomainEditorAbility)).rejects.toThrow(
+                new ForbiddenException('Missing domain permission'),
+            )
+            expect(projectDomainDestroy).not.toHaveBeenCalled()
+        })
+
+        it('rejects read-only members', async () => {
+            projectFindByPk.mockResolvedValue(projectRow())
+
+            await expect(service.unassignDomain(1, 3, readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(projectDomainDestroy).not.toHaveBeenCalled()
+        })
     })
 
     describe('assertDomainInProject', () => {
@@ -407,6 +514,20 @@ describe('ProjectService', () => {
             await expect(service.assertDomainInProject(1, 3)).rejects.toThrow(
                 new BadRequestException('Domain does not belong to the project'),
             )
+        })
+    })
+
+    describe('assertProjectExists', () => {
+        it('resolves for existing projects', async () => {
+            projectFindByPk.mockResolvedValue(projectRow())
+
+            await expect(service.assertProjectExists(1)).resolves.toBeUndefined()
+        })
+
+        it('throws not found for unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.assertProjectExists(1)).rejects.toThrow(new NotFoundException('Unknown project'))
         })
     })
 })

@@ -142,7 +142,9 @@ router.beforeEach(async (to) => {
         await queryClient.fetchQuery(useAuthQuery())
     } catch (err) {
         console.error(err)
-        return { name: RouteNames.LOGIN }
+        return to.fullPath === '/'
+            ? { name: RouteNames.LOGIN }
+            : { name: RouteNames.LOGIN, query: { redirect: to.fullPath } }
     }
 
     try {

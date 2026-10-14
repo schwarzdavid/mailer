@@ -4,6 +4,7 @@
             <VBtn :text="t('module.inboundForms.details.fields.add')" @click="openDialog(null)" />
         </template>
         <VCardItem>
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <p v-if="form.fields.length === 0">{{ t('module.inboundForms.details.fields.empty') }}</p>
             <VTable v-else>
                 <thead>
@@ -33,7 +34,13 @@
                 </tbody>
             </VTable>
         </VCardItem>
-        <FieldDialog v-model="dialogOpen" :field="editingField" :saving="isPending" @save="saveField" />
+        <FieldDialog
+            v-model="dialogOpen"
+            :field="editingField"
+            :saving="isPending"
+            :error="dialogError"
+            @save="saveField"
+        />
     </VCard>
 </template>
 
@@ -43,6 +50,7 @@
     import type { InboundFormDetailDto, InboundFormFieldDto, InboundFormFieldUpsertDto } from 'api'
     import { useInboundFormFieldsMutation } from '@/modules/inbound-forms/mutations/useInboundFormFieldsMutation.ts'
     import FieldDialog from '@/modules/inbound-forms/views/details/partials/FieldDialog.vue'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto }>()
 
@@ -51,9 +59,12 @@
 
     const dialogOpen = ref(false)
     const editingField = ref<InboundFormFieldDto | null>(null)
+    const errorMessage = ref<string | null>(null)
+    const dialogError = ref<string | null>(null)
 
     function openDialog(field: InboundFormFieldDto | null) {
         editingField.value = field
+        dialogError.value = null
         dialogOpen.value = true
     }
 
@@ -75,13 +86,23 @@
                 ? [...current, payload]
                 : current.map((field) => (field.key === originalKey ? payload : field))
 
-        await mutateAsync({ inboundFormId: props.form.inboundFormId, fields })
-        dialogOpen.value = false
+        dialogError.value = null
+        try {
+            await mutateAsync({ inboundFormId: props.form.inboundFormId, fields })
+            dialogOpen.value = false
+        } catch (error) {
+            dialogError.value = apiErrorMessage(error, t('module.inboundForms.details.fields.error'))
+        }
     }
 
     async function removeField(key: string) {
         const fields = props.form.fields.map(toUpsert).filter((field) => field.key !== key)
 
-        await mutateAsync({ inboundFormId: props.form.inboundFormId, fields })
+        errorMessage.value = null
+        try {
+            await mutateAsync({ inboundFormId: props.form.inboundFormId, fields })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.details.fields.error'))
+        }
     }
 </script>

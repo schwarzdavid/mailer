@@ -1,6 +1,6 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { describe, expect, it } from 'vitest'
-import { UserDto } from './user.dto'
+import { UserDto } from './user.dto.js'
 
 describe('UserDto serialization', () => {
     // Mirrors what the global ClassSerializerInterceptor does for responses: only the

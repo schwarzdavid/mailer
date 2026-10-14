@@ -2,8 +2,8 @@ import 'reflect-metadata'
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common'
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants'
 import { describe, expect, it } from 'vitest'
-import { Principal } from './Principal'
-import type { User } from '../../user/interfaces/user.interface'
+import { Principal } from './Principal.js'
+import type { User } from '../../user/interfaces/user.interface.js'
 
 type PrincipalFactory = (data: unknown, ctx: ExecutionContext) => User
 

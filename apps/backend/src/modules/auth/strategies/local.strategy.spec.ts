@@ -1,8 +1,8 @@
 import { Logger, UnauthorizedException } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LocalStrategy } from './local.strategy'
-import { CredentialsService } from '../services/credentials.service'
-import { User } from '../../user/interfaces/user.interface'
+import { LocalStrategy } from './local.strategy.js'
+import { CredentialsService } from '../services/credentials.service.js'
+import { User } from '../../user/interfaces/user.interface.js'
 
 describe('LocalStrategy', () => {
     let strategy: LocalStrategy

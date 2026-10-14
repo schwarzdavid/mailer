@@ -31,6 +31,32 @@ afterEach(() => {
 })
 
 describe('SettingsView', () => {
+    it('shows a spinner until the settings arrive', () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockReturnValue(new Promise(() => {}))
+        const wrapper = mountView(SettingsView)
+
+        expect(wrapper.find('.v-progress-circular').exists()).toBe(true)
+        expect(wrapper.find('input[name="fqdn"]').exists()).toBe(false)
+    })
+
+    it('reveals the records card once a sending domain is saved', async () => {
+        vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+        vi.spyOn(SettingsApi, 'configureSendingDomain').mockResolvedValue(configured.sendingDomain!)
+        const wrapper = mountView(SettingsView)
+        await vi.waitFor(() => {
+            expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true)
+        })
+
+        await wrapper.get('input[name="fqdn"]').setValue('mail.sending-domain.org')
+        await wrapper.get('input[name="serverIpv4"]').setValue('203.0.113.10')
+        await wrapper.get('form').trigger('submit')
+
+        await vi.waitFor(() => {
+            expect(wrapper.text()).toContain('DNS Records')
+        })
+        expect((wrapper.get('input[name="fqdn"]').element as HTMLInputElement).value).toBe('mail.sending-domain.org')
+    })
+
     it('shows the sending domain form without a records card while unconfigured', async () => {
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
         const wrapper = mountView(SettingsView)

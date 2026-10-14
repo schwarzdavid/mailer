@@ -1,8 +1,8 @@
 import { Expose } from 'class-transformer'
 import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface'
-import { InboundFormTemplateSummary } from '../interfaces/inbound-form-template.interface'
+import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
+import { InboundFormTemplateSummary } from '../interfaces/inbound-form-template.interface.js'
 
 export class InboundFormReceiverCreateDto {
     @Expose()

@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common'
-import { AbilityAction, AbilitySubjectName } from '../interfaces/app-ability'
+import { AbilityAction, AbilitySubjectName } from '../interfaces/app-ability.js'
 
 export interface AbilityRequirement {
     action: AbilityAction

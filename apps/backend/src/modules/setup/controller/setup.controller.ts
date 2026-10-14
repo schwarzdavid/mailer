@@ -1,12 +1,12 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { ThrottlerGuard } from '@nestjs/throttler'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { SetupService } from '../services/setup.service'
-import { SetupStatusDto } from '../dtos/setup-status.dto'
-import { RegisterUserDto } from '../dtos/register-user.dto'
-import { AuthenticationDto } from '../../auth/dtos/authentication.dto'
-import { JwtHelperService } from '../../auth/services/jwt-helper.service'
+import { SkipThrottle, ThrottlerGuard } from '@nestjs/throttler'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { SetupService } from '../services/setup.service.js'
+import { SetupStatusDto } from '../dtos/setup-status.dto.js'
+import { RegisterUserDto } from '../dtos/register-user.dto.js'
+import { AuthenticationDto } from '../../auth/dtos/authentication.dto.js'
+import { JwtHelperService } from '../../auth/services/jwt-helper.service.js'
 
 @ApiTags('setup')
 @UseGuards(ThrottlerGuard)
@@ -17,6 +17,7 @@ export class SetupController {
         private readonly jwtHelperService: JwtHelperService,
     ) {}
 
+    @SkipThrottle()
     @ResponseDto(SetupStatusDto)
     @Get('status')
     async getStatus(): Promise<SetupStatusDto> {

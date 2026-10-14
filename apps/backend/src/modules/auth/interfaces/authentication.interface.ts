@@ -1,5 +1,5 @@
-import { UserWithRole } from '../../user/interfaces/user.interface'
-import { Role } from '../../permission/interfaces/role.interface'
+import { UserWithRole } from '../../user/interfaces/user.interface.js'
+import { Role } from '../../permission/interfaces/role.interface.js'
 
 export interface Authentication {
     token: string

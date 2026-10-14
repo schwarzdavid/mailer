@@ -11,8 +11,8 @@ import {
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { Settings, SettingsCreate } from '../interfaces/settings.interface'
-import { DomainModel } from '../../domain/models/domain.model'
+import { Settings, SettingsCreate } from '../interfaces/settings.interface.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
 
 @Table({
     tableName: 'settings',

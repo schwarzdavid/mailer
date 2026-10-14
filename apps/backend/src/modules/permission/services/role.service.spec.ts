@@ -2,11 +2,11 @@ import { BadRequestException } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { RoleService } from './role.service'
-import { RoleModel } from '../models/role.model'
-import { RolePermissionModel } from '../models/role-permission.model'
-import { Role } from '../interfaces/role.interface'
-import { Permission } from '../permission.constants'
+import { RoleService } from './role.service.js'
+import { RoleModel } from '../models/role.model.js'
+import { RolePermissionModel } from '../models/role-permission.model.js'
+import { Role } from '../interfaces/role.interface.js'
+import { Permission } from '../permission.constants.js'
 
 const role: Role = {
     roleId: 2,

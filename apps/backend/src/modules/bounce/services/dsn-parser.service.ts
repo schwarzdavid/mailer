@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { simpleParser } from 'mailparser'
-import { BounceType } from '../interfaces/bounce.interface'
+import { BounceType } from '../interfaces/bounce.interface.js'
 
 declare module 'mailparser' {
     interface MailParserOptions {

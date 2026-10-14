@@ -1,10 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Op } from 'sequelize'
-import { EmailBlockModel } from '../models/email-block.model'
-import { EmailBlock } from '../interfaces/email-block.interface'
-import { EmailBlockedException } from '../exceptions/email-blocked.exception'
-import { BLOCK_LADDER_DAYS, DAY_MS } from '../bounce.constants'
+import { EmailBlockModel } from '../models/email-block.model.js'
+import { EmailBlock } from '../interfaces/email-block.interface.js'
+import { EmailBlockedException } from '../exceptions/email-blocked.exception.js'
+import { BLOCK_LADDER_DAYS, DAY_MS } from '../bounce.constants.js'
 
 @Injectable()
 export class EmailBlockService {

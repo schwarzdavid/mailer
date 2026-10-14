@@ -2,9 +2,9 @@ import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { ThrottlerGuard } from '@nestjs/throttler'
 import type { Request } from 'express'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { InboundFormSubmissionService } from '../services/inbound-form-submission.service'
-import { InboundFormSubmitDto, InboundFormSubmitResultDto } from '../dtos/inbound-form-submit.dto'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
+import { InboundFormSubmitDto, InboundFormSubmitResultDto } from '../dtos/inbound-form-submit.dto.js'
 
 @ApiTags('public-form')
 @UseGuards(ThrottlerGuard)

@@ -9,7 +9,7 @@ export function useDomainsQuery() {
         queryKey: ['domains'],
         queryFn: () =>
             waitAtleast(DomainApi.getDomains()).then((domains) => {
-                domains.forEach((domain) => queryClient.setQueryData(['domain', domain.domainId], domain))
+                domains.forEach((domain) => queryClient.setQueryData(['domains', domain.domainId], domain))
                 return domains
             }),
     })

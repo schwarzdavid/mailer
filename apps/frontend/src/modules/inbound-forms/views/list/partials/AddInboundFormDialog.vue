@@ -1,5 +1,5 @@
 <template>
-    <VDialog max-width="600" v-model="model" @after-leave="resetForm" :persistent="isPending">
+    <VDialog max-width="600" v-model="model" @after-leave="onAfterLeave" :persistent="isPending">
         <template #activator="props">
             <slot v-bind="props" />
         </template>
@@ -9,6 +9,7 @@
             </template>
             <form @submit.prevent="onSubmit">
                 <VCardItem>
+                    <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
                     <p class="mb-4">{{ t('module.inboundForms.add.intro') }}</p>
                     <VTextField name="name" :label="t('field.name')" v-model="name" :error-messages="errors.name" />
                     <VTextField name="slug" :label="t('field.slug')" v-model="slug" :error-messages="errors.slug" />
@@ -44,11 +45,13 @@
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import { useInboundFormCreateMutation } from '@/modules/inbound-forms/mutations/useInboundFormCreateMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ projectId: number }>()
 
     const model = ref<undefined | boolean>()
     const slugTouched = ref(false)
+    const errorMessage = ref<string | null>(null)
     const { t } = useI18n()
     const { data: project } = useQuery(useProjectQuery(() => props.projectId))
     const { mutateAsync, isPending } = useInboundFormCreateMutation()
@@ -79,7 +82,7 @@
     })
 
     watch(slug, (value, oldValue) => {
-        if (value !== slugify(name.value ?? '') && value !== oldValue) {
+        if ((value ?? '') !== slugify(name.value ?? '') && value !== oldValue) {
             slugTouched.value = true
         }
     })
@@ -92,12 +95,23 @@
     }
 
     const onSubmit = handleSubmit(async (values) => {
-        const { inboundFormId } = await mutateAsync({
-            name: values.name,
-            slug: values.slug,
-            domainId: values.domainId ?? null,
-            projectId: props.projectId,
-        })
-        void router.push({ name: RouteNames.INBOUND_FORM_DETAILS, params: { inboundFormId } })
+        errorMessage.value = null
+        try {
+            const { inboundFormId } = await mutateAsync({
+                name: values.name,
+                slug: values.slug,
+                domainId: values.domainId ?? null,
+                projectId: props.projectId,
+            })
+            void router.push({ name: RouteNames.INBOUND_FORM_DETAILS, params: { inboundFormId } })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.add.error'))
+        }
     })
+
+    function onAfterLeave() {
+        errorMessage.value = null
+        resetForm()
+        slugTouched.value = false
+    }
 </script>

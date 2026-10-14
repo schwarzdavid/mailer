@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
-import { Domain } from '../interfaces/domain.interface'
-import { DomainDkim, DomainDkimAlgorithm, DomainDkimKeyBits } from '../interfaces/domain-dkim.interface'
+import { Domain } from '../interfaces/domain.interface.js'
+import { DomainDkim, DomainDkimAlgorithm, DomainDkimKeyBits } from '../interfaces/domain-dkim.interface.js'
 import { InjectModel } from '@nestjs/sequelize'
-import { DomainDkimModel } from '../models/domain-dkim.model'
+import { DomainDkimModel } from '../models/domain-dkim.model.js'
 import { generateKeyPair } from 'node:crypto'
-import { DkimEncryptionService } from './dkim-encryption.service'
+import { DkimEncryptionService } from './dkim-encryption.service.js'
 import { Sequelize } from 'sequelize-typescript'
-import { DomainModel } from '../models/domain.model'
+import { DomainModel } from '../models/domain.model.js'
 
 interface KeyPair {
     privateKey: string

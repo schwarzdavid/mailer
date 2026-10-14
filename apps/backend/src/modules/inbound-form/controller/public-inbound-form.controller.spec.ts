@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { ThrottlerGuard } from '@nestjs/throttler'
 import type { Request } from 'express'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { PublicInboundFormController } from './public-inbound-form.controller'
-import { InboundFormSubmissionService } from '../services/inbound-form-submission.service'
+import { PublicInboundFormController } from './public-inbound-form.controller.js'
+import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
 
 describe('PublicInboundFormController', () => {
     let controller: PublicInboundFormController

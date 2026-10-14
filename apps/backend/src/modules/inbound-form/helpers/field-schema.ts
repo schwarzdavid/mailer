@@ -1,7 +1,9 @@
 import { z } from 'zod'
-import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface'
+import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface.js'
+import { findPatternProblem } from './pattern-safety.js'
 
-const DEFAULT_MAX_TEXT_LENGTH = 5000
+export const MAX_TEXT_LENGTH = 5000
+export const MAX_PATTERN_INPUT_LENGTH = 1000
 const MAX_EMAIL_LENGTH = 254
 
 export function buildDataSchema(fields: InboundFormField[]) {
@@ -41,12 +43,11 @@ function buildFieldSchema(field: InboundFormField): z.ZodType {
             if (validation.minLength !== undefined) {
                 stringSchema = stringSchema.min(validation.minLength)
             }
-            stringSchema = stringSchema.max(validation.maxLength ?? DEFAULT_MAX_TEXT_LENGTH)
-            if (validation.pattern !== undefined) {
-                const pattern = compilePattern(validation.pattern)
-                if (pattern) {
-                    stringSchema = stringSchema.regex(pattern)
-                }
+            const pattern = validation.pattern === undefined ? null : compilePattern(validation.pattern)
+            const lengthCap = pattern ? MAX_PATTERN_INPUT_LENGTH : MAX_TEXT_LENGTH
+            stringSchema = stringSchema.max(Math.min(validation.maxLength ?? lengthCap, lengthCap), { abort: true })
+            if (pattern) {
+                stringSchema = stringSchema.regex(pattern)
             }
             schema = stringSchema
         }
@@ -62,11 +63,7 @@ function buildFieldSchema(field: InboundFormField): z.ZodType {
 }
 
 function compilePattern(pattern: string): RegExp | null {
-    try {
-        return new RegExp(pattern)
-    } catch {
-        return null
-    }
+    return findPatternProblem(pattern) === null ? new RegExp(pattern) : null
 }
 
 function castDefaultValue(field: InboundFormField): unknown {

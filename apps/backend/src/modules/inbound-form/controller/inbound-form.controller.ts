@@ -12,24 +12,24 @@ import {
     SerializeOptions,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { Principal } from '../../auth/decorators/Principal'
-import { CurrentAbility } from '../../permission/decorators/CurrentAbility'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { InboundFormService } from '../services/inbound-form.service'
-import { InboundFormTemplateService } from '../services/inbound-form-template.service'
-import { InboundFormCreateDto, InboundFormUpdateDto } from '../dtos/inbound-form-create.dto'
-import { InboundFormDetailDto, InboundFormDto } from '../dtos/inbound-form.dto'
-import { InboundFormFieldDto, InboundFormFieldsPutDto } from '../dtos/inbound-form-field.dto'
-import { InboundFormSecurityDto, InboundFormSecurityPutDto } from '../dtos/inbound-form-security.dto'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { Principal } from '../../auth/decorators/Principal.js'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { InboundFormService } from '../services/inbound-form.service.js'
+import { InboundFormTemplateService } from '../services/inbound-form-template.service.js'
+import { InboundFormCreateDto, InboundFormUpdateDto } from '../dtos/inbound-form-create.dto.js'
+import { InboundFormDetailDto, InboundFormDto } from '../dtos/inbound-form.dto.js'
+import { InboundFormFieldDto, InboundFormFieldsPutDto } from '../dtos/inbound-form-field.dto.js'
+import { InboundFormSecurityDto, InboundFormSecurityPutDto } from '../dtos/inbound-form-security.dto.js'
 import {
     InboundFormReceiverCreateDto,
     InboundFormReceiverDto,
     InboundFormReceiverUpdateDto,
-} from '../dtos/inbound-form-receiver.dto'
-import { InboundFormTemplateDraftDto, InboundFormTemplateDto } from '../dtos/inbound-form-template.dto'
-import type { UserWithRole } from '../../user/interfaces/user.interface'
-import type { AppAbility } from '../../permission/interfaces/app-ability'
+} from '../dtos/inbound-form-receiver.dto.js'
+import { InboundFormTemplateDraftDto, InboundFormTemplateDto } from '../dtos/inbound-form-template.dto.js'
+import type { UserWithRole } from '../../user/interfaces/user.interface.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 @JwtAuth()
 @ApiTags('inbound-form')
@@ -74,7 +74,7 @@ export class InboundFormController {
     @ResponseDto(InboundFormDetailDto)
     @Get(':inboundFormId')
     async getInboundForm(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormDetailDto> {
         const form = await this.inboundFormService.getFormById(inboundFormId, ability)
@@ -85,7 +85,7 @@ export class InboundFormController {
     @ResponseDto(InboundFormDetailDto)
     @Patch(':inboundFormId')
     async updateInboundForm(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @Body() body: InboundFormUpdateDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormDetailDto> {
@@ -96,7 +96,7 @@ export class InboundFormController {
 
     @Delete(':inboundFormId')
     async deleteInboundForm(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
         await this.inboundFormService.deleteForm(inboundFormId, ability)
@@ -105,7 +105,7 @@ export class InboundFormController {
     @SerializeOptions({ type: InboundFormFieldDto })
     @Put(':inboundFormId/fields')
     async updateInboundFormFields(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @Body() body: InboundFormFieldsPutDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormFieldDto[]> {
@@ -117,7 +117,7 @@ export class InboundFormController {
     @SerializeOptions({ type: InboundFormSecurityDto })
     @Put(':inboundFormId/security')
     async updateInboundFormSecurity(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @Body() body: InboundFormSecurityPutDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormSecurityDto[]> {
@@ -129,7 +129,7 @@ export class InboundFormController {
     @ResponseDto(InboundFormReceiverDto)
     @Post(':inboundFormId/receiver')
     async createInboundFormReceiver(
-        @Param('inboundFormId') inboundFormId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
         @Body() body: InboundFormReceiverCreateDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormReceiverDto> {
@@ -150,8 +150,8 @@ export class InboundFormController {
     @ResponseDto(InboundFormReceiverDto)
     @Patch(':inboundFormId/receiver/:inboundFormReceiverId')
     async updateInboundFormReceiver(
-        @Param('inboundFormId') inboundFormId: number,
-        @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
+        @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @Body() body: InboundFormReceiverUpdateDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormReceiverDto> {
@@ -168,8 +168,8 @@ export class InboundFormController {
 
     @Delete(':inboundFormId/receiver/:inboundFormReceiverId')
     async deleteInboundFormReceiver(
-        @Param('inboundFormId') inboundFormId: number,
-        @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
+        @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
         await this.inboundFormService.deleteReceiver(inboundFormId, inboundFormReceiverId, ability)
@@ -178,8 +178,8 @@ export class InboundFormController {
     @SerializeOptions({ type: InboundFormTemplateDto })
     @Get(':inboundFormId/receiver/:inboundFormReceiverId/template')
     async getInboundFormTemplates(
-        @Param('inboundFormId') inboundFormId: number,
-        @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
+        @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto[]> {
         await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability)
@@ -191,8 +191,8 @@ export class InboundFormController {
     @ResponseDto(InboundFormTemplateDto)
     @Put(':inboundFormId/receiver/:inboundFormReceiverId/template/draft')
     async saveInboundFormTemplateDraft(
-        @Param('inboundFormId') inboundFormId: number,
-        @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
+        @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @Body() body: InboundFormTemplateDraftDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
@@ -205,8 +205,8 @@ export class InboundFormController {
     @ResponseDto(InboundFormTemplateDto)
     @Post(':inboundFormId/receiver/:inboundFormReceiverId/template/publish')
     async publishInboundFormTemplate(
-        @Param('inboundFormId') inboundFormId: number,
-        @Param('inboundFormReceiverId') inboundFormReceiverId: number,
+        @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
+        @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
         await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'update')

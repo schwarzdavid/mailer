@@ -1,8 +1,8 @@
 import { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { JwtAuthGuard } from './jwt-auth.guard'
-import { PUBLIC_KEY } from '../decorators/Public'
+import { JwtAuthGuard } from './jwt-auth.guard.js'
+import { PUBLIC_KEY } from '../decorators/Public.js'
 
 describe('JwtAuthGuard', () => {
     let guard: JwtAuthGuard

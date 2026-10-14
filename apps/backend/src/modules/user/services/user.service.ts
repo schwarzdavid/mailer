@@ -5,16 +5,19 @@ import type { Transaction } from 'sequelize'
 import { UniqueConstraintError } from 'sequelize'
 import { subject } from '@casl/ability'
 import bcrypt from 'bcryptjs'
-import { UserModel } from '../models/user.model'
-import { FullUser, UserCreate, UserDetail, UserUpdate, UserWithRole } from '../interfaces/user.interface'
-import { RoleModel } from '../../permission/models/role.model'
-import { UserPermissionModel } from '../../permission/models/user-permission.model'
-import { RoleService } from '../../permission/services/role.service'
-import { ProjectMemberService } from '../../permission/services/project-member.service'
-import { PermissionCacheService } from '../../permission/services/permission-cache.service'
-import { Role } from '../../permission/interfaces/role.interface'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { Permission } from '../../permission/permission.constants'
+import { UserModel } from '../models/user.model.js'
+import { FullUser, UserCreate, UserDetail, UserUpdate, UserWithRole } from '../interfaces/user.interface.js'
+import { RoleModel } from '../../permission/models/role.model.js'
+import { UserPermissionModel } from '../../permission/models/user-permission.model.js'
+import { RoleService } from '../../permission/services/role.service.js'
+import { ProjectMemberService } from '../../permission/services/project-member.service.js'
+import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
+import { Role } from '../../permission/interfaces/role.interface.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { Permission } from '../../permission/permission.constants.js'
+import { holdsPermission } from '../../permission/helpers/holds-permission.js'
+import { userWithRoleFromRow } from '../mappers/user.mapper.js'
+import { normalizeEmail } from '../helpers/normalize-email.js'
 
 @Injectable()
 export class UserService {
@@ -34,7 +37,7 @@ export class UserService {
             {
                 firstName: user.firstName,
                 lastName: user.lastName,
-                email: user.email,
+                email: normalizeEmail(user.email),
                 password: hashedPassword,
                 roleId: user.roleId,
             },
@@ -47,7 +50,7 @@ export class UserService {
             transaction,
         })
 
-        return withRole.get({ plain: true }) as UserWithRole & { password: string }
+        return userWithRoleFromRow(withRole)
     }
 
     async createManagedUser(
@@ -74,7 +77,7 @@ export class UserService {
     async getUsers(): Promise<UserWithRole[]> {
         const rows = await this.userModel.findAll({ include: [RoleModel] })
 
-        return rows.map((row) => row.get({ plain: true }) as UserWithRole & { password: string })
+        return rows.map((row) => userWithRoleFromRow(row))
     }
 
     async getUserById(userId: number): Promise<UserDetail> {
@@ -86,7 +89,7 @@ export class UserService {
         ])
 
         return {
-            ...(row.get({ plain: true }) as UserWithRole & { password: string }),
+            ...userWithRoleFromRow(row),
             permissions: permissions.map((entry) => entry.permission),
             memberships,
         }
@@ -99,7 +102,7 @@ export class UserService {
         ability: AppAbility,
     ): Promise<UserWithRole> {
         const row = await this.loadUser(userId)
-        const target = row.get({ plain: true }) as UserWithRole & { password: string }
+        const target = userWithRoleFromRow(row)
 
         this.assertCanManage(ability, 'update', target)
 
@@ -111,7 +114,7 @@ export class UserService {
             changes.lastName = update.lastName
         }
         if (update.email !== undefined) {
-            changes.email = update.email
+            changes.email = normalizeEmail(update.email)
         }
         if (update.password !== undefined) {
             changes.password = await bcrypt.hash(update.password, 10)
@@ -138,7 +141,7 @@ export class UserService {
 
         const reloaded = await this.userModel.findByPk(userId, { include: [RoleModel], rejectOnEmpty: true })
 
-        return reloaded.get({ plain: true }) as UserWithRole & { password: string }
+        return userWithRoleFromRow(reloaded)
     }
 
     async deleteUser(userId: number, principal: UserWithRole, ability: AppAbility): Promise<void> {
@@ -147,7 +150,7 @@ export class UserService {
         }
 
         const row = await this.loadUser(userId)
-        const target = row.get({ plain: true }) as UserWithRole & { password: string }
+        const target = userWithRoleFromRow(row)
 
         this.assertCanManage(ability, 'delete', target)
 
@@ -165,11 +168,17 @@ export class UserService {
         ability: AppAbility,
     ): Promise<Permission[]> {
         const row = await this.loadUser(userId)
-        const target = row.get({ plain: true }) as UserWithRole & { password: string }
+        const target = userWithRoleFromRow(row)
 
         this.assertCanManage(ability, 'update', target)
 
         const uniquePermissions = [...new Set(permissions)]
+        const current = await this.userPermissionModel.findAll({ where: { userId } })
+        this.assertPermissionChangesHeld(
+            current.map((entry) => entry.permission),
+            uniquePermissions,
+            ability,
+        )
 
         await this.sequelize.transaction(async (transaction) => {
             await this.userPermissionModel.destroy({ where: { userId }, transaction })
@@ -187,6 +196,20 @@ export class UserService {
     private assertCanManage(ability: AppAbility, action: 'update' | 'delete', target: UserWithRole): void {
         if (!ability.can(action, subject('User', { ...target }))) {
             throw new ForbiddenException('Insufficient permissions for this user')
+        }
+    }
+
+    private assertPermissionChangesHeld(current: Permission[], requested: Permission[], ability: AppAbility): void {
+        const changed = [
+            ...requested.filter((permission) => !current.includes(permission)),
+            ...current.filter((permission) => !requested.includes(permission)),
+        ]
+        const notHeld = changed.filter((permission) => !holdsPermission(ability, permission))
+
+        if (notHeld.length > 0) {
+            throw new ForbiddenException(
+                `You cannot grant or revoke permissions you do not hold: ${notHeld.join(', ')}`,
+            )
         }
     }
 

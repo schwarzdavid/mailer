@@ -1,10 +1,11 @@
 <template>
-    <VDialog max-width="600" v-model="model" :persistent="isPending">
+    <VDialog max-width="600" v-model="model" :persistent="isPending" @after-leave="errorMessage = null">
         <template #activator="props">
             <slot v-bind="props" />
         </template>
         <VCard :title="t('module.projects.details.delete.title')">
             <VCardItem>
+                <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
                 <p>{{ t('module.projects.details.delete.intro') }}</p>
             </VCardItem>
             <VCardActions>
@@ -23,6 +24,7 @@
     import type { ProjectDetailDto } from 'api'
     import { useProjectDeleteMutation } from '@/modules/projects/mutations/useProjectDeleteMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ project: ProjectDetailDto }>()
 
@@ -30,10 +32,16 @@
     const { t } = useI18n()
     const { mutateAsync, isPending } = useProjectDeleteMutation()
     const router = useRouter()
+    const errorMessage = ref<string | null>(null)
 
     async function remove() {
-        await mutateAsync(props.project.projectId)
-        model.value = false
-        void router.push({ name: RouteNames.PROJECT_LIST })
+        errorMessage.value = null
+        try {
+            await mutateAsync(props.project.projectId)
+            model.value = false
+            void router.push({ name: RouteNames.PROJECT_LIST })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.projects.details.delete.error'))
+        }
     }
 </script>

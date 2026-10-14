@@ -15,6 +15,13 @@ export interface E2eEnv {
     SMTP_PORT: string
     SMTP_SECURE: string
     MAILHOG_URL: string
+    IMAP_HOST: string
+    IMAP_PORT: string
+    IMAP_SECURE: string
+    IMAP_USER: string
+    IMAP_PASSWORD: string
+    GREENMAIL_SMTP_HOST: string
+    GREENMAIL_SMTP_PORT: string
 }
 
 export interface Infrastructure {
@@ -50,6 +57,19 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         .withWaitStrategy(Wait.forListeningPorts())
         .start()
 
+    const greenmail = await new GenericContainer('greenmail/standalone:2.1.0')
+        .withEnvironment({
+            GREENMAIL_OPTS: [
+                '-Dgreenmail.setup.test.smtp',
+                '-Dgreenmail.setup.test.imap',
+                '-Dgreenmail.auth.disabled',
+                '-Dgreenmail.hostname=0.0.0.0',
+            ].join(' '),
+        })
+        .withExposedPorts(3025, 3143)
+        .withWaitStrategy(Wait.forListeningPorts())
+        .start()
+
     const env: E2eEnv = {
         DB_HOST: postgres.getHost(),
         DB_PORT: String(postgres.getPort()),
@@ -64,11 +84,19 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',
         MAILHOG_URL: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
+        IMAP_HOST: greenmail.getHost(),
+        IMAP_PORT: String(greenmail.getMappedPort(3143)),
+        IMAP_SECURE: 'false',
+        IMAP_USER: 'bounce@e2e-bounces.test',
+        IMAP_PASSWORD: 'e2e-imap-password',
+        GREENMAIL_SMTP_HOST: greenmail.getHost(),
+        GREENMAIL_SMTP_PORT: String(greenmail.getMappedPort(3025)),
     }
 
     return {
         env,
         async stop() {
+            await greenmail.stop()
             await mailhog.stop()
             await redis.stop()
             await postgres.stop()

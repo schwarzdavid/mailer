@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
-import { PUBLIC_KEY, Public } from './Public'
+import { PUBLIC_KEY, Public } from './Public.js'
 
 describe('Public', () => {
     it('flags the decorated handler with the public metadata key', () => {

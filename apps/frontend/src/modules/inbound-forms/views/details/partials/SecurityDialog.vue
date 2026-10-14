@@ -3,6 +3,7 @@
         <VCard :title="scheme ? t('cta.edit') : t('module.inboundForms.details.security.add')">
             <form @submit.prevent="onSubmit">
                 <VCardItem>
+                    <VAlert v-if="error" type="error" class="mb-4" :text="error" />
                     <VSelect
                         name="type"
                         :label="t('module.inboundForms.details.security.type')"
@@ -65,6 +66,7 @@
         modelValue: boolean
         scheme: InboundFormSecurityDto | null
         saving: boolean
+        error?: string | null
     }>()
 
     const emit = defineEmits<{

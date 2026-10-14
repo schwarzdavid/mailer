@@ -1,11 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { UserModel } from '../../user/models/user.model'
-import { UserService } from '../../user/services/user.service'
-import { UserCreate, UserWithRole } from '../../user/interfaces/user.interface'
-import { RoleService } from '../../permission/services/role.service'
-import { SETUP_LOCK_KEY } from '../setup.constants'
+import { UserModel } from '../../user/models/user.model.js'
+import { UserService } from '../../user/services/user.service.js'
+import { UserCreate, UserWithRole } from '../../user/interfaces/user.interface.js'
+import { RoleService } from '../../permission/services/role.service.js'
+import { SETUP_LOCK_KEY } from '../setup.constants.js'
 
 @Injectable()
 export class SetupService {

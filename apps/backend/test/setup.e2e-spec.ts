@@ -1,10 +1,10 @@
 import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createTestApp } from './support/app'
-import { UserModel } from '../src/modules/user/models/user.model'
+import { createTestApp } from './support/app.js'
+import { UserModel } from '../src/modules/user/models/user.model.js'
 
 describe('SetupController (e2e)', () => {
     let app: INestApplication<App>
@@ -63,5 +63,33 @@ describe('SetupController (e2e)', () => {
         const response = await http().post('/api/setup/user').send({ firstName: 'Ada' })
 
         expect(response.status).toBe(400)
+    })
+
+    it.each([
+        ['an empty first name', { ...registration, email: 'empty.name@example.com', firstName: '' }],
+        ['unknown properties', { ...registration, email: 'extra.prop@example.com', roleId: 1 }],
+    ])('rejects a registration with %s with 400', async (_case, body) => {
+        const response = await http().post('/api/setup/user').send(body)
+
+        expect(response.status).toBe(400)
+    })
+
+    it('never throttles the status probe the frontend sends on every navigation', async () => {
+        const statuses: number[] = []
+        for (let attempt = 0; attempt < 25; attempt++) {
+            statuses.push((await http().get('/api/setup/status')).status)
+        }
+
+        expect(statuses.every((status) => status === 200)).toBe(true)
+    })
+
+    it('throttles repeated registration attempts', async () => {
+        const statuses: number[] = []
+        for (let attempt = 0; attempt < 12; attempt++) {
+            statuses.push((await http().post('/api/setup/user').send({ firstName: 'Ada' })).status)
+        }
+
+        expect(statuses).toContain(429)
+        expect(statuses.slice(statuses.indexOf(429)).every((status) => status === 429)).toBe(true)
     })
 })

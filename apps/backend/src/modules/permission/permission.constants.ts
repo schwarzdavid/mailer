@@ -1,4 +1,4 @@
-import { AbilityAction, AbilitySubjectName } from './interfaces/app-ability'
+import { AbilityAction, AbilitySubjectName } from './interfaces/app-ability.js'
 
 export const GLOBAL_PERMISSIONS = [
     'domains.read',

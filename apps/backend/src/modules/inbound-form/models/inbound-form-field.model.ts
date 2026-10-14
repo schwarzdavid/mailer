@@ -18,12 +18,18 @@ import {
     InboundFormFieldCreate,
     InboundFormFieldType,
     InboundFormFieldValidation,
-} from '../interfaces/inbound-form-field.interface'
-import { InboundFormModel } from './inbound-form.model'
+} from '../interfaces/inbound-form-field.interface.js'
+import { InboundFormModel } from './inbound-form.model.js'
 
 @Table({
     tableName: 'inbound_form_fields',
     timestamps: true,
+    indexes: [
+        {
+            name: 'inbound_form_fields_position',
+            fields: ['inboundFormId', 'position'],
+        },
+    ],
 })
 export class InboundFormFieldModel extends Model<InboundFormField, InboundFormFieldCreate> implements InboundFormField {
     @PrimaryKey
@@ -59,6 +65,10 @@ export class InboundFormFieldModel extends Model<InboundFormField, InboundFormFi
     @AllowNull
     @Column(DataType.JSON)
     declare validation: InboundFormFieldValidation | null
+
+    @AllowNull(false)
+    @Column(DataType.INTEGER)
+    declare position: number
 
     @CreatedAt
     declare createdAt: Date

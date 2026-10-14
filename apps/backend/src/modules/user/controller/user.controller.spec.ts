@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { UserController } from './user.controller'
-import { UserService } from '../services/user.service'
-import { PoliciesGuard } from '../../permission/guards/policies.guard'
-import { Role } from '../../permission/interfaces/role.interface'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { UserDetail, UserWithRole } from '../interfaces/user.interface'
+import { UserController } from './user.controller.js'
+import { UserService } from '../services/user.service.js'
+import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
+import { Role } from '../../permission/interfaces/role.interface.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { UserDetail, UserWithRole } from '../interfaces/user.interface.js'
 
 const role: Role = {
     roleId: 3,

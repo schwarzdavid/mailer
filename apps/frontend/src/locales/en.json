@@ -48,7 +48,8 @@
             "steps": {
                 "account": {
                     "title": "Create your account",
-                    "intro": "Create the administrator account for this installation."
+                    "intro": "Create the administrator account for this installation.",
+                    "error": "The account could not be created"
                 },
                 "domain": {
                     "title": "Sending domain",
@@ -63,7 +64,9 @@
         "auth": {
             "login": {
                 "title": "Welcome Back",
-                "intro": "Enter your credentials to access the admin panel"
+                "intro": "Enter your credentials to access the admin panel",
+                "invalidCredentials": "Invalid email or password",
+                "error": "Login failed, please try again"
             }
         },
         "dashboard": {
@@ -77,7 +80,14 @@
             "add": {
                 "title": "New Domain",
                 "intro": "Enter your domain name",
-                "invalidSubdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example{'@'}{fqdn}."
+                "invalidSubdomain": "It is recommended to use a subdomain (e.g. mail.{fqdn}). You will still be able to send as example{'@'}{fqdn}.",
+                "error": "The domain could not be created"
+            },
+            "delete": {
+                "action": "Delete",
+                "title": "Delete Domain",
+                "confirm": "Do you really want to delete {fqdn}? Its DNS records and DKIM keys are removed and it is unassigned from all projects. This cannot be undone.",
+                "error": "The domain could not be deleted"
             },
             "status": {
                 "valid": "Valid",
@@ -122,7 +132,8 @@
             "deleted": {
                 "title": "Recently deleted",
                 "purgeAt": "Will be permanently deleted on {date}",
-                "restore": "Restore"
+                "restore": "Restore",
+                "error": "The project could not be restored"
             },
             "details": {
                 "general": {
@@ -133,7 +144,8 @@
                     "title": "Domains",
                     "empty": "No domains assigned yet. Assign a domain so forms in this project can send mail.",
                     "add": "Assign",
-                    "error": "The domain could not be removed"
+                    "error": "The domain could not be removed",
+                    "assignError": "The domain could not be assigned"
                 },
                 "forms": {
                     "title": "Inbound Forms",
@@ -141,7 +153,8 @@
                 },
                 "delete": {
                     "title": "Delete project",
-                    "intro": "The project and its forms are moved to the trash and permanently deleted after 30 days. Domains are kept."
+                    "intro": "The project and its forms are moved to the trash and permanently deleted after 30 days. Domains are kept.",
+                    "error": "The project could not be deleted"
                 }
             },
             "members": {
@@ -149,13 +162,15 @@
                 "add": "Add member",
                 "edit": "Edit member",
                 "empty": "No members yet.",
-                "error": "The member could not be saved"
+                "error": "The member could not be saved",
+                "removeError": "The member could not be removed"
             }
         },
         "inboundForms": {
             "add": {
                 "title": "New Form",
-                "intro": "Give your form a name. The slug becomes part of the public endpoint URL."
+                "intro": "Give your form a name. The slug becomes part of the public endpoint URL.",
+                "error": "The form could not be created"
             },
             "status": {
                 "active": "Active",
@@ -164,7 +179,8 @@
             "details": {
                 "endpoint": "Endpoint URL",
                 "general": {
-                    "title": "General"
+                    "title": "General",
+                    "error": "The form could not be saved"
                 },
                 "fields": {
                     "title": "Fields",
@@ -185,7 +201,8 @@
                         "email": "Email",
                         "number": "Number",
                         "boolean": "Boolean"
-                    }
+                    },
+                    "error": "The fields could not be saved"
                 },
                 "security": {
                     "title": "Security",
@@ -204,7 +221,8 @@
                         "body": "Body",
                         "header": "Header",
                         "query": "Query parameter"
-                    }
+                    },
+                    "error": "The security schemes could not be saved"
                 },
                 "receivers": {
                     "title": "Receivers",
@@ -219,7 +237,9 @@
                         "draft": "Draft v{version}",
                         "published": "Published v{version}",
                         "edit": "Edit template"
-                    }
+                    },
+                    "error": "The receiver could not be saved",
+                    "removeError": "The receiver could not be removed"
                 }
             },
             "template": {
@@ -234,7 +254,9 @@
                 "statusOptions": {
                     "draft": "Draft",
                     "published": "Published"
-                }
+                },
+                "insertField": "Insert field {key}",
+                "unknownError": "Unknown error"
             }
         },
         "bounces": {
@@ -265,7 +287,8 @@
                     "email": "Recipient",
                     "blockedUntil": "Blocked until",
                     "blockCount": "Times blocked"
-                }
+                },
+                "error": "The address could not be unblocked"
             }
         },
         "users": {
@@ -284,6 +307,7 @@
                 "error": "The user could not be deleted"
             },
             "details": {
+                "loadError": "The user could not be loaded",
                 "profile": {
                     "title": "Profile",
                     "newPassword": "New password (optional)",
@@ -305,6 +329,7 @@
             "title": "Settings",
             "sendingDomain": {
                 "title": "Sending Domain",
+                "error": "The sending domain could not be saved",
                 "intro": "The sending domain is the mail infrastructure domain of this server. It is used as the bounce address for outgoing mails and as the SPF include target for all sender domains.",
                 "records": {
                     "title": "DNS Records",

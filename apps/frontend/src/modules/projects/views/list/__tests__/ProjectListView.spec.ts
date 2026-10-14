@@ -62,4 +62,29 @@ describe('ProjectListView', () => {
         expect(wrapper.text()).toContain('Recently deleted')
         expect(wrapper.text()).toContain('Restore')
     })
+
+    it('shows the empty hint and an add button for users who may create projects', async () => {
+        vi.spyOn(ProjectApi, 'getProjects').mockResolvedValue([])
+        vi.spyOn(ProjectApi, 'getDeletedProjects').mockResolvedValue([])
+        const wrapper = mountView(ProjectListView, {}, [
+            { action: 'create', subject: 'Project' },
+            { action: 'read', subject: 'Project' },
+        ])
+
+        await vi.waitFor(() => {
+            expect(wrapper.text()).toContain('No projects yet')
+        })
+        expect(wrapper.findAll('button').map((button) => button.text())).toContain('Add')
+    })
+
+    it('hides the add button from users who may not create projects', async () => {
+        vi.spyOn(ProjectApi, 'getProjects').mockResolvedValue(projects)
+        vi.spyOn(ProjectApi, 'getDeletedProjects').mockResolvedValue([])
+        const wrapper = mountView(ProjectListView, {}, [{ action: 'read', subject: 'Project' }])
+
+        await vi.waitFor(() => {
+            expect(wrapper.text()).toContain('Acme')
+        })
+        expect(wrapper.findAll('button').map((button) => button.text())).not.toContain('Add')
+    })
 })

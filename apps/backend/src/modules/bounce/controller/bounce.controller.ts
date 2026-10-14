@@ -1,12 +1,12 @@
-import { Controller, Delete, Get, Param, SerializeOptions } from '@nestjs/common'
+import { Controller, Delete, Get, Param, ParseIntPipe, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { RequireAbility } from '../../permission/decorators/RequireAbility'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { BounceService } from '../services/bounce.service'
-import { EmailBlockService } from '../services/email-block.service'
-import { BounceDto } from '../dtos/bounce.dto'
-import { EmailBlockDto } from '../dtos/email-block.dto'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { BounceService } from '../services/bounce.service.js'
+import { EmailBlockService } from '../services/email-block.service.js'
+import { BounceDto } from '../dtos/bounce.dto.js'
+import { EmailBlockDto } from '../dtos/email-block.dto.js'
 
 @JwtAuth()
 @ApiTags('bounce')
@@ -34,7 +34,7 @@ export class BounceController {
     @RequireAbility({ action: 'unblock', subject: 'Bounce' })
     @ResponseDto(EmailBlockDto)
     @Delete('blocked/:emailBlockId')
-    async unblock(@Param('emailBlockId') emailBlockId: number): Promise<EmailBlockDto> {
+    async unblock(@Param('emailBlockId', ParseIntPipe) emailBlockId: number): Promise<EmailBlockDto> {
         return await this.emailBlockService.unblock(emailBlockId)
     }
 }

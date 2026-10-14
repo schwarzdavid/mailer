@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer'
-import { EmailBlock } from '../interfaces/email-block.interface'
+import { EmailBlock } from '../interfaces/email-block.interface.js'
 
 export class EmailBlockDto implements Omit<EmailBlock, 'createdAt' | 'updatedAt'> {
     @Expose()

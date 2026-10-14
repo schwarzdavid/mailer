@@ -1,14 +1,14 @@
 import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createTestApp } from './support/app'
-import { login, seedUser, type Credentials } from './support/session'
-import { DomainModel } from '../src/modules/domain/models/domain.model'
-import { SettingsModel } from '../src/modules/settings/models/settings.model'
-import { DomainDnsRecordDto } from '../src/modules/domain/dtos/domain-dns-record.dto'
-import { DomainDnsRecordUse } from '../src/modules/domain/interfaces/domain-dns.interface'
+import { createTestApp } from './support/app.js'
+import { login, seedUser, type Credentials } from './support/session.js'
+import { DomainModel } from '../src/modules/domain/models/domain.model.js'
+import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
+import { DomainDnsRecordDto } from '../src/modules/domain/dtos/domain-dns-record.dto.js'
+import { DomainDnsRecordUse } from '../src/modules/domain/interfaces/domain-dns.interface.js'
 
 describe('SettingsController (e2e)', () => {
     let app: INestApplication<App>

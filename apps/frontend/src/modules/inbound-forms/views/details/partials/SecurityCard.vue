@@ -4,6 +4,7 @@
             <VBtn :text="t('module.inboundForms.details.security.add')" @click="openDialog(null)" />
         </template>
         <VCardItem>
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <p v-if="form.security.length === 0">{{ t('module.inboundForms.details.security.empty') }}</p>
             <VList v-else>
                 <VListItem v-for="scheme in form.security" :key="scheme.inboundFormSecurityId">
@@ -21,7 +22,13 @@
                 </VListItem>
             </VList>
         </VCardItem>
-        <SecurityDialog v-model="dialogOpen" :scheme="editingScheme" :saving="isPending" @save="saveScheme" />
+        <SecurityDialog
+            v-model="dialogOpen"
+            :scheme="editingScheme"
+            :saving="isPending"
+            :error="dialogError"
+            @save="saveScheme"
+        />
     </VCard>
 </template>
 
@@ -31,6 +38,7 @@
     import type { InboundFormDetailDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
     import { useInboundFormSecurityMutation } from '@/modules/inbound-forms/mutations/useInboundFormSecurityMutation.ts'
     import SecurityDialog from '@/modules/inbound-forms/views/details/partials/SecurityDialog.vue'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto }>()
 
@@ -39,9 +47,12 @@
 
     const dialogOpen = ref(false)
     const editingScheme = ref<InboundFormSecurityDto | null>(null)
+    const errorMessage = ref<string | null>(null)
+    const dialogError = ref<string | null>(null)
 
     function openDialog(scheme: InboundFormSecurityDto | null) {
         editingScheme.value = scheme
+        dialogError.value = null
         dialogOpen.value = true
     }
 
@@ -57,13 +68,23 @@
     async function saveScheme(payload: InboundFormSecurityUpsertDto) {
         const others = props.form.security.filter((scheme) => scheme.type !== payload.type).map(toUpsert)
 
-        await mutateAsync({ inboundFormId: props.form.inboundFormId, security: [...others, payload] })
-        dialogOpen.value = false
+        dialogError.value = null
+        try {
+            await mutateAsync({ inboundFormId: props.form.inboundFormId, security: [...others, payload] })
+            dialogOpen.value = false
+        } catch (error) {
+            dialogError.value = apiErrorMessage(error, t('module.inboundForms.details.security.error'))
+        }
     }
 
     async function removeScheme(type: InboundFormSecurityDto['type']) {
         const security = props.form.security.filter((scheme) => scheme.type !== type).map(toUpsert)
 
-        await mutateAsync({ inboundFormId: props.form.inboundFormId, security })
+        errorMessage.value = null
+        try {
+            await mutateAsync({ inboundFormId: props.form.inboundFormId, security })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.details.security.error'))
+        }
     }
 </script>

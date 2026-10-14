@@ -1,9 +1,9 @@
 import { Controller, Get, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { RequireAbility } from '../decorators/RequireAbility'
-import { RoleService } from '../services/role.service'
-import { RoleDto } from '../dtos/role.dto'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { RequireAbility } from '../decorators/RequireAbility.js'
+import { RoleService } from '../services/role.service.js'
+import { RoleDto } from '../dtos/role.dto.js'
 
 @JwtAuth()
 @ApiTags('role')

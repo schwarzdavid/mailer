@@ -3,6 +3,7 @@ import { AuthApi, UserApi, RoleApi, type RoleDto, type UserDetailDto, type UserD
 import type { Router } from 'vue-router'
 import UserDetailView from '../UserDetailView.vue'
 import { mountView } from '@/__tests__/support.ts'
+import { RouteNames } from '@/router/RouteNames.ts'
 
 const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
 
@@ -45,6 +46,45 @@ afterEach(() => {
 })
 
 describe('UserDetailView', () => {
+    it('shows a skeleton while the user loads', () => {
+        vi.spyOn(UserApi, 'getUser').mockReturnValue(new Promise(() => {}))
+        const wrapper = mountView(UserDetailView)
+
+        expect(wrapper.find('.v-skeleton-loader').exists()).toBe(true)
+        expect(wrapper.find('h1').exists()).toBe(false)
+    })
+
+    it('shows the API error instead of a blank page when the user cannot be loaded', async () => {
+        vi.spyOn(UserApi, 'getUser').mockRejectedValue({ message: 'User not found', statusCode: 404 })
+        const wrapper = mountView(UserDetailView)
+
+        await vi.waitFor(() => expect(wrapper.get('.v-alert').text()).toContain('User not found'))
+        expect(wrapper.find('h1').exists()).toBe(false)
+        expect(wrapper.find('.v-skeleton-loader').exists()).toBe(false)
+    })
+
+    it('falls back to a generic load error and links back to the user list', async () => {
+        vi.spyOn(UserApi, 'getUser').mockRejectedValue(null)
+        const wrapper = mountView(UserDetailView)
+
+        await vi.waitFor(() => expect(wrapper.get('.v-alert').text()).toContain('The user could not be loaded'))
+        const back = wrapper.findAll('button').find((button) => button.text() === 'Back')
+        await back!.trigger('click')
+
+        expect(push).toHaveBeenCalledWith({ name: RouteNames.USER_LIST })
+    })
+
+    it('loads the user from the route and shows the role', async () => {
+        const getUser = vi.spyOn(UserApi, 'getUser').mockResolvedValue(detail)
+        vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(superAdminCaller)
+        const wrapper = mountView(UserDetailView)
+
+        await vi.waitFor(() => expect(wrapper.get('h1').text()).toBe('Grace Hopper'))
+        expect(getUser).toHaveBeenCalledWith({ path: { userId: 7 } })
+        expect(wrapper.findAll('.v-chip').some((chip) => chip.text() === 'User')).toBe(true)
+    })
+
     it('renders profile, permissions, and memberships', async () => {
         vi.spyOn(UserApi, 'getUser').mockResolvedValue(detail)
         vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)

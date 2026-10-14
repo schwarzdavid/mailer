@@ -1,6 +1,6 @@
 import type { ProvidedContext } from 'vitest'
-import { startInfrastructure } from './infrastructure'
-import { runMigrations } from './migrations'
+import { startInfrastructure } from './infrastructure.js'
+import { runMigrations } from './migrations.js'
 
 // Minimal shape of the context Vitest passes to a global setup function.
 interface GlobalSetupContext {

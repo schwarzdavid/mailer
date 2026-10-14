@@ -1,9 +1,9 @@
 import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
-import type { App } from 'supertest/types'
-import { UserService } from '../../src/modules/user/services/user.service'
-import { RoleService } from '../../src/modules/permission/services/role.service'
-import type { RoleType } from '../../src/modules/permission/permission.constants'
+import type { App } from 'supertest/types.js'
+import { UserService } from '../../src/modules/user/services/user.service.js'
+import { RoleService } from '../../src/modules/permission/services/role.service.js'
+import type { RoleType } from '../../src/modules/permission/permission.constants.js'
 
 export interface Credentials {
     email: string

@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
-import { AppAbility } from '../../permission/interfaces/app-ability'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 type AppRule = AppAbility['rules'][number]
 

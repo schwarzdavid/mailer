@@ -3,10 +3,10 @@ import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { UniqueConstraintError } from 'sequelize'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { InboundFormTemplateService } from './inbound-form-template.service'
-import { InboundFormTemplateModel } from '../models/inbound-form-template.model'
-import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface'
-import { TemplateRendererService } from '../../mail/services/template-renderer.service'
+import { InboundFormTemplateService } from './inbound-form-template.service.js'
+import { InboundFormTemplateModel } from '../models/inbound-form-template.model.js'
+import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface.js'
+import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
 
 type TemplateRow = InboundFormTemplate & {
     get: (options: { plain: true }) => InboundFormTemplate
@@ -211,6 +211,33 @@ describe('InboundFormTemplateService', () => {
 
             expect(result).toEqual({})
             expect(findAll).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('publishDraft guards', () => {
+        it('rejects a whitespace-only template body without publishing', async () => {
+            const row = templateRow({ status: InboundFormTemplateStatus.DRAFT, subject: 'Hello', template: '  \n ' })
+            findOne.mockResolvedValue(row as unknown as InboundFormTemplateModel)
+
+            await expect(service.publishDraft(31)).rejects.toThrow(
+                new BadRequestException('Subject and template must not be empty'),
+            )
+            expect(findOne).toHaveBeenCalledWith({
+                where: { inboundFormReceiverId: 31, status: InboundFormTemplateStatus.DRAFT },
+            })
+            expect(row.update).not.toHaveBeenCalled()
+        })
+
+        it('rejects a syntactically broken subject without publishing', async () => {
+            const row = templateRow({
+                status: InboundFormTemplateStatus.DRAFT,
+                subject: 'Hi {{#if name}}',
+                template: '<p>ok</p>',
+            })
+            findOne.mockResolvedValue(row as unknown as InboundFormTemplateModel)
+
+            await expect(service.publishDraft(31)).rejects.toThrow(BadRequestException)
+            expect(row.update).not.toHaveBeenCalled()
         })
     })
 })

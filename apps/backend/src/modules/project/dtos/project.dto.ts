@@ -1,8 +1,8 @@
 import { Expose, Type } from 'class-transformer'
-import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface'
-import { PROJECT_PURGE_AFTER_MS } from '../project.constants'
-import { DomainDto } from '../../domain/dtos/domain.dto'
-import { DomainDnsDto } from '../../domain/dtos/domain-dns.dto'
+import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface.js'
+import { PROJECT_PURGE_AFTER_MS } from '../project.constants.js'
+import { DomainDto } from '../../domain/dtos/domain.dto.js'
+import { DomainDnsDto } from '../../domain/dtos/domain-dns.dto.js'
 
 export class ProjectDto {
     @Expose()

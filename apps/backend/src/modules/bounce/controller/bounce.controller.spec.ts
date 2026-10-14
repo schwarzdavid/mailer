@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { BounceController } from './bounce.controller'
-import { BounceService } from '../services/bounce.service'
-import { EmailBlockService } from '../services/email-block.service'
-import { PoliciesGuard } from '../../permission/guards/policies.guard'
-import { Bounce, BounceType } from '../interfaces/bounce.interface'
-import { EmailBlock } from '../interfaces/email-block.interface'
+import { BounceController } from './bounce.controller.js'
+import { BounceService } from '../services/bounce.service.js'
+import { EmailBlockService } from '../services/email-block.service.js'
+import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
+import { Bounce, BounceType } from '../interfaces/bounce.interface.js'
+import { EmailBlock } from '../interfaces/email-block.interface.js'
 
 const bounce: Bounce = {
     bounceId: 1,

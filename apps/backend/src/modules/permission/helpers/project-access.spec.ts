@@ -1,8 +1,13 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common'
 import { createMongoAbility } from '@casl/ability'
 import { describe, expect, it } from 'vitest'
-import { assertProjectDeletable, assertProjectReadable, assertProjectUpdatable, canOnProject } from './project-access'
-import { AppAbility } from '../interfaces/app-ability'
+import {
+    assertProjectDeletable,
+    assertProjectReadable,
+    assertProjectUpdatable,
+    canOnProject,
+} from './project-access.js'
+import { AppAbility } from '../interfaces/app-ability.js'
 
 const memberAbility = createMongoAbility<AppAbility>([
     { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1, 2] } } },

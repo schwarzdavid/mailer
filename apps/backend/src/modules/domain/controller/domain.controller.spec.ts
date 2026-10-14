@@ -1,18 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { DomainController } from './domain.controller'
-import { DomainService } from '../services/domain.service'
-import { DomainDnsService } from '../services/domain-dns.service'
-import { PoliciesGuard } from '../../permission/guards/policies.guard'
-import { Domain, DomainWithDkim } from '../interfaces/domain.interface'
-import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
+import { DomainController } from './domain.controller.js'
+import { DomainService } from '../services/domain.service.js'
+import { DomainDnsService } from '../services/domain-dns.service.js'
+import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
+import { Domain, DomainWithDkim } from '../interfaces/domain.interface.js'
+import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
+} from '../interfaces/domain-dns.interface.js'
 
 const dnsRecord = (use: DomainDnsRecordUse, host: string, value: string): DomainDnsRecord => ({
     dnsId: 1,
@@ -39,6 +39,7 @@ describe('DomainController', () => {
     let getDomains: Mock<DomainService['getDomains']>
     let getDomainById: Mock<DomainService['getDomainById']>
     let reloadDnsRecords: Mock<DomainDnsService['reloadDnsRecords']>
+    let deleteUnusedDomain: Mock<DomainService['deleteUnusedDomain']>
 
     const activeDkim: DomainDkim = {
         dkimId: 7,
@@ -73,11 +74,12 @@ describe('DomainController', () => {
         getDomains = vi.fn<typeof getDomains>().mockResolvedValue([domain])
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
         reloadDnsRecords = vi.fn<typeof reloadDnsRecords>().mockResolvedValue(domain)
+        deleteUnusedDomain = vi.fn<typeof deleteUnusedDomain>().mockResolvedValue(undefined)
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [DomainController],
             providers: [
-                { provide: DomainService, useValue: { createDomain, getDomains, getDomainById } },
+                { provide: DomainService, useValue: { createDomain, getDomains, getDomainById, deleteUnusedDomain } },
                 { provide: DomainDnsService, useValue: { reloadDnsRecords } },
             ],
         })
@@ -150,6 +152,14 @@ describe('DomainController', () => {
             expect(reloadDnsRecords).toHaveBeenCalledWith(1)
             expect(result).toMatchObject({ domainId: 1, fqdn: 'example.com' })
             expect(result.dns[DomainDnsRecordUse.SPF]).toMatchObject({ use: DomainDnsRecordUse.SPF })
+        })
+    })
+
+    describe('deleteDomain', () => {
+        it('delegates the guarded deletion to the service', async () => {
+            await controller.deleteDomain(1)
+
+            expect(deleteUnusedDomain).toHaveBeenCalledWith(1)
         })
     })
 })

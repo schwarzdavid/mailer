@@ -15,8 +15,8 @@ import {
     type DomainDkimAlgorithm,
     type DomainDkimCreate,
     type DomainDkimKeyBits,
-} from '../interfaces/domain-dkim.interface'
-import { DomainModel } from './domain.model'
+} from '../interfaces/domain-dkim.interface.js'
+import { DomainModel } from './domain.model.js'
 
 @Table({
     tableName: 'domain_dkim',

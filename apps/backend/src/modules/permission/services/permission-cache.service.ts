@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager'
-import { AUTH_PERMISSIONS_CACHE_PREFIX, AUTH_USER_CACHE_PREFIX } from '../permission.constants'
+import { AUTH_PERMISSIONS_CACHE_PREFIX, AUTH_USER_CACHE_PREFIX } from '../permission.constants.js'
 
 @Injectable()
 export class PermissionCacheService {

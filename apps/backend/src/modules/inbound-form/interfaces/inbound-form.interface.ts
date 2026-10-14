@@ -1,6 +1,6 @@
-import { InboundFormField } from './inbound-form-field.interface'
-import { InboundFormReceiver } from './inbound-form-receiver.interface'
-import { InboundFormSecurity } from './inbound-form-security.interface'
+import { InboundFormField } from './inbound-form-field.interface.js'
+import { InboundFormReceiver } from './inbound-form-receiver.interface.js'
+import { InboundFormSecurity } from './inbound-form-security.interface.js'
 
 export interface InboundForm {
     inboundFormId: number

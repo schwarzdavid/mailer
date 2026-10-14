@@ -1,4 +1,4 @@
-import { ProjectPermission } from '../permission.constants'
+import { ProjectPermission } from '../permission.constants.js'
 
 export interface ProjectMember {
     projectMemberId: number

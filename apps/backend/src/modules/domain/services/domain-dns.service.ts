@@ -1,19 +1,19 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { Op } from 'sequelize'
-import { Domain, SendingDomainIps } from '../interfaces/domain.interface'
-import { DomainDkim } from '../interfaces/domain-dkim.interface'
+import { Domain, SendingDomainIps } from '../interfaces/domain.interface.js'
+import { DomainDkim } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordCreate,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
+} from '../interfaces/domain-dns.interface.js'
 import { InjectModel } from '@nestjs/sequelize'
-import { DomainDnsModel } from '../models/domain-dns.model'
+import { DomainDnsModel } from '../models/domain-dns.model.js'
 import { resolve, resolve4, resolve6, resolveMx, reverse } from 'node:dns/promises'
-import { DomainModel } from '../models/domain.model'
-import { SettingsModel } from '../../settings/models/settings.model'
+import { DomainModel } from '../models/domain.model.js'
+import { SettingsModel } from '../../settings/models/settings.model.js'
 import ErrnoException = NodeJS.ErrnoException
 
 @Injectable()

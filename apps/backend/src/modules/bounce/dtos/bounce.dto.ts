@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer'
-import { Bounce, BounceType } from '../interfaces/bounce.interface'
+import { Bounce, BounceType } from '../interfaces/bounce.interface.js'
 
 export class BounceDto implements Omit<Bounce, 'messageId' | 'createdAt' | 'updatedAt'> {
     @Expose()

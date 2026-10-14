@@ -4,13 +4,13 @@ import {
     InboundFormSecurityService,
     SecurityCheckResult,
     SecurityRequestContext,
-} from './inbound-form-security.service'
+} from './inbound-form-security.service.js'
 import {
     InboundFormRecaptchaConfig,
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
-} from '../interfaces/inbound-form-security.interface'
+} from '../interfaces/inbound-form-security.interface.js'
 
 function scheme(
     type: InboundFormSecurityType,
@@ -84,6 +84,30 @@ describe('InboundFormSecurityService', () => {
             await expect(
                 service.checkSubmission([queryHoneypot], context({ query: { website: 'spam' } })),
             ).resolves.toBe(SecurityCheckResult.SPAM)
+        })
+
+        it('passes when the honeypot is an empty string', async () => {
+            await expect(service.checkSubmission([honeypot], context({ security: { website: '' } }))).resolves.toBe(
+                SecurityCheckResult.PASSED,
+            )
+        })
+
+        it('flags spam for any non-empty honeypot value, not only strings', async () => {
+            await expect(service.checkSubmission([honeypot], context({ security: { website: 0 } }))).resolves.toBe(
+                SecurityCheckResult.SPAM,
+            )
+            await expect(service.checkSubmission([honeypot], context({ security: { website: false } }))).resolves.toBe(
+                SecurityCheckResult.SPAM,
+            )
+        })
+
+        it('ignores honeypot values sent in a different location', async () => {
+            await expect(
+                service.checkSubmission(
+                    [honeypot],
+                    context({ headers: { website: 'spam' }, query: { website: 'spam' } }),
+                ),
+            ).resolves.toBe(SecurityCheckResult.PASSED)
         })
 
         it('flags spam without verifying other schemes when the honeypot is filled', async () => {
@@ -181,11 +205,96 @@ describe('InboundFormSecurityService', () => {
 
             expect(result).toBe(SecurityCheckResult.PASSED)
         })
+
+        it('rejects an empty token without calling the verifier', async () => {
+            await expect(
+                service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': '' } })),
+            ).rejects.toThrow(new ForbiddenException('Missing captcha token'))
+            expect(fetchSpy).not.toHaveBeenCalled()
+        })
+
+        it('rejects a non-string token without calling the verifier', async () => {
+            await expect(
+                service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': ['a', 'b'] } })),
+            ).rejects.toThrow(new ForbiddenException('Missing captcha token'))
+            expect(fetchSpy).not.toHaveBeenCalled()
+        })
+
+        it('rejects when the scheme has no secret configured', async () => {
+            const unconfigured = { ...recaptcha, config: null }
+
+            await expect(
+                service.checkSubmission([unconfigured], context({ security: { 'recaptcha-token': 'token-123' } })),
+            ).rejects.toThrow(new ForbiddenException('Captcha is not configured'))
+            expect(fetchSpy).not.toHaveBeenCalled()
+        })
+
+        it('rejects when the verifier answers with a non-2xx status', async () => {
+            fetchSpy.mockResolvedValue(new Response('upstream error', { status: 503 }))
+
+            await expect(
+                service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': 'token-123' } })),
+            ).rejects.toThrow(new ForbiddenException('Captcha verification unavailable'))
+        })
+
+        it('treats a missing score as zero when a minimum score is configured', async () => {
+            mockVerification({ success: true })
+
+            await expect(
+                service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': 'token-123' } })),
+            ).rejects.toThrow(new ForbiddenException('Captcha score too low'))
+        })
+
+        it('accepts a score exactly at the minimum', async () => {
+            mockVerification({ success: true, score: 0.5 })
+
+            await expect(
+                service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': 'token-123' } })),
+            ).resolves.toBe(SecurityCheckResult.PASSED)
+        })
+
+        it('ignores the score when no minimum is configured', async () => {
+            mockVerification({ success: true, score: 0 })
+            const lenient = { ...recaptcha, config: { secret: 'secret-key' } }
+
+            await expect(
+                service.checkSubmission([lenient], context({ security: { 'recaptcha-token': 'token-123' } })),
+            ).resolves.toBe(SecurityCheckResult.PASSED)
+        })
+
+        it('bounds the verification request with a timeout signal', async () => {
+            mockVerification({ success: true, score: 0.9 })
+
+            await service.checkSubmission([recaptcha], context({ security: { 'recaptcha-token': 'token-123' } }))
+
+            const [, init] = fetchSpy.mock.calls[0]!
+            expect(init?.method).toBe('POST')
+            expect(init?.signal).toBeInstanceOf(AbortSignal)
+        })
+
+        it('verifies every configured captcha scheme and fails if any fails', async () => {
+            const second = { ...recaptcha, key: 'second-token' }
+            fetchSpy
+                .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, score: 0.9 }), { status: 200 }))
+                .mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 200 }))
+
+            await expect(
+                service.checkSubmission(
+                    [recaptcha, second],
+                    context({ security: { 'recaptcha-token': 'one', 'second-token': 'two' } }),
+                ),
+            ).rejects.toThrow(new ForbiddenException('Captcha verification failed'))
+            expect(fetchSpy).toHaveBeenCalledTimes(2)
+        })
     })
 
     it('rejects unsupported scheme types', async () => {
         const csrf = scheme(InboundFormSecurityType.CSRF, InboundFormSecurityLocation.HEADER, 'x-csrf')
 
         await expect(service.checkSubmission([csrf], context())).rejects.toThrow(ForbiddenException)
+    })
+
+    it('passes a form without any security schemes', async () => {
+        await expect(service.checkSubmission([], context())).resolves.toBe(SecurityCheckResult.PASSED)
     })
 })

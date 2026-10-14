@@ -3,6 +3,7 @@
         <h1 class="text-center mb-0">{{ t('module.auth.login.title') }}</h1>
         <p class="text-center mb-8 mt-2 text-medium-emphasis">{{ t('module.auth.login.intro') }}</p>
         <form novalidate @submit.prevent="onSubmit">
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <VTextField
                 v-model="email"
                 :label="t('field.email')"
@@ -23,17 +24,23 @@
 </template>
 
 <script lang="ts" setup>
+    import { ref } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { zCredentialsDto } from 'api'
     import { useI18n } from 'vue-i18n'
     import { useLoginMutation } from '@/modules/auth/mutations/useLoginMutation.ts'
-    import { useRouter } from 'vue-router'
+    import { useRoute, useRouter } from 'vue-router'
     import { RouteNames } from '@/router/RouteNames.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
+    import { apiErrorStatus } from '@/helper/apiErrorStatus.ts'
+    import { safeRedirect } from '@/helper/safeRedirect.ts'
 
     const { t } = useI18n()
     const { mutateAsync, isPending } = useLoginMutation()
+    const route = useRoute()
     const router = useRouter()
+    const errorMessage = ref<string | null>(null)
 
     const { handleSubmit, defineField, errors } = useForm({
         validationSchema: toTypedSchema(zCredentialsDto),
@@ -43,7 +50,16 @@
     const [password] = defineField('password')
 
     const onSubmit = handleSubmit(async (values) => {
-        await mutateAsync(values)
-        void router.push({ name: RouteNames.DASHBOARD })
+        errorMessage.value = null
+        try {
+            await mutateAsync(values)
+        } catch (error) {
+            errorMessage.value =
+                apiErrorStatus(error) === 401
+                    ? t('module.auth.login.invalidCredentials')
+                    : apiErrorMessage(error, t('module.auth.login.error'))
+            return
+        }
+        void router.push(safeRedirect(route.query.redirect) ?? { name: RouteNames.DASHBOARD })
     })
 </script>

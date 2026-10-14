@@ -1,17 +1,19 @@
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { IsArray, IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator'
-import { GLOBAL_PERMISSIONS, Permission } from '../../permission/permission.constants'
+import { GLOBAL_PERMISSIONS, Permission } from '../../permission/permission.constants.js'
 
 export class UserCreateDto {
     @Expose()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     firstName!: string
 
     @Expose()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     lastName!: string
 
     @Expose()
@@ -34,12 +36,14 @@ export class UserUpdateDto {
     @IsOptional()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     firstName?: string
 
     @Expose()
     @IsOptional()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     lastName?: string
 
     @Expose()

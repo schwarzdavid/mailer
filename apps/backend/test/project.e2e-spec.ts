@@ -1,14 +1,14 @@
 import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createTestApp } from './support/app'
-import { login, seedUser, type Credentials } from './support/session'
-import { configureSendingDomain } from './support/sending-domain'
-import { ProjectModel } from '../src/modules/project/models/project.model'
-import { ProjectPurgeService } from '../src/modules/project/services/project-purge.service'
-import { PROJECT_PURGE_AFTER_MS } from '../src/modules/project/project.constants'
+import { createTestApp } from './support/app.js'
+import { login, seedUser, type Credentials } from './support/session.js'
+import { configureSendingDomain } from './support/sending-domain.js'
+import { ProjectModel } from '../src/modules/project/models/project.model.js'
+import { ProjectPurgeService } from '../src/modules/project/services/project-purge.service.js'
+import { PROJECT_PURGE_AFTER_MS } from '../src/modules/project/project.constants.js'
 
 describe('Project (e2e)', () => {
     let app: INestApplication<App>
@@ -157,5 +157,138 @@ describe('Project (e2e)', () => {
 
         const deleted = await http().get('/api/project/deleted').set('Authorization', auth()).expect(200)
         expect((deleted.body as { projectId: number }[]).map((project) => project.projectId)).not.toContain(projectId)
+    })
+
+    it('adds, lists and removes project members', async () => {
+        const memberCredentials: Credentials = {
+            email: 'project.member@example.com',
+            password: 'correct-horse-battery-staple',
+        }
+        await seedUser(app, memberCredentials, 'user')
+        const memberToken = await login(app, memberCredentials)
+        const users = await http().get('/api/user').set('Authorization', auth()).expect(200)
+        const memberUserId = (users.body as { userId: number; email: string }[]).find(
+            (user) => user.email === memberCredentials.email,
+        )!.userId
+
+        await http()
+            .put(`/api/project/${otherProjectId}/members/${memberUserId}`)
+            .set('Authorization', auth())
+            .send({ permissions: ['owner'] })
+            .expect(400)
+        await http()
+            .put(`/api/project/${otherProjectId}/members/${memberUserId}`)
+            .set('Authorization', auth())
+            .send({ permissions: ['read', 'update'] })
+            .expect(200)
+
+        const members = await http()
+            .get(`/api/project/${otherProjectId}/members`)
+            .set('Authorization', auth())
+            .expect(200)
+        expect(members.body).toEqual([
+            expect.objectContaining({
+                userId: memberUserId,
+                email: memberCredentials.email,
+                permissions: expect.arrayContaining(['read', 'update']) as string[],
+            }),
+        ])
+        await http().get(`/api/project/${otherProjectId}`).set('Authorization', `Bearer ${memberToken}`).expect(200)
+
+        await http()
+            .delete(`/api/project/${otherProjectId}/members/${memberUserId}`)
+            .set('Authorization', auth())
+            .expect(200)
+
+        const after = await http()
+            .get(`/api/project/${otherProjectId}/members`)
+            .set('Authorization', auth())
+            .expect(200)
+        expect(after.body).toEqual([])
+        await http().get(`/api/project/${otherProjectId}`).set('Authorization', `Bearer ${memberToken}`).expect(404)
+        await http()
+            .get(`/api/project/${otherProjectId}/members`)
+            .set('Authorization', `Bearer ${memberToken}`)
+            .expect(404)
+    })
+
+    it('unassigns a domain that no form uses', async () => {
+        const domainResponse = await http()
+            .post('/api/domain')
+            .set('Authorization', auth())
+            .send({ fqdn: 'forms.unused-project-example.com' })
+            .expect(201)
+        const unusedDomainId = (domainResponse.body as { domainId: number }).domainId
+
+        await http()
+            .post(`/api/project/${otherProjectId}/domains`)
+            .set('Authorization', auth())
+            .send({ domainId: unusedDomainId })
+            .expect(201)
+        await http()
+            .delete(`/api/project/${otherProjectId}/domains/${unusedDomainId}`)
+            .set('Authorization', auth())
+            .expect(200)
+
+        const detail = await http().get(`/api/project/${otherProjectId}`).set('Authorization', auth()).expect(200)
+        expect((detail.body as { domains: unknown[] }).domains).toEqual([])
+    })
+
+    it('renames a project and validates the name', async () => {
+        const renamed = await http()
+            .patch(`/api/project/${otherProjectId}`)
+            .set('Authorization', auth())
+            .send({ name: 'E2E Other Renamed' })
+            .expect(200)
+        expect(renamed.body).toMatchObject({ projectId: otherProjectId, name: 'E2E Other Renamed' })
+
+        await http().post('/api/project').set('Authorization', auth()).send({ name: '' }).expect(400)
+        await http().patch('/api/project/999999').set('Authorization', auth()).send({ name: 'Ghost' }).expect(404)
+    })
+
+    it.each([
+        ['get', '/api/project'],
+        ['post', '/api/project'],
+        ['get', '/api/project/deleted'],
+        ['get', '/api/project/1'],
+        ['patch', '/api/project/1'],
+        ['delete', '/api/project/1'],
+        ['post', '/api/project/1/restore'],
+        ['post', '/api/project/1/domains'],
+        ['delete', '/api/project/1/domains/1'],
+        ['get', '/api/project/1/members'],
+        ['put', '/api/project/1/members/1'],
+        ['delete', '/api/project/1/members/1'],
+    ] as const)('rejects %s %s without a token', async (method, path) => {
+        const response = await http()[method](path)
+
+        expect(response.status).toBe(401)
+    })
+
+    it.each([
+        ['get', '/api/project/abc'],
+        ['patch', '/api/project/abc'],
+        ['delete', '/api/project/abc'],
+        ['post', '/api/project/abc/restore'],
+        ['post', '/api/project/abc/domains'],
+        ['delete', '/api/project/1/domains/abc'],
+        ['get', '/api/project/abc/members'],
+        ['put', '/api/project/1/members/abc'],
+        ['delete', '/api/project/1/members/abc'],
+    ] as const)('rejects %s %s with a non-numeric id with 400', async (method, path) => {
+        const response = await http()[method](path).set('Authorization', auth()).send({})
+
+        expect(response.status).toBe(400)
+    })
+
+    it('rejects properties a project update does not accept', async () => {
+        const response = await http()
+            .patch(`/api/project/${otherProjectId}`)
+            .set('Authorization', auth())
+            .send({ name: 'E2E Other Hijacked', projectId: 1, deletedAt: null })
+
+        expect(response.status).toBe(400)
+        const detail = await http().get(`/api/project/${otherProjectId}`).set('Authorization', auth()).expect(200)
+        expect((detail.body as { name: string }).name).not.toBe('E2E Other Hijacked')
     })
 })

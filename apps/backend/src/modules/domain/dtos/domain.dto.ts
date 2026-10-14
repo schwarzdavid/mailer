@@ -1,5 +1,5 @@
-import { Domain } from '../interfaces/domain.interface'
-import { DomainDnsDto } from './domain-dns.dto'
+import { Domain } from '../interfaces/domain.interface.js'
+import { DomainDnsDto } from './domain-dns.dto.js'
 import { Expose } from 'class-transformer'
 
 export class DomainDto implements Omit<Domain, 'activeDkimId' | 'dnsRecords'> {

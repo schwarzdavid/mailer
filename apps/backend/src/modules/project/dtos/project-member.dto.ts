@@ -1,7 +1,7 @@
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { ArrayNotEmpty, IsArray, IsIn } from 'class-validator'
-import { PROJECT_PERMISSIONS, ProjectPermission } from '../../permission/permission.constants'
+import { PROJECT_PERMISSIONS, ProjectPermission } from '../../permission/permission.constants.js'
 
 export class ProjectMemberPutDto {
     @Expose()

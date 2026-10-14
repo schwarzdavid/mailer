@@ -82,7 +82,7 @@
             await assignDomain({ projectId: props.project.projectId, domainId: selectedDomainId.value })
             selectedDomainId.value = null
         } catch (error) {
-            errorMessage.value = apiErrorMessage(error, t('module.projects.details.domains.error'))
+            errorMessage.value = apiErrorMessage(error, t('module.projects.details.domains.assignError'))
         }
     }
 

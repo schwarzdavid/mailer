@@ -3,9 +3,9 @@ import { getModelToken } from '@nestjs/sequelize'
 import { UnauthorizedException } from '@nestjs/common'
 import bcrypt from 'bcryptjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CredentialsService } from './credentials.service'
-import { UserModel } from '../../user/models/user.model'
-import { RoleModel } from '../../permission/models/role.model'
+import { CredentialsService } from './credentials.service.js'
+import { UserModel } from '../../user/models/user.model.js'
+import { RoleModel } from '../../permission/models/role.model.js'
 
 describe('CredentialsService', () => {
     let service: CredentialsService
@@ -68,6 +68,22 @@ describe('CredentialsService', () => {
             },
             include: [RoleModel],
         })
+    })
+
+    it('looks the user up by the normalized email so login is case-insensitive', async () => {
+        findOne.mockResolvedValue(buildUser())
+
+        await service.validateCredentials({ email: '  Ada@Example.COM ', password })
+
+        expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { email: 'ada@example.com' } }))
+    })
+
+    it('never returns the password hash', async () => {
+        findOne.mockResolvedValue(buildUser())
+
+        const result = await service.validateCredentials({ email: 'ada@example.com', password })
+
+        expect(result).not.toHaveProperty('password')
     })
 
     it('throws UnauthorizedException when the password does not match', async () => {

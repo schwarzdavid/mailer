@@ -1,4 +1,4 @@
-import { Domain } from '../../domain/interfaces/domain.interface'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
 
 export interface Project {
     projectId: number

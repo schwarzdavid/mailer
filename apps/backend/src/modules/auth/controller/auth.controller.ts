@@ -1,17 +1,24 @@
 import { Controller, Get, HttpCode, HttpStatus, Post, SerializeOptions, UseGuards } from '@nestjs/common'
-import { CredentialsDto } from '../dtos/credentials.dto'
-import { AuthenticationDto } from '../dtos/authentication.dto'
-import { LocalAuthGuard } from '../guards/local-auth.guard'
-import { JwtAuth } from '../decorators/JwtAuth'
-import { JwtHelperService } from '../services/jwt-helper.service'
-import { Principal } from '../decorators/Principal'
-import type { UserWithRole } from '../../user/interfaces/user.interface'
-import { UserDto } from '../../user/dtos/user.dto'
-import { ResponseDto } from '../../../decorators/ResponseDto'
+import { CredentialsDto } from '../dtos/credentials.dto.js'
+import { AuthenticationDto } from '../dtos/authentication.dto.js'
+import { LocalAuthGuard } from '../guards/local-auth.guard.js'
+import { JwtAuth } from '../decorators/JwtAuth.js'
+import { JwtHelperService } from '../services/jwt-helper.service.js'
+import { Principal } from '../decorators/Principal.js'
+import type { UserWithRole } from '../../user/interfaces/user.interface.js'
+import { UserDto } from '../../user/dtos/user.dto.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { ApiBody, ApiTags } from '@nestjs/swagger'
-import { CurrentAbility } from '../../permission/decorators/CurrentAbility'
-import type { AppAbility } from '../../permission/interfaces/app-ability'
-import { AbilityRuleDto } from '../dtos/ability-rule.dto'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { AbilityRuleDto } from '../dtos/ability-rule.dto.js'
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
+import {
+    LOGIN_THROTTLE_BLOCK_MS,
+    LOGIN_THROTTLE_LIMIT,
+    LOGIN_THROTTLE_TTL_MS,
+    loginThrottleTracker,
+} from '../auth.constants.js'
 
 @ApiTags('auth')
 @Controller('auth')
@@ -20,7 +27,15 @@ export class AuthController {
 
     @ApiBody({ type: CredentialsDto })
     @HttpCode(HttpStatus.OK)
-    @UseGuards(LocalAuthGuard)
+    @Throttle({
+        default: {
+            limit: LOGIN_THROTTLE_LIMIT,
+            ttl: LOGIN_THROTTLE_TTL_MS,
+            blockDuration: LOGIN_THROTTLE_BLOCK_MS,
+            getTracker: loginThrottleTracker,
+        },
+    })
+    @UseGuards(ThrottlerGuard, LocalAuthGuard)
     @ResponseDto(AuthenticationDto)
     @Post('login')
     async login(@Principal() principal: UserWithRole): Promise<AuthenticationDto> {

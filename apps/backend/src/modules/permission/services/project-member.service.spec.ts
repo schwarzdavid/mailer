@@ -5,13 +5,13 @@ import { Sequelize } from 'sequelize-typescript'
 import type { Transaction } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { ProjectMemberService } from './project-member.service'
-import { ProjectMemberModel } from '../models/project-member.model'
-import { ProjectModel } from '../../project/models/project.model'
-import { UserModel } from '../../user/models/user.model'
-import { PermissionCacheService } from './permission-cache.service'
-import { AppAbility } from '../interfaces/app-ability'
-import { ProjectMember } from '../interfaces/project-member.interface'
+import { ProjectMemberService } from './project-member.service.js'
+import { ProjectMemberModel } from '../models/project-member.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { UserModel } from '../../user/models/user.model.js'
+import { PermissionCacheService } from './permission-cache.service.js'
+import { AppAbility } from '../interfaces/app-ability.js'
+import { ProjectMember } from '../interfaces/project-member.interface.js'
 
 const userManagerAbility = createMongoAbility<AppAbility>([{ action: 'update', subject: 'User' }])
 
@@ -149,6 +149,38 @@ describe('ProjectMemberService', () => {
                 new NotFoundException('Unknown user'),
             )
         })
+
+        it('rejects read-only members without touching the rows', async () => {
+            await expect(service.setMemberPermissions(1, 2, ['delete'], readOnlyAbility)).rejects.toThrow(
+                ForbiddenException,
+            )
+            expect(transaction).not.toHaveBeenCalled()
+            expect(invalidateUser).not.toHaveBeenCalled()
+        })
+
+        it('hides projects the caller cannot read', async () => {
+            await expect(service.setMemberPermissions(2, 2, ['read'], projectEditorAbility)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+            expect(transaction).not.toHaveBeenCalled()
+        })
+
+        it('lets project editors manage members of their own project', async () => {
+            await service.setMemberPermissions(1, 2, ['read'], projectEditorAbility)
+
+            expect(memberBulkCreate).toHaveBeenCalledWith([{ projectId: 1, userId: 2, permission: 'read' }], {
+                transaction: transactionStub,
+            })
+        })
+
+        it('does not invalidate the cache when the transaction fails', async () => {
+            memberBulkCreate.mockRejectedValue(new Error('constraint violated'))
+
+            await expect(service.setMemberPermissions(1, 2, ['read'], userManagerAbility)).rejects.toThrow(
+                'constraint violated',
+            )
+            expect(invalidateUser).not.toHaveBeenCalled()
+        })
     })
 
     describe('removeMember', () => {
@@ -157,6 +189,21 @@ describe('ProjectMemberService', () => {
 
             expect(memberDestroy).toHaveBeenCalledWith({ where: { projectId: 1, userId: 2 } })
             expect(invalidateUser).toHaveBeenCalledWith(2)
+        })
+
+        it('rejects read-only members without removing anyone', async () => {
+            await expect(service.removeMember(1, 2, readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(memberDestroy).not.toHaveBeenCalled()
+            expect(invalidateUser).not.toHaveBeenCalled()
+        })
+
+        it('rejects unknown projects', async () => {
+            projectFindByPk.mockResolvedValue(null)
+
+            await expect(service.removeMember(9, 2, userManagerAbility)).rejects.toThrow(
+                new NotFoundException('Unknown project'),
+            )
+            expect(memberDestroy).not.toHaveBeenCalled()
         })
     })
 

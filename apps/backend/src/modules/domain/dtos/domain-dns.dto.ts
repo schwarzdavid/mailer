@@ -1,5 +1,5 @@
-import { DomainDnsRecord, DomainDnsRecordUse } from '../interfaces/domain-dns.interface'
-import { DomainDnsRecordDto } from './domain-dns-record.dto'
+import { DomainDnsRecord, DomainDnsRecordUse } from '../interfaces/domain-dns.interface.js'
+import { DomainDnsRecordDto } from './domain-dns-record.dto.js'
 import { Expose, plainToInstance } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 

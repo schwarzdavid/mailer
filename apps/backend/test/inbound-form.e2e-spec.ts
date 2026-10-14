@@ -1,38 +1,22 @@
 ﻿import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
-import { createTestApp } from './support/app'
-import { login, seedUser, type Credentials } from './support/session'
-import { configureSendingDomain } from './support/sending-domain'
-import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model'
-import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model'
-
-interface MailhogMessage {
-    Content: {
-        Headers: Record<string, string[]>
-        Body: string
-    }
-}
-
-interface MailhogMessages {
-    total: number
-    items: MailhogMessage[]
-}
-
-function header(message: MailhogMessage, name: string): string[] {
-    const key = Object.keys(message.Content.Headers).find(
-        (headerName) => headerName.toLowerCase() === name.toLowerCase(),
-    )
-    return key ? message.Content.Headers[key]! : []
-}
+import { createTestApp } from './support/app.js'
+import { login, seedUser, type Credentials } from './support/session.js'
+import { configureSendingDomain } from './support/sending-domain.js'
+import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
+import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
+import { fetchMessages as fetchMailhogMessages, header, parseMessage, type MailhogMessages } from './support/mailhog.js'
 
 describe('InboundForm (e2e)', () => {
     let app: INestApplication<App>
     let token: string
     let inboundFormId: number
     let inboundFormReceiverId: number
+    let domainId: number
+    let projectId: number
     const slug = 'e2e-contact'
     const mailhogUrl = inject('e2eEnv').MAILHOG_URL
 
@@ -44,8 +28,7 @@ describe('InboundForm (e2e)', () => {
     const http = () => request(app.getHttpServer())
 
     async function fetchMessages(): Promise<MailhogMessages> {
-        const response = await fetch(`${mailhogUrl}/api/v2/messages`)
-        return (await response.json()) as MailhogMessages
+        return await fetchMailhogMessages(mailhogUrl)
     }
 
     beforeAll(async () => {
@@ -59,14 +42,14 @@ describe('InboundForm (e2e)', () => {
             .set('Authorization', `Bearer ${token}`)
             .send({ fqdn: 'forms.inbound-example.com' })
             .expect(201)
-        const domainId = (domainResponse.body as { domainId: number }).domainId
+        domainId = (domainResponse.body as { domainId: number }).domainId
 
         const projectResponse = await http()
             .post('/api/project')
             .set('Authorization', `Bearer ${token}`)
             .send({ name: 'E2E Inbound' })
             .expect(201)
-        const projectId = (projectResponse.body as { projectId: number }).projectId
+        projectId = (projectResponse.body as { projectId: number }).projectId
 
         await http()
             .post(`/api/project/${projectId}/domains`)
@@ -196,5 +179,73 @@ describe('InboundForm (e2e)', () => {
             .post(`/api/public/form/${slug}`)
             .send({ security: { website: null }, data: { firstName: 'Max', email: 'broken' } })
         expect(response.status).toBe(400)
+    })
+
+    it('returns fields in the order they were saved and keeps a reorder', async () => {
+        const formResponse = await http()
+            .post('/api/inbound-form')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ name: 'E2E Ordering', slug: 'e2e-ordering', domainId, projectId })
+            .expect(201)
+        const orderingFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+        const field = (key: string) => ({ key, label: key, type: 'text' })
+        const savedKeys = async (keys: string[]) => {
+            const saved = await http()
+                .put(`/api/inbound-form/${orderingFormId}/fields`)
+                .set('Authorization', `Bearer ${token}`)
+                .send({ fields: keys.map(field) })
+                .expect(200)
+            const loaded = await http()
+                .get(`/api/inbound-form/${orderingFormId}`)
+                .set('Authorization', `Bearer ${token}`)
+                .expect(200)
+            return {
+                saved: (saved.body as { key: string }[]).map((entry) => entry.key),
+                loaded: (loaded.body as { fields: { key: string }[] }).fields.map((entry) => entry.key),
+            }
+        }
+
+        const initial = ['zip', 'city', 'street', 'name']
+        await expect(savedKeys(initial)).resolves.toEqual({ saved: initial, loaded: initial })
+
+        const reordered = ['name', 'street', 'extra', 'zip', 'city']
+        await expect(savedKeys(reordered)).resolves.toEqual({ saved: reordered, loaded: reordered })
+    })
+
+    it('rejects a backtracking-prone field pattern', async () => {
+        const response = await http()
+            .put(`/api/inbound-form/${inboundFormId}/fields`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                fields: [
+                    { key: 'firstName', label: 'First name', type: 'text', validation: { pattern: '^(a+)+$' } },
+                    { key: 'email', label: 'Email', type: 'email', validation: { required: true } },
+                ],
+            })
+            .expect(400)
+
+        expect(JSON.stringify(response.body)).toContain('firstName')
+    })
+
+    it('renders the mail subject without html escaping', async () => {
+        await http()
+            .post(`/api/public/form/${slug}`)
+            .send({
+                security: { website: null },
+                data: { firstName: "O'Brien & Co", email: 'obrien@example.com' },
+            })
+            .expect(201)
+
+        const subject = await vi.waitFor(
+            async () => {
+                const parsed = await Promise.all((await fetchMessages()).items.map((message) => parseMessage(message)))
+                const match = parsed.find((mail) => mail.replyTo?.text.includes('obrien@example.com'))
+                expect(match).toBeDefined()
+                return match!.subject
+            },
+            { timeout: 15_000, interval: 250 },
+        )
+
+        expect(subject).toBe("Message from O'Brien & Co")
     })
 })

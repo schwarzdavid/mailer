@@ -2,32 +2,33 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Sequelize } from 'sequelize-typescript'
-import { Op } from 'sequelize'
+import { Op, UniqueConstraintError } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { InboundFormService } from './inbound-form.service'
-import { InboundFormModel } from '../models/inbound-form.model'
-import { InboundFormFieldModel } from '../models/inbound-form-field.model'
-import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
-import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
-import { DomainService } from '../../domain/services/domain.service'
-import { Domain } from '../../domain/interfaces/domain.interface'
-import { ProjectService } from '../../project/services/project.service'
-import { AbilityFactory } from '../../permission/services/ability-factory.service'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { User } from '../../user/interfaces/user.interface'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
+import { InboundFormService } from './inbound-form.service.js'
+import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { InboundFormModel } from '../models/inbound-form.model.js'
+import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
+import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
+import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { ProjectService } from '../../project/services/project.service.js'
+import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { User } from '../../user/interfaces/user.interface.js'
+import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
 import {
     InboundFormField,
     InboundFormFieldType,
     InboundFormFieldUpsert,
-} from '../interfaces/inbound-form-field.interface'
-import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface'
+} from '../interfaces/inbound-form-field.interface.js'
+import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface.js'
 import {
     InboundFormSecurityLocation,
     InboundFormSecurityType,
     InboundFormSecurityUpsert,
-} from '../interfaces/inbound-form-security.interface'
+} from '../interfaces/inbound-form-security.interface.js'
 
 const domain: Domain = {
     domainId: 3,
@@ -46,6 +47,7 @@ const emailField: InboundFormField = {
     type: InboundFormFieldType.EMAIL,
     defaultValue: null,
     validation: { required: true },
+    position: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -56,6 +58,7 @@ const textField: InboundFormField = {
     key: 'firstName',
     label: 'First name',
     type: InboundFormFieldType.TEXT,
+    position: 1,
 }
 
 const receiver: InboundFormReceiver = {
@@ -98,6 +101,9 @@ const principal: User = {
 }
 
 const manageAll = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
+const readOnlyAbility = createMongoAbility<AppAbility>([
+    { action: 'read', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+])
 
 type FormRow = InboundFormFull & {
     get: (options: { plain: true }) => InboundFormFull
@@ -327,6 +333,29 @@ describe('InboundFormService', () => {
 
             expect(row.update).toHaveBeenCalledWith({ name: 'New name' })
         })
+
+        it('drops keys the request left undefined', async () => {
+            const row = formRow()
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(
+                1,
+                { name: 'New name', slug: undefined, domainId: undefined, isActive: undefined },
+                manageAll,
+            )
+
+            expect(row.update).toHaveBeenCalledWith({ name: 'New name' })
+        })
+
+        it('never moves the form into another project', async () => {
+            const row = formRow()
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+            const request = { isActive: false, projectId: 99, inboundFormId: 77 }
+
+            await service.updateForm(1, request, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ isActive: false })
+        })
     })
 
     describe('updateForm project rules', () => {
@@ -420,13 +449,49 @@ describe('InboundFormService', () => {
                 }),
             )
             expect(fieldUpdate).toHaveBeenCalledWith(
-                expect.objectContaining({ label: 'Email', type: InboundFormFieldType.EMAIL }),
+                expect.objectContaining({ label: 'Email', type: InboundFormFieldType.EMAIL, position: 0 }),
                 expect.objectContaining({ where: { inboundFormId: 1, key: 'email' } }),
             )
             expect(fieldUpsertCreate).toHaveBeenCalledWith(
-                expect.objectContaining({ inboundFormId: 1, key: 'message' }),
+                expect.objectContaining({ inboundFormId: 1, key: 'message', position: 1 }),
                 expect.anything(),
             )
+        })
+
+        it('stores each field at its index in the submitted order and reads them back in that order', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await service.replaceFields(
+                1,
+                [
+                    upsert({ key: 'message', type: InboundFormFieldType.TEXT, label: 'Message' }),
+                    upsert({ key: 'firstName', type: InboundFormFieldType.TEXT, label: 'First name' }),
+                    upsert({ key: 'email' }),
+                ],
+                manageAll,
+            )
+
+            expect(fieldUpsertCreate).toHaveBeenCalledWith(
+                expect.objectContaining({ key: 'message', position: 0 }),
+                expect.anything(),
+            )
+            expect(fieldUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({ position: 1 }),
+                expect.objectContaining({ where: { inboundFormId: 1, key: 'firstName' } }),
+            )
+            expect(fieldUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({ position: 2 }),
+                expect.objectContaining({ where: { inboundFormId: 1, key: 'email' } }),
+            )
+            expect(fieldFindAll).toHaveBeenCalledWith({ where: { inboundFormId: 1 }, order: FIELD_ORDER })
+        })
+
+        it('loads forms with their fields ordered by position', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await service.getFormById(1, manageAll)
+
+            expect(formFindByPk).toHaveBeenCalledWith(1, expect.objectContaining({ order: INCLUDED_FIELD_ORDER }))
         })
 
         it('rejects a field with a pattern that does not compile', async () => {
@@ -434,7 +499,39 @@ describe('InboundFormService', () => {
 
             await expect(
                 service.replaceFields(1, [upsert({ validation: { pattern: '[' } })], manageAll),
-            ).rejects.toThrow(new BadRequestException('Invalid pattern for field "email"'))
+            ).rejects.toThrow(
+                new BadRequestException(
+                    'Invalid pattern for field "email": the pattern is not a valid regular expression',
+                ),
+            )
+        })
+
+        it.each(['(a+)+$', '^(\\w+\\s?)*$', '(a|aa)*', '(x\\d{1,3})+', '(.)\\1', 'a'.repeat(201)])(
+            'rejects the backtracking-prone pattern %s before anything is written',
+            async (pattern) => {
+                formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+                await expect(
+                    service.replaceFields(
+                        1,
+                        [upsert({ type: InboundFormFieldType.TEXT, validation: { pattern } })],
+                        manageAll,
+                    ),
+                ).rejects.toThrow(BadRequestException)
+                expect(transaction).not.toHaveBeenCalled()
+            },
+        )
+
+        it('accepts a safe pattern', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(
+                service.replaceFields(
+                    1,
+                    [upsert({ type: InboundFormFieldType.TEXT, validation: { pattern: '^\\+?[0-9 ]{6,20}$' } })],
+                    manageAll,
+                ),
+            ).resolves.toEqual([])
         })
     })
 
@@ -589,6 +686,40 @@ describe('InboundFormService', () => {
             expect(update).toHaveBeenCalledWith({ emailReplyTo: '{{email}}' })
         })
 
+        it('validates a partial update against the stored values', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+            const update = vi.fn<(values: Partial<InboundFormReceiver>) => Promise<unknown>>().mockResolvedValue(null)
+            receiverFindOne.mockResolvedValue({
+                ...receiver,
+                get: () => receiver,
+                update,
+            } as unknown as InboundFormReceiverModel)
+
+            await service.updateReceiver(
+                1,
+                31,
+                { isActive: false, emailFrom: undefined, emailReceiver: undefined, emailReplyTo: undefined },
+                manageAll,
+            )
+
+            expect(update).toHaveBeenCalledWith({ isActive: false })
+        })
+
+        it('never moves the receiver to another form', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+            const update = vi.fn<(values: Partial<InboundFormReceiver>) => Promise<unknown>>().mockResolvedValue(null)
+            receiverFindOne.mockResolvedValue({
+                ...receiver,
+                get: () => receiver,
+                update,
+            } as unknown as InboundFormReceiverModel)
+            const request = { isActive: true, inboundFormId: 99, inboundFormReceiverId: 1 }
+
+            await service.updateReceiver(1, 31, request, manageAll)
+
+            expect(update).toHaveBeenCalledWith({ isActive: true })
+        })
+
         it('throws NotFoundException for a receiver of another form', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
             receiverFindOne.mockResolvedValue(null)
@@ -609,5 +740,284 @@ describe('InboundFormService', () => {
 
             expect(destroy).toHaveBeenCalled()
         })
+    })
+
+    describe('project access on mutations', () => {
+        beforeEach(() => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+        })
+
+        it('rejects creating a form in a project the caller can only read', async () => {
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, readOnlyAbility),
+            ).rejects.toThrow(ForbiddenException)
+            expect(formCreate).not.toHaveBeenCalled()
+        })
+
+        it('hides a project the caller cannot read when creating a form in it', async () => {
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 6 }, readOnlyAbility),
+            ).rejects.toThrow(new NotFoundException('Unknown project'))
+            expect(formCreate).not.toHaveBeenCalled()
+        })
+
+        it('rejects updating a form with read-only access', async () => {
+            await expect(service.updateForm(1, { name: 'Renamed' }, readOnlyAbility)).rejects.toThrow(
+                ForbiddenException,
+            )
+        })
+
+        it('rejects replacing fields with read-only access', async () => {
+            await expect(service.replaceFields(1, [], readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(transaction).not.toHaveBeenCalled()
+        })
+
+        it('rejects replacing security schemes with read-only access', async () => {
+            await expect(service.replaceSecurity(1, [], readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(securityDestroy).not.toHaveBeenCalled()
+        })
+
+        it('rejects creating a receiver with read-only access', async () => {
+            await expect(
+                service.createReceiver(
+                    1,
+                    {
+                        emailFrom: 'noreply@mail.example.com',
+                        emailReceiver: 'attacker@evil.com',
+                        emailReplyTo: null,
+                        isActive: true,
+                    },
+                    readOnlyAbility,
+                ),
+            ).rejects.toThrow(ForbiddenException)
+            expect(receiverCreate).not.toHaveBeenCalled()
+        })
+
+        it('rejects updating a receiver with read-only access before loading it', async () => {
+            await expect(
+                service.updateReceiver(1, 31, { emailReceiver: 'attacker@evil.com' }, readOnlyAbility),
+            ).rejects.toThrow(ForbiddenException)
+            expect(receiverFindOne).not.toHaveBeenCalled()
+        })
+
+        it('rejects deleting a receiver with read-only access', async () => {
+            await expect(service.deleteReceiver(1, 31, readOnlyAbility)).rejects.toThrow(ForbiddenException)
+            expect(receiverFindOne).not.toHaveBeenCalled()
+        })
+
+        it('lets read-only members read a receiver but not load it for editing', async () => {
+            receiverFindOne.mockResolvedValue({ get: () => receiver } as unknown as InboundFormReceiverModel)
+
+            await expect(service.getReceiver(1, 31, readOnlyAbility)).resolves.toEqual(receiver)
+            await expect(service.getReceiver(1, 31, readOnlyAbility, 'update')).rejects.toThrow(ForbiddenException)
+        })
+    })
+
+    describe('slug conflicts', () => {
+        it('maps a duplicate slug on create to a bad request', async () => {
+            formCreate.mockRejectedValue(new UniqueConstraintError({}))
+
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
+            ).rejects.toThrow(new BadRequestException('Slug is already in use'))
+        })
+
+        it('maps a duplicate slug on update to a bad request', async () => {
+            const row = formRow()
+            row.update.mockRejectedValue(new UniqueConstraintError({}))
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await expect(service.updateForm(1, { slug: 'taken' }, manageAll)).rejects.toThrow(
+                new BadRequestException('Slug is already in use'),
+            )
+        })
+
+        it('rethrows unexpected persistence errors on create', async () => {
+            formCreate.mockRejectedValue(new Error('connection lost'))
+
+            await expect(
+                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
+            ).rejects.toThrow('connection lost')
+        })
+    })
+
+    describe('updateForm domain changes', () => {
+        it('skips domain checks when the domain stays the same', async () => {
+            const row = formRow()
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(1, { domainId: 3, isActive: false }, manageAll)
+
+            expect(getDomainById).not.toHaveBeenCalled()
+            expect(row.update).toHaveBeenCalledWith({ domainId: 3, isActive: false })
+        })
+
+        it('allows removing the domain from a form without receivers', async () => {
+            const row = formRow({ inboundFormReceivers: [] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(1, { domainId: null }, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ domainId: null })
+        })
+
+        it('switches to a domain every existing sender already uses', async () => {
+            const row = formRow({ inboundFormReceivers: [{ ...receiver, emailFrom: 'noreply@other.example.com' }] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
+
+            await service.updateForm(1, { domainId: 4 }, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ domainId: 4 })
+        })
+
+        it('leaves the form untouched when a sender no longer matches the new domain', async () => {
+            const row = formRow()
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
+
+            await expect(service.updateForm(1, { domainId: 4 }, manageAll)).rejects.toThrow(
+                new BadRequestException('Sender address must use the form domain other.example.com'),
+            )
+            expect(row.update).not.toHaveBeenCalled()
+        })
+
+        it('rejects switching to an unknown domain', async () => {
+            const row = formRow({ inboundFormReceivers: [] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+            getDomainById.mockRejectedValue(new NotFoundException())
+
+            await expect(service.updateForm(1, { domainId: 99 }, manageAll)).rejects.toThrow(
+                new BadRequestException('Unknown domain'),
+            )
+            expect(row.update).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('receiver address rules', () => {
+        const upsert = (partial: Partial<InboundFormReceiverUpsert>): InboundFormReceiverUpsert => ({
+            emailFrom: 'noreply@mail.example.com',
+            emailReceiver: 'owner@business.com',
+            emailReplyTo: null,
+            isActive: true,
+            ...partial,
+        })
+
+        beforeEach(() => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+            receiverCreate.mockResolvedValue({ get: () => receiver })
+        })
+
+        it('accepts a sender on the form domain regardless of case', async () => {
+            await service.createReceiver(1, upsert({ emailFrom: 'NoReply@MAIL.Example.com' }), manageAll)
+
+            expect(receiverCreate).toHaveBeenCalled()
+        })
+
+        it.each(['noreply@evilmail.example.com', 'noreply@mail.example.com.evil.io', 'noreply@example.com'])(
+            'rejects the lookalike sender %s',
+            async (emailFrom) => {
+                await expect(service.createReceiver(1, upsert({ emailFrom }), manageAll)).rejects.toThrow(
+                    new BadRequestException('Sender address must use the form domain mail.example.com'),
+                )
+                expect(receiverCreate).not.toHaveBeenCalled()
+            },
+        )
+
+        it('validates the reply-to like a recipient', async () => {
+            await expect(
+                service.createReceiver(1, upsert({ emailReplyTo: 'not-an-address' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
+            await expect(
+                service.createReceiver(1, upsert({ emailReplyTo: '{{firstName}}' }), manageAll),
+            ).rejects.toThrow(BadRequestException)
+            await expect(service.createReceiver(1, upsert({ emailReplyTo: '{{missing}}' }), manageAll)).rejects.toThrow(
+                BadRequestException,
+            )
+            expect(receiverCreate).not.toHaveBeenCalled()
+        })
+
+        it('re-validates the merged receiver on a partial update', async () => {
+            const update = vi.fn<(values: Partial<InboundFormReceiver>) => Promise<unknown>>()
+            receiverFindOne.mockResolvedValue({
+                ...receiver,
+                get: () => receiver,
+                update,
+            } as unknown as InboundFormReceiverModel)
+
+            await expect(
+                service.updateReceiver(1, 31, { emailFrom: 'noreply@evil.example.org' }, manageAll),
+            ).rejects.toThrow(BadRequestException)
+            expect(update).not.toHaveBeenCalled()
+        })
+
+        it('looks receivers up within the requested form only', async () => {
+            receiverFindOne.mockResolvedValue(null)
+
+            await expect(service.deleteReceiver(1, 31, manageAll)).rejects.toThrow(
+                new NotFoundException('Unknown receiver'),
+            )
+            expect(receiverFindOne).toHaveBeenCalledWith({ where: { inboundFormId: 1, inboundFormReceiverId: 31 } })
+        })
+    })
+
+    describe('replaceFields edge cases', () => {
+        it('keeps a referenced email field when it is only relabelled', async () => {
+            formFindByPk.mockResolvedValue(
+                formRow({
+                    inboundFormReceivers: [{ ...receiver, emailReceiver: '{{email}}' }],
+                }) as unknown as InboundFormModel,
+            )
+
+            await service.replaceFields(
+                1,
+                [
+                    {
+                        key: 'email',
+                        label: 'Your email',
+                        type: InboundFormFieldType.EMAIL,
+                        defaultValue: null,
+                        validation: null,
+                    },
+                ],
+                manageAll,
+            )
+
+            expect(fieldUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({ label: 'Your email' }),
+                expect.objectContaining({ where: { inboundFormId: 1, key: 'email' } }),
+            )
+        })
+
+        it('writes nothing when validation fails', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(
+                service.replaceFields(
+                    1,
+                    [
+                        {
+                            key: 'email',
+                            label: 'Email',
+                            type: InboundFormFieldType.EMAIL,
+                            defaultValue: null,
+                            validation: { pattern: '(' },
+                        },
+                    ],
+                    manageAll,
+                ),
+            ).rejects.toThrow(BadRequestException)
+            expect(transaction).not.toHaveBeenCalled()
+            expect(fieldDestroy).not.toHaveBeenCalled()
+        })
+    })
+
+    it('clears every security scheme for an empty list', async () => {
+        formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+        await expect(service.replaceSecurity(1, [], manageAll)).resolves.toEqual([])
+
+        expect(securityDestroy).toHaveBeenCalledWith(expect.objectContaining({ where: { inboundFormId: 1 } }))
+        expect(securityBulkCreate).toHaveBeenCalledWith([], expect.objectContaining({ returning: true }))
     })
 })

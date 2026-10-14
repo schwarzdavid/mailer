@@ -1,5 +1,5 @@
-import { DomainDkim } from './domain-dkim.interface'
-import { DomainDnsRecord } from './domain-dns.interface'
+import { DomainDkim } from './domain-dkim.interface.js'
+import { DomainDnsRecord } from './domain-dns.interface.js'
 
 export interface Domain {
     domainId: number

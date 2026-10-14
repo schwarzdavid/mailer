@@ -55,6 +55,9 @@
                 v-for="field in form.fields"
                 :key="field.inboundFormFieldId"
                 size="small"
+                link
+                role="button"
+                :aria-label="t('module.inboundForms.template.insertField', { key: field.key })"
                 @click="insertField(field.key)"
             >
                 {{ field.key }}
@@ -85,6 +88,7 @@
     import MonacoEditor from '@/modules/inbound-forms/views/template/partials/MonacoEditor.vue'
     import TemplatePreview from '@/modules/inbound-forms/views/template/partials/TemplatePreview.vue'
     import { RouteNames } from '@/router/RouteNames.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const route = useRoute()
     const { t } = useI18n()
@@ -138,7 +142,7 @@
     }
 
     function errorMessage(error: unknown): string {
-        return error instanceof Error ? error.message : String(error)
+        return apiErrorMessage(error, t('module.inboundForms.template.unknownError'))
     }
 
     async function saveDraft(): Promise<boolean> {

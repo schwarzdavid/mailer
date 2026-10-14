@@ -1,7 +1,7 @@
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
-import { GLOBAL_PERMISSIONS, ROLE_TYPES } from '../permission.constants'
-import type { Permission, RoleType } from '../permission.constants'
+import { GLOBAL_PERMISSIONS, ROLE_TYPES } from '../permission.constants.js'
+import type { Permission, RoleType } from '../permission.constants.js'
 
 export class RoleDto {
     @Expose()

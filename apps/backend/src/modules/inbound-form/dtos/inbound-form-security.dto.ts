@@ -17,7 +17,7 @@ import {
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
-} from '../interfaces/inbound-form-security.interface'
+} from '../interfaces/inbound-form-security.interface.js'
 
 export class InboundFormRecaptchaConfigDto implements InboundFormRecaptchaConfig {
     @Expose()

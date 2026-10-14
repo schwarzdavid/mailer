@@ -10,9 +10,9 @@ import {
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { ProjectDomain, ProjectDomainCreate } from '../interfaces/project.interface'
-import { ProjectModel } from './project.model'
-import { DomainModel } from '../../domain/models/domain.model'
+import { ProjectDomain, ProjectDomainCreate } from '../interfaces/project.interface.js'
+import { ProjectModel } from './project.model.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
 
 @Table({
     tableName: 'project_domains',

@@ -15,10 +15,10 @@ import {
     InboundFormDelivery,
     InboundFormDeliveryCreate,
     InboundFormDeliveryStatus,
-} from '../interfaces/inbound-form-delivery.interface'
-import { InboundFormSubmissionModel } from './inbound-form-submission.model'
-import { InboundFormReceiverModel } from './inbound-form-receiver.model'
-import { InboundFormTemplateModel } from './inbound-form-template.model'
+} from '../interfaces/inbound-form-delivery.interface.js'
+import { InboundFormSubmissionModel } from './inbound-form-submission.model.js'
+import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
+import { InboundFormTemplateModel } from './inbound-form-template.model.js'
 
 @Table({
     tableName: 'inbound_form_delivery',

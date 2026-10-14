@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose } from 'class-transformer'
 import { IsFQDN, IsIP, IsNotEmpty, IsOptional, IsString } from 'class-validator'
-import { IsIcann } from '../../domain/validators/IsIcann'
+import { IsIcann } from '../../domain/validators/IsIcann.js'
 
 export class SendingDomainConfigureDto {
     @Expose()

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ConfigService } from '@nestjs/config'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DkimEncryptionService } from './dkim-encryption.service'
+import { DkimEncryptionService } from './dkim-encryption.service.js'
 
 const scryptControl = vi.hoisted(() => ({ fail: false }))
 

@@ -1,4 +1,4 @@
-import { Permission, RoleType } from '../permission.constants'
+import { Permission, RoleType } from '../permission.constants.js'
 
 export interface Role {
     roleId: number

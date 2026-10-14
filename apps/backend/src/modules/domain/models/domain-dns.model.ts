@@ -17,8 +17,9 @@ import {
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
-import { DomainModel } from './domain.model'
+} from '../interfaces/domain-dns.interface.js'
+import type { Relation } from '../../../types/relation.js'
+import { DomainModel } from './domain.model.js'
 
 @Table({
     tableName: 'domain_dns',
@@ -70,7 +71,7 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     })
-    domain?: DomainModel
+    domain?: Relation<DomainModel>
 
     @UpdatedAt
     declare updatedAt: Date

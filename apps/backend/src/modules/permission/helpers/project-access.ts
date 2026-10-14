@@ -1,7 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common'
 import { subject } from '@casl/ability'
-import { AppAbility } from '../interfaces/app-ability'
-import { ProjectPermission } from '../permission.constants'
+import { AppAbility } from '../interfaces/app-ability.js'
+import { ProjectPermission } from '../permission.constants.js'
 
 export function canOnProject(ability: AppAbility, permission: ProjectPermission, projectId: number): boolean {
     return ability.can(permission, subject('Project', { projectId }))

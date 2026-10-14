@@ -2,6 +2,7 @@
     <div>
         <p class="mb-6">{{ t('module.onboarding.steps.account.intro') }}</p>
         <form novalidate @submit.prevent="onSubmit">
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <VTextField
                 v-model="firstName"
                 name="firstName"
@@ -38,11 +39,14 @@
 </template>
 
 <script lang="ts" setup>
+    import { ref } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
+    import { z } from 'zod'
     import { zRegisterUserDto } from 'api'
     import { useI18n } from 'vue-i18n'
     import { useRegisterMutation } from '@/modules/onboarding/mutations/useRegisterMutation.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const emit = defineEmits<{
         completed: []
@@ -50,9 +54,15 @@
 
     const { t } = useI18n()
     const { mutateAsync, isPending } = useRegisterMutation()
+    const errorMessage = ref<string | null>(null)
 
     const { handleSubmit, defineField, errors } = useForm({
-        validationSchema: toTypedSchema(zRegisterUserDto),
+        validationSchema: toTypedSchema(
+            zRegisterUserDto.extend({
+                firstName: z.string().trim().min(1),
+                lastName: z.string().trim().min(1),
+            }),
+        ),
     })
 
     const [firstName] = defineField('firstName')
@@ -61,7 +71,13 @@
     const [password] = defineField('password')
 
     const onSubmit = handleSubmit(async (values) => {
-        await mutateAsync(values)
+        errorMessage.value = null
+        try {
+            await mutateAsync(values)
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.onboarding.steps.account.error'))
+            return
+        }
         emit('completed')
     })
 </script>

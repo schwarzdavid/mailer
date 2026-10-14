@@ -14,8 +14,8 @@ import {
     InboundFormSubmission,
     InboundFormSubmissionCreate,
     InboundFormSubmissionStatus,
-} from '../interfaces/inbound-form-submission.interface'
-import { InboundFormModel } from './inbound-form.model'
+} from '../interfaces/inbound-form-submission.interface.js'
+import { InboundFormModel } from './inbound-form.model.js'
 
 @Table({
     tableName: 'inbound_form_submission',

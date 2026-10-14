@@ -13,8 +13,9 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { FullUser, UserCreate } from '../interfaces/user.interface'
-import { RoleModel } from '../../permission/models/role.model'
+import { FullUser, UserCreate } from '../interfaces/user.interface.js'
+import { RoleModel } from '../../permission/models/role.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @DefaultScope(() => ({
     attributes: {
@@ -54,8 +55,11 @@ export class UserModel extends Model<FullUser, UserCreate> implements FullUser {
     @Column(DataType.INTEGER)
     declare roleId: number
 
-    @BelongsTo(() => RoleModel)
-    declare role?: RoleModel
+    @BelongsTo(() => RoleModel, {
+        onDelete: 'RESTRICT',
+        onUpdate: 'CASCADE',
+    })
+    declare role?: Relation<RoleModel>
 
     @CreatedAt
     declare createdAt: Date

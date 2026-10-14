@@ -1,39 +1,23 @@
-import { ClassSerializerInterceptor, INestApplication, ValidationPipe } from '@nestjs/common'
-import { Reflector } from '@nestjs/core'
+import { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import type { App } from 'supertest/types'
-import { inject } from 'vitest'
-import { AppModule } from '../../src/app.module'
+import type { App } from 'supertest/types.js'
+import { AppModule } from '../../src/app.module.js'
+import { appOptions } from '../../src/factories/app.options.js'
+import { configureApp } from '../../src/factories/app.setup.js'
 
 /**
- * Boots the full application from AppModule, mirroring src/main.ts so the suite
- * exercises the same global prefix and validation pipeline as production. Points
- * config at the shared containers started in global setup.
+ * Boots the full application from AppModule with the same `configureApp` setup
+ * as src/main.ts, so the suite exercises production's global prefix, CORS,
+ * validation and serialization. Config points at the shared containers via the
+ * env applied in `env.ts`.
  */
 export async function createTestApp(): Promise<INestApplication<App>> {
-    Object.assign(process.env, inject('e2eEnv'))
-
     const moduleRef = await Test.createTestingModule({
         imports: [AppModule],
     }).compile()
 
-    const app = moduleRef.createNestApplication<INestApplication<App>>()
-
-    app.setGlobalPrefix('api')
-    app.useGlobalPipes(
-        new ValidationPipe({
-            transform: true,
-            transformOptions: {
-                exposeDefaultValues: true,
-            },
-        }),
-    )
-    app.useGlobalInterceptors(
-        new ClassSerializerInterceptor(app.get(Reflector), {
-            exposeDefaultValues: true,
-            excludeExtraneousValues: true,
-        }),
-    )
+    const app = moduleRef.createNestApplication<INestApplication<App>>(appOptions)
+    configureApp(app)
 
     await app.init()
     return app

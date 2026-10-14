@@ -1,6 +1,7 @@
 <template>
     <VCard v-if="canManage" :title="t('module.projects.members.title')">
         <VCardItem>
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <p v-if="members?.length === 0">{{ t('module.projects.members.empty') }}</p>
             <VList v-else>
                 <VListItem
@@ -40,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-    import { computed } from 'vue'
+    import { computed, ref } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
     import { useAbility } from '@casl/vue'
@@ -48,6 +49,7 @@
     import { useProjectMembersQuery } from '@/modules/projects/queries/useProjectMembersQuery.ts'
     import { useProjectMemberRemoveMutation } from '@/modules/projects/mutations/useProjectMemberRemoveMutation.ts'
     import ProjectMemberDialog from '@/modules/projects/views/details/partials/ProjectMemberDialog.vue'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ projectId: number }>()
     const { t } = useI18n()
@@ -64,8 +66,17 @@
         enabled: canManage,
     })
     const { mutate: removeMember, isPending } = useProjectMemberRemoveMutation()
+    const errorMessage = ref<string | null>(null)
 
     function onRemove(userId: number) {
-        removeMember({ projectId: props.projectId, userId })
+        errorMessage.value = null
+        removeMember(
+            { projectId: props.projectId, userId },
+            {
+                onError(error) {
+                    errorMessage.value = apiErrorMessage(error, t('module.projects.members.removeError'))
+                },
+            },
+        )
     }
 </script>

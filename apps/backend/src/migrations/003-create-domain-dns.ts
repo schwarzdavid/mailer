@@ -57,4 +57,5 @@ export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface 
 
 export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
     await queryInterface.dropTable('domain_dns')
+    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_domain_dns_status"')
 }

@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Op, UniqueConstraintError } from 'sequelize'
-import { BounceModel } from '../models/bounce.model'
-import { Bounce, BounceCreate, BounceType } from '../interfaces/bounce.interface'
-import { EmailBlockService } from './email-block.service'
-import { DAY_MS, TRANSIENT_THRESHOLD, TRANSIENT_WINDOW_DAYS } from '../bounce.constants'
+import { BounceModel } from '../models/bounce.model.js'
+import { Bounce, BounceCreate, BounceType } from '../interfaces/bounce.interface.js'
+import { EmailBlockService } from './email-block.service.js'
+import { DAY_MS, TRANSIENT_THRESHOLD, TRANSIENT_WINDOW_DAYS } from '../bounce.constants.js'
 
 @Injectable()
 export class BounceService {

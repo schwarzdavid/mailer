@@ -17,11 +17,18 @@ import {
     InboundFormSecurityCreate,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
-} from '../interfaces/inbound-form-security.interface'
-import { InboundFormModel } from './inbound-form.model'
+} from '../interfaces/inbound-form-security.interface.js'
+import { InboundFormModel } from './inbound-form.model.js'
 
 @Table({
     tableName: 'inbound_form_security',
+    indexes: [
+        {
+            name: 'form_security_type_unique',
+            unique: true,
+            fields: ['inboundFormId', 'type'],
+        },
+    ],
 })
 export class InboundFormSecurityModel
     extends Model<InboundFormSecurity, InboundFormSecurityCreate>

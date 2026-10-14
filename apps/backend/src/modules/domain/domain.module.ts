@@ -1,18 +1,21 @@
 import { Module } from '@nestjs/common'
 import { SequelizeModule } from '@nestjs/sequelize'
-import { DomainModel } from './models/domain.model'
-import { DomainDkimModel } from './models/domain-dkim.model'
-import { DomainController } from './controller/domain.controller'
-import { DomainService } from './services/domain.service'
-import { DomainDkimService } from './services/domain-dkim.service'
-import { DkimEncryptionService } from './services/dkim-encryption.service'
-import { DomainDnsService } from './services/domain-dns.service'
-import { DnsHealthService } from './services/dns-health.service'
-import { DomainDnsModel } from './models/domain-dns.model'
-import { SettingsModel } from '../settings/models/settings.model'
+import { DomainModel } from './models/domain.model.js'
+import { DomainDkimModel } from './models/domain-dkim.model.js'
+import { DomainController } from './controller/domain.controller.js'
+import { DomainService } from './services/domain.service.js'
+import { DomainDkimService } from './services/domain-dkim.service.js'
+import { DkimEncryptionService } from './services/dkim-encryption.service.js'
+import { DomainDnsService } from './services/domain-dns.service.js'
+import { DnsHealthService } from './services/dns-health.service.js'
+import { DomainDnsModel } from './models/domain-dns.model.js'
+import { SettingsModel } from '../settings/models/settings.model.js'
+import { InboundFormModel } from '../inbound-form/models/inbound-form.model.js'
 
 @Module({
-    imports: [SequelizeModule.forFeature([DomainModel, DomainDkimModel, DomainDnsModel, SettingsModel])],
+    imports: [
+        SequelizeModule.forFeature([DomainModel, DomainDkimModel, DomainDnsModel, SettingsModel, InboundFormModel]),
+    ],
     controllers: [DomainController],
     providers: [DomainService, DomainDkimService, DkimEncryptionService, DomainDnsService, DnsHealthService],
     exports: [DomainService, DkimEncryptionService, DomainDnsService],

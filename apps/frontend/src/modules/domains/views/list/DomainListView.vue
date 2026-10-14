@@ -2,8 +2,8 @@
     <VContainer>
         <div class="d-flex justify-space-between align-center">
             <h1>{{ t('module.domains.list.title') }}</h1>
-            <AddDomainDialog v-slot="{ props }">
-                <VBtn v-bind="props">Add</VBtn>
+            <AddDomainDialog v-if="can('create', 'Domain')" v-slot="{ props }">
+                <VBtn v-bind="props">{{ t('cta.add') }}</VBtn>
             </AddDomainDialog>
         </div>
         <VDivider />
@@ -24,7 +24,10 @@
     import { useDomainsQuery } from '@/modules/domains/queries/useDomainsQuery.ts'
     import DomainListEntry from '@/modules/domains/views/list/partials/DomainListEntry.vue'
     import { useI18n } from 'vue-i18n'
+    import { useAbility } from '@casl/vue'
 
     const { data: domains, isPending } = useQuery(useDomainsQuery())
     const { t } = useI18n()
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
 </script>

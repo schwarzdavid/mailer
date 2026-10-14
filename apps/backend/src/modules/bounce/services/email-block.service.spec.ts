@@ -3,11 +3,11 @@ import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Op } from 'sequelize'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { EmailBlockService } from './email-block.service'
-import { EmailBlockModel } from '../models/email-block.model'
-import { EmailBlock } from '../interfaces/email-block.interface'
-import { EmailBlockedException } from '../exceptions/email-blocked.exception'
-import { DAY_MS } from '../bounce.constants'
+import { EmailBlockService } from './email-block.service.js'
+import { EmailBlockModel } from '../models/email-block.model.js'
+import { EmailBlock } from '../interfaces/email-block.interface.js'
+import { EmailBlockedException } from '../exceptions/email-blocked.exception.js'
+import { DAY_MS } from '../bounce.constants.js'
 
 const now = new Date('2026-07-13T12:00:00.000Z')
 

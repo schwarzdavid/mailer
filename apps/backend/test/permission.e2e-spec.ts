@@ -1,10 +1,10 @@
 import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createTestApp } from './support/app'
-import { login, seedUser, type Credentials } from './support/session'
-import { configureSendingDomain } from './support/sending-domain'
+import { createTestApp } from './support/app.js'
+import { login, seedUser, type Credentials } from './support/session.js'
+import { configureSendingDomain } from './support/sending-domain.js'
 
 describe('Permissions (e2e)', () => {
     let app: INestApplication<App>
@@ -198,6 +198,52 @@ describe('Permissions (e2e)', () => {
             .set('Authorization', asMember())
             .expect(200)
         expect((members.body as { userId: number }[]).map((entry) => entry.userId)).toContain(otherUserId)
+    })
+
+    it('only lets users.update holders grant or revoke permissions they hold themselves', async () => {
+        const managerCredentials: Credentials = {
+            email: 'perm.manager@example.com',
+            password: 'correct-horse-battery-staple',
+        }
+        const created = await http()
+            .post('/api/user')
+            .set('Authorization', asSuper())
+            .send({ firstName: 'Manager', lastName: 'User', ...managerCredentials })
+            .expect(201)
+        const managerUserId = (created.body as { userId: number }).userId
+        await http()
+            .put(`/api/user/${managerUserId}/permissions`)
+            .set('Authorization', asSuper())
+            .send({ permissions: ['users.read', 'users.update'] })
+            .expect(200)
+        const asManager = `Bearer ${await login(app, managerCredentials)}`
+
+        await http()
+            .put(`/api/user/${managerUserId}/permissions`)
+            .set('Authorization', asManager)
+            .send({ permissions: ['users.read', 'users.update', 'settings.update', 'users.delete'] })
+            .expect(403)
+        await http()
+            .put(`/api/user/${otherUserId}/permissions`)
+            .set('Authorization', asManager)
+            .send({ permissions: ['domains.delete'] })
+            .expect(403)
+        await http()
+            .put(`/api/user/${memberUserId}/permissions`)
+            .set('Authorization', asManager)
+            .send({ permissions: [] })
+            .expect(403)
+
+        await http().get('/api/settings').set('Authorization', asManager).expect(403)
+        const manager = await http().get(`/api/user/${managerUserId}`).set('Authorization', asManager).expect(200)
+        expect((manager.body as { permissions: string[] }).permissions.sort()).toEqual(['users.read', 'users.update'])
+
+        const granted = await http()
+            .put(`/api/user/${otherUserId}/permissions`)
+            .set('Authorization', asManager)
+            .send({ permissions: ['users.read'] })
+            .expect(200)
+        expect(granted.body).toEqual({ permissions: ['users.read'] })
     })
 
     it('shields super admins from admins', async () => {

@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Post, Put } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { RequireAbility } from '../../permission/decorators/RequireAbility'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { SettingsService } from '../services/settings.service'
-import { SettingsDto } from '../dtos/settings.dto'
-import { SendingDomainDto } from '../dtos/sending-domain.dto'
-import { SendingDomainConfigureDto } from '../dtos/sending-domain-configure.dto'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { SettingsService } from '../services/settings.service.js'
+import { SettingsDto } from '../dtos/settings.dto.js'
+import { SendingDomainDto } from '../dtos/sending-domain.dto.js'
+import { SendingDomainConfigureDto } from '../dtos/sending-domain-configure.dto.js'
 
 @JwtAuth()
 @ApiTags('settings')

@@ -1,16 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { AuthApi, type AuthenticationDto } from 'api'
-import type { Router } from 'vue-router'
+import type { LocationQuery, Router } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { mountView } from '@/__tests__/support.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
+import { JWT_KEY } from '@/constants/jwtKey.ts'
 
-const { push } = vi.hoisted(() => ({ push: vi.fn<Router['push']>() }))
+const { push, route } = vi.hoisted(() => {
+    const route: { query: LocationQuery } = { query: {} }
+    return { push: vi.fn<Router['push']>(), route }
+})
 
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()
-    return { ...actual, useRouter: () => ({ push }) }
+    return { ...actual, useRouter: () => ({ push }), useRoute: () => route }
 })
 
 const authentication: AuthenticationDto = {
@@ -33,7 +37,15 @@ const authentication: AuthenticationDto = {
 afterEach(() => {
     vi.restoreAllMocks()
     push.mockClear()
+    route.query = {}
+    localStorage.removeItem(JWT_KEY)
 })
+
+async function submitCredentials(wrapper: ReturnType<typeof mountView>) {
+    await wrapper.find('input[type="email"]').setValue('admin@example.com')
+    await wrapper.find('input[type="password"]').setValue('super-secret')
+    await wrapper.get('form').trigger('submit')
+}
 
 describe('LoginView', () => {
     it('renders the localized heading, fields and submit button', () => {
@@ -112,4 +124,95 @@ describe('LoginView', () => {
 
         expect(wrapper.get('button[type="submit"]').classes()).not.toContain('v-btn--loading')
     })
+
+    it('persists the issued token before navigating', async () => {
+        vi.spyOn(AuthApi, 'login').mockResolvedValue(authentication)
+        const wrapper = mountView(LoginView)
+
+        await wrapper.find('input[type="email"]').setValue('admin@example.com')
+        await wrapper.find('input[type="password"]').setValue('super-secret')
+        await wrapper.get('form').trigger('submit')
+
+        await vi.waitFor(() => {
+            expect(push).toHaveBeenCalled()
+        })
+        expect(localStorage.getItem(JWT_KEY)).toContain('jwt-token')
+    })
+
+    it('shows an invalid credentials alert when the API answers 401', async () => {
+        vi.spyOn(AuthApi, 'login').mockRejectedValue({ message: 'Unauthorized', statusCode: 401 })
+        const wrapper = mountView(LoginView)
+
+        await submitCredentials(wrapper)
+
+        await vi.waitFor(() => {
+            expect(wrapper.get('.v-alert').text()).toContain('Invalid email or password')
+        })
+        expect(push).not.toHaveBeenCalled()
+        expect(localStorage.getItem(JWT_KEY)).toBeNull()
+    })
+
+    it('shows the API message for other failures', async () => {
+        vi.spyOn(AuthApi, 'login').mockRejectedValue({ message: 'Too Many Requests', statusCode: 429 })
+        const wrapper = mountView(LoginView)
+
+        await submitCredentials(wrapper)
+
+        await vi.waitFor(() => {
+            expect(wrapper.get('.v-alert').text()).toContain('Too Many Requests')
+        })
+        expect(push).not.toHaveBeenCalled()
+    })
+
+    it('falls back to a generic message when the failure has no message', async () => {
+        vi.spyOn(AuthApi, 'login').mockRejectedValue(null)
+        const wrapper = mountView(LoginView)
+
+        await submitCredentials(wrapper)
+
+        await vi.waitFor(() => {
+            expect(wrapper.get('.v-alert').text()).toContain('Login failed, please try again')
+        })
+    })
+
+    it('clears the alert after a successful retry', async () => {
+        vi.spyOn(AuthApi, 'login')
+            .mockRejectedValueOnce({ message: 'Unauthorized', statusCode: 401 })
+            .mockResolvedValueOnce(authentication)
+        const wrapper = mountView(LoginView)
+
+        await submitCredentials(wrapper)
+        await vi.waitFor(() => expect(wrapper.find('.v-alert').exists()).toBe(true))
+        await wrapper.get('form').trigger('submit')
+
+        await vi.waitFor(() => expect(push).toHaveBeenCalled())
+        expect(wrapper.find('.v-alert').exists()).toBe(false)
+    })
+
+    it('returns to the internal page that required the login', async () => {
+        route.query = { redirect: '/users/3?tab=permissions' }
+        vi.spyOn(AuthApi, 'login').mockResolvedValue(authentication)
+        const wrapper = mountView(LoginView)
+
+        await submitCredentials(wrapper)
+
+        await vi.waitFor(() => {
+            expect(push).toHaveBeenCalledWith('/users/3?tab=permissions')
+        })
+    })
+
+    it.each(['https://evil.example.com', '//evil.example.com', '/\\evil.example.com'])(
+        'ignores the external redirect %s',
+        async (redirect) => {
+            route.query = { redirect }
+            vi.spyOn(AuthApi, 'login').mockResolvedValue(authentication)
+            const wrapper = mountView(LoginView)
+
+            await submitCredentials(wrapper)
+
+            await vi.waitFor(() => {
+                expect(push).toHaveBeenCalledWith({ name: RouteNames.DASHBOARD })
+            })
+        },
+    )
 })

@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Transporter } from 'nodemailer'
-import { MAIL_TRANSPORTER } from '../mail.constants'
-import { DomainService } from '../../domain/services/domain.service'
-import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service'
-import { EmailBlockService } from '../../bounce/services/email-block.service'
-import { BounceService } from '../../bounce/services/bounce.service'
-import { BounceType } from '../../bounce/interfaces/bounce.interface'
+import { MAIL_TRANSPORTER } from '../mail.constants.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service.js'
+import { EmailBlockService } from '../../bounce/services/email-block.service.js'
+import { BounceService } from '../../bounce/services/bounce.service.js'
+import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
 
 export interface SendMail {
     from: string

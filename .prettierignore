@@ -9,6 +9,8 @@
 
 # Test / coverage artifacts
 **/coverage/
+**/test-results/
+**/playwright-report/
 
 # Generated code
 **/src/generated/

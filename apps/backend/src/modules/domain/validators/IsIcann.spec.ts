@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { validate } from 'class-validator'
 import { describe, expect, it } from 'vitest'
-import { IsIcann } from './IsIcann'
+import { IsIcann } from './IsIcann.js'
 
 class DomainProbe {
     @IsIcann()

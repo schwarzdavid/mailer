@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Interval } from '@nestjs/schedule'
 import { Op } from 'sequelize'
-import { ProjectModel } from '../models/project.model'
-import { PROJECT_PURGE_AFTER_MS, PROJECT_PURGE_INTERVAL_MS } from '../project.constants'
+import { ProjectModel } from '../models/project.model.js'
+import { PROJECT_PURGE_AFTER_MS, PROJECT_PURGE_INTERVAL_MS } from '../project.constants.js'
 
 @Injectable()
 export class ProjectPurgeService {

@@ -2,18 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { Logger, NotFoundException } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { SettingsService } from './settings.service'
-import { SettingsModel } from '../models/settings.model'
-import { Settings, SettingsCreate } from '../interfaces/settings.interface'
-import { DomainService } from '../../domain/services/domain.service'
-import { DomainDnsService } from '../../domain/services/domain-dns.service'
-import { Domain } from '../../domain/interfaces/domain.interface'
+import { SettingsService } from './settings.service.js'
+import { SettingsModel } from '../models/settings.model.js'
+import { Settings, SettingsCreate } from '../interfaces/settings.interface.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { DomainDnsService } from '../../domain/services/domain-dns.service.js'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../../domain/interfaces/domain-dns.interface'
+} from '../../domain/interfaces/domain-dns.interface.js'
 
 type SettingsRow = Settings & { save: Mock<() => Promise<void>> }
 

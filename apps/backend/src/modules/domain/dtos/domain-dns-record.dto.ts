@@ -3,7 +3,7 @@ import {
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
+} from '../interfaces/domain-dns.interface.js'
 import { Expose } from 'class-transformer'
 
 export class DomainDnsRecordDto implements Omit<DomainDnsRecord, 'dnsId' | 'domainId' | 'createdAt' | 'updatedAt'> {

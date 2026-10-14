@@ -13,10 +13,10 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { Project, ProjectCreate } from '../interfaces/project.interface'
-import { ProjectDomainModel } from './project-domain.model'
-import { DomainModel } from '../../domain/models/domain.model'
-import { InboundFormModel } from '../../inbound-form/models/inbound-form.model'
+import { Project, ProjectCreate } from '../interfaces/project.interface.js'
+import { ProjectDomainModel } from './project-domain.model.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
+import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
 
 @Table({
     tableName: 'projects',

@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { JwtModule, JwtService } from '@nestjs/jwt'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { JwtHelperService } from './jwt-helper.service'
-import { User } from '../../user/interfaces/user.interface'
-import { JwtPayload } from '../interfaces/jwt-payload.interface'
+import { JwtHelperService } from './jwt-helper.service.js'
+import { User } from '../../user/interfaces/user.interface.js'
+import { JwtPayload } from '../interfaces/jwt-payload.interface.js'
 
 describe('JwtHelperService', () => {
     let service: JwtHelperService

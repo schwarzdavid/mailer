@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose, Type } from 'class-transformer'
-import { SendingDomainDto } from './sending-domain.dto'
+import { SendingDomainDto } from './sending-domain.dto.js'
 
 export class SettingsDto {
     @Expose()

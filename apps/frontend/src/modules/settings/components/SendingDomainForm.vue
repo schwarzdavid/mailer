@@ -1,5 +1,6 @@
 <template>
     <form novalidate @submit.prevent="onSubmit">
+        <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
         <VTextField
             v-model="fqdn"
             name="fqdn"
@@ -28,6 +29,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ref } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
@@ -35,6 +37,7 @@
     import { useI18n } from 'vue-i18n'
     import type { SendingDomainDto } from 'api'
     import { useSendingDomainMutation } from '@/modules/settings/mutations/useSendingDomainMutation.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{
         sendingDomain?: SendingDomainDto | null
@@ -46,6 +49,7 @@
 
     const { t } = useI18n()
     const { mutateAsync, isPending } = useSendingDomainMutation()
+    const errorMessage = ref<string | null>(null)
 
     const { defineField, handleSubmit, errors } = useForm({
         validationSchema: toTypedSchema(
@@ -77,11 +81,16 @@
     const [serverIpv6] = defineField('serverIpv6')
 
     const onSubmit = handleSubmit(async (values) => {
-        const sendingDomain = await mutateAsync({
-            fqdn: values.fqdn,
-            serverIpv4: values.serverIpv4,
-            serverIpv6: values.serverIpv6 || undefined,
-        })
-        emit('saved', sendingDomain)
+        errorMessage.value = null
+        try {
+            const sendingDomain = await mutateAsync({
+                fqdn: values.fqdn,
+                serverIpv4: values.serverIpv4,
+                serverIpv6: values.serverIpv6 || undefined,
+            })
+            emit('saved', sendingDomain)
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.settings.sendingDomain.error'))
+        }
     })
 </script>

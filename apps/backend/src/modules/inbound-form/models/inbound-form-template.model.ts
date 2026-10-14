@@ -16,11 +16,19 @@ import {
     InboundFormTemplate,
     InboundFormTemplateCreate,
     InboundFormTemplateStatus,
-} from '../interfaces/inbound-form-template.interface'
-import { InboundFormReceiverModel } from './inbound-form-receiver.model'
+} from '../interfaces/inbound-form-template.interface.js'
+import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
 
 @Table({
     tableName: 'inbound_form_template',
+    indexes: [
+        {
+            name: 'template_single_draft',
+            unique: true,
+            fields: ['inboundFormReceiverId'],
+            where: { status: InboundFormTemplateStatus.DRAFT },
+        },
+    ],
 })
 export class InboundFormTemplateModel
     extends Model<InboundFormTemplate, InboundFormTemplateCreate>

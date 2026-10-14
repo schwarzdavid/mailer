@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePlaceholder } from './placeholder'
+import { parsePlaceholder } from './placeholder.js'
 
 describe('parsePlaceholder', () => {
     it('extracts the field key from a placeholder', () => {

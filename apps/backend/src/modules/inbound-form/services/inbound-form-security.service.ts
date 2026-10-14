@@ -3,7 +3,7 @@ import {
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
-} from '../interfaces/inbound-form-security.interface'
+} from '../interfaces/inbound-form-security.interface.js'
 
 export interface SecurityRequestContext {
     security: Record<string, unknown>

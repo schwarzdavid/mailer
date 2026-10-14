@@ -1,10 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { PUBLIC_KEY } from '../../auth/decorators/Public'
-import { AbilityFactory } from '../services/ability-factory.service'
-import { ABILITY_KEY, AbilityRequirement } from '../decorators/RequireAbility'
-import { AppAbility } from '../interfaces/app-ability'
-import { User } from '../../user/interfaces/user.interface'
+import { PUBLIC_KEY } from '../../auth/decorators/Public.js'
+import { AbilityFactory } from '../services/ability-factory.service.js'
+import { ABILITY_KEY, AbilityRequirement } from '../decorators/RequireAbility.js'
+import { AppAbility } from '../interfaces/app-ability.js'
+import { User } from '../../user/interfaces/user.interface.js'
 
 @Injectable()
 export class PoliciesGuard implements CanActivate {

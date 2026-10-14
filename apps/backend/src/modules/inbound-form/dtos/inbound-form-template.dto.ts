@@ -1,7 +1,7 @@
 import { Expose } from 'class-transformer'
 import { IsString, MaxLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface'
+import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface.js'
 
 export class InboundFormTemplateDraftDto {
     @Expose()

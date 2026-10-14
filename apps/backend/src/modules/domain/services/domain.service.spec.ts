@@ -1,23 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
-import { BadRequestException, Logger } from '@nestjs/common'
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { Op } from 'sequelize'
-import { DomainService } from './domain.service'
-import { DomainDkimService } from './domain-dkim.service'
-import { DomainDnsService } from './domain-dns.service'
-import { DomainModel } from '../models/domain.model'
-import { DomainDkimModel } from '../models/domain-dkim.model'
-import { Domain, DomainWithActiveDkim, SendingDomainIps } from '../interfaces/domain.interface'
-import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
+import { Op, UniqueConstraintError } from 'sequelize'
+import { DomainService } from './domain.service.js'
+import { DomainDkimService } from './domain-dkim.service.js'
+import { DomainDnsService } from './domain-dns.service.js'
+import { DomainModel } from '../models/domain.model.js'
+import { DomainDkimModel } from '../models/domain-dkim.model.js'
+import { Domain, DomainWithActiveDkim, SendingDomainIps } from '../interfaces/domain.interface.js'
+import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
-import { SettingsModel } from '../../settings/models/settings.model'
-import { Settings } from '../../settings/interfaces/settings.interface'
+} from '../interfaces/domain-dns.interface.js'
+import { SettingsModel } from '../../settings/models/settings.model.js'
+import { Settings } from '../../settings/interfaces/settings.interface.js'
+import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
 
 type DomainRow = Domain & { get(options: { plain: true }): Domain }
 
@@ -27,7 +28,7 @@ describe('DomainService', () => {
     let service: DomainService
     let create: Mock<(values: Pick<Domain, 'fqdn' | 'rootDomain'>, options: { returning: true }) => Promise<DomainRow>>
     let findAll: Mock<() => Promise<DomainRow[]>>
-    let findByPk: Mock<(id: number, options?: { rejectOnEmpty: true }) => Promise<DomainRow>>
+    let findByPk: Mock<(id: number) => Promise<DomainRow | null>>
     let findOne: Mock<(typeof DomainModel)['findOne']>
     let destroy: Mock<(options: { where: { domainId: number } }) => Promise<number>>
     let createDkimForDomain: Mock<DomainDkimService['createDkimForDomain']>
@@ -35,6 +36,7 @@ describe('DomainService', () => {
     let createSendingDomainDnsRecords: Mock<DomainDnsService['createSendingDomainDnsRecords']>
     let deleteRecordsForDomain: Mock<DomainDnsService['deleteRecordsForDomain']>
     let settingsFindOne: Mock<() => Promise<Settings | null>>
+    let formCount: Mock<(options: { where: { domainId: number } }) => Promise<number>>
 
     const persistedDomain: Domain = {
         domainId: 3,
@@ -95,6 +97,7 @@ describe('DomainService', () => {
         createSendingDomainDnsRecords = vi.fn<typeof createSendingDomainDnsRecords>().mockResolvedValue(dnsRecords)
         deleteRecordsForDomain = vi.fn<typeof deleteRecordsForDomain>().mockResolvedValue(undefined)
         settingsFindOne = vi.fn<typeof settingsFindOne>().mockResolvedValue(null)
+        formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -106,6 +109,7 @@ describe('DomainService', () => {
                 },
                 { provide: getModelToken(DomainModel), useValue: { create, findAll, findByPk, findOne, destroy } },
                 { provide: getModelToken(SettingsModel), useValue: { findOne: settingsFindOne } },
+                { provide: getModelToken(InboundFormModel), useValue: { count: formCount } },
             ],
         }).compile()
 
@@ -183,6 +187,37 @@ describe('DomainService', () => {
             expect(result.dkims).toEqual([dkim])
             expect(result.dnsRecords).toBe(dnsRecords)
         })
+
+        it('reports a second domain under the same root domain as a conflict', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            create.mockRejectedValue(new UniqueConstraintError({}))
+
+            await expect(service.createDomain('www.example.com')).rejects.toBeInstanceOf(ConflictException)
+
+            expect(createDkimForDomain).not.toHaveBeenCalled()
+            expect(destroy).not.toHaveBeenCalled()
+        })
+
+        it('removes the domain row again when DKIM provisioning fails', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            const failure = new Error('key generation failed')
+            createDkimForDomain.mockRejectedValue(failure)
+
+            await expect(service.createDomain('example.com')).rejects.toBe(failure)
+
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 3 } })
+            expect(createDefaultDnsRecords).not.toHaveBeenCalled()
+        })
+
+        it('removes the domain row again when DNS provisioning fails', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            const failure = new UniqueConstraintError({})
+            createDefaultDnsRecords.mockRejectedValue(failure)
+
+            await expect(service.createDomain('example.com')).rejects.toBe(failure)
+
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 3 } })
+        })
     })
 
     describe('createSendingDomain', () => {
@@ -206,6 +241,15 @@ describe('DomainService', () => {
         it('rejects an fqdn without a resolvable root domain', async () => {
             await expect(service.createSendingDomain('localhost', ips)).rejects.toBeInstanceOf(BadRequestException)
             expect(create).not.toHaveBeenCalled()
+        })
+
+        it('removes the domain row again when the sending record set cannot be created', async () => {
+            const failure = new Error('dns failure')
+            createSendingDomainDnsRecords.mockRejectedValue(failure)
+
+            await expect(service.createSendingDomain('mail.sending-domain.org', ips)).rejects.toBe(failure)
+
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 3 } })
         })
     })
 
@@ -268,10 +312,16 @@ describe('DomainService', () => {
     })
 
     describe('getDomainById', () => {
-        it('looks up the domain by primary key and rejects when it is missing', async () => {
+        it('looks up the domain by primary key', async () => {
             await service.getDomainById(3)
 
-            expect(findByPk).toHaveBeenCalledWith(3, { rejectOnEmpty: true })
+            expect(findByPk).toHaveBeenCalledWith(3)
+        })
+
+        it('rejects an unknown domain with 404', async () => {
+            findByPk.mockResolvedValue(null)
+
+            await expect(service.getDomainById(404)).rejects.toBeInstanceOf(NotFoundException)
         })
 
         it('returns the requested domain as a plain object', async () => {
@@ -304,6 +354,42 @@ describe('DomainService', () => {
             await service.deleteDomain(4)
 
             expect(destroy).toHaveBeenCalledWith({ where: { domainId: 4 } })
+        })
+    })
+
+    describe('deleteUnusedDomain', () => {
+        it('destroys an unused customer domain', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+
+            await service.deleteUnusedDomain(3)
+
+            expect(formCount).toHaveBeenCalledWith({ where: { domainId: 3 } })
+            expect(destroy).toHaveBeenCalledWith({ where: { domainId: 3 } })
+        })
+
+        it('rejects an unknown domain with 404', async () => {
+            findByPk.mockResolvedValue(null)
+
+            await expect(service.deleteUnusedDomain(99)).rejects.toBeInstanceOf(NotFoundException)
+
+            expect(destroy).not.toHaveBeenCalled()
+        })
+
+        it('refuses to delete the configured sending domain', async () => {
+            settingsFindOne.mockResolvedValue({ ...settings, sendingDomainId: 3 })
+
+            await expect(service.deleteUnusedDomain(3)).rejects.toBeInstanceOf(ConflictException)
+
+            expect(destroy).not.toHaveBeenCalled()
+        })
+
+        it('refuses to delete a domain referenced by inbound forms', async () => {
+            settingsFindOne.mockResolvedValue(settings)
+            formCount.mockResolvedValue(2)
+
+            await expect(service.deleteUnusedDomain(3)).rejects.toBeInstanceOf(ConflictException)
+
+            expect(destroy).not.toHaveBeenCalled()
         })
     })
 

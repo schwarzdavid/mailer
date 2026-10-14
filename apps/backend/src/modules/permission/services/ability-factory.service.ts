@@ -2,11 +2,11 @@ import { Inject, Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager'
 import { AbilityBuilder, createMongoAbility } from '@casl/ability'
-import { RoleModel } from '../models/role.model'
-import { RolePermissionModel } from '../models/role-permission.model'
-import { UserPermissionModel } from '../models/user-permission.model'
-import { ProjectMemberModel } from '../models/project-member.model'
-import { User } from '../../user/interfaces/user.interface'
+import { RoleModel } from '../models/role.model.js'
+import { RolePermissionModel } from '../models/role-permission.model.js'
+import { UserPermissionModel } from '../models/user-permission.model.js'
+import { ProjectMemberModel } from '../models/project-member.model.js'
+import { User } from '../../user/interfaces/user.interface.js'
 import {
     AUTH_PERMISSIONS_CACHE_PREFIX,
     GLOBAL_PERMISSION_ABILITIES,
@@ -14,8 +14,8 @@ import {
     PROJECT_PERMISSIONS,
     ProjectPermission,
     RoleType,
-} from '../permission.constants'
-import { AppAbility } from '../interfaces/app-ability'
+} from '../permission.constants.js'
+import { AppAbility } from '../interfaces/app-ability.js'
 
 export interface PermissionInputs {
     roleType: RoleType

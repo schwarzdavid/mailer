@@ -4,6 +4,7 @@
             <VBtn :text="t('module.inboundForms.details.receivers.add')" @click="openDialog(null)" />
         </template>
         <VCardItem>
+            <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
             <p v-if="form.receivers.length === 0">{{ t('module.inboundForms.details.receivers.empty') }}</p>
             <VList v-else>
                 <VListItem v-for="receiver in form.receivers" :key="receiver.inboundFormReceiverId">
@@ -46,6 +47,7 @@
             :email-field-keys="emailFieldKeys"
             :domain-fqdn="domainFqdn"
             :saving="isSaving"
+            :error="dialogError"
             @save="saveReceiver"
         />
     </VCard>
@@ -62,6 +64,7 @@
     import { useReceiverDeleteMutation } from '@/modules/inbound-forms/mutations/useReceiverDeleteMutation.ts'
     import ReceiverDialog from '@/modules/inbound-forms/views/details/partials/ReceiverDialog.vue'
     import { RouteNames } from '@/router/RouteNames.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto }>()
 
@@ -73,6 +76,8 @@
 
     const dialogOpen = ref(false)
     const editingReceiver = ref<InboundFormReceiverDto | null>(null)
+    const errorMessage = ref<string | null>(null)
+    const dialogError = ref<string | null>(null)
 
     const isSaving = computed(() => createMutation.isPending.value || updateMutation.isPending.value)
 
@@ -86,6 +91,7 @@
 
     function openDialog(receiver: InboundFormReceiverDto | null) {
         editingReceiver.value = receiver
+        dialogError.value = null
         dialogOpen.value = true
     }
 
@@ -102,22 +108,32 @@
     }
 
     async function saveReceiver(payload: InboundFormReceiverCreateDto) {
-        if (editingReceiver.value) {
-            await updateMutation.mutateAsync({
-                inboundFormId: props.form.inboundFormId,
-                inboundFormReceiverId: editingReceiver.value.inboundFormReceiverId,
-                update: payload,
-            })
-        } else {
-            await createMutation.mutateAsync({ inboundFormId: props.form.inboundFormId, receiver: payload })
+        dialogError.value = null
+        try {
+            if (editingReceiver.value) {
+                await updateMutation.mutateAsync({
+                    inboundFormId: props.form.inboundFormId,
+                    inboundFormReceiverId: editingReceiver.value.inboundFormReceiverId,
+                    update: payload,
+                })
+            } else {
+                await createMutation.mutateAsync({ inboundFormId: props.form.inboundFormId, receiver: payload })
+            }
+            dialogOpen.value = false
+        } catch (error) {
+            dialogError.value = apiErrorMessage(error, t('module.inboundForms.details.receivers.error'))
         }
-        dialogOpen.value = false
     }
 
     async function removeReceiver(receiver: InboundFormReceiverDto) {
-        await deleteMutation.mutateAsync({
-            inboundFormId: props.form.inboundFormId,
-            inboundFormReceiverId: receiver.inboundFormReceiverId,
-        })
+        errorMessage.value = null
+        try {
+            await deleteMutation.mutateAsync({
+                inboundFormId: props.form.inboundFormId,
+                inboundFormReceiverId: receiver.inboundFormReceiverId,
+            })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.details.receivers.removeError'))
+        }
     }
 </script>

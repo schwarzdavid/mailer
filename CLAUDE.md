@@ -72,6 +72,8 @@ After changing any endpoint, regenerate: `pnpm --filter backend generate` then `
 
 ### Backend (NestJS)
 
+NestJS 12, native ESM (`"type": "module"`, `nodenext` resolution): relative imports carry a `.js` extension (`./app.module.js`, `./dtos/index.js` for directories), and `import.meta.dirname` replaces `__dirname`. Under ESM, decorator metadata that names a circularly imported class throws a TDZ `ReferenceError` at load time, so type singular model associations as `Relation<OtherModel>` (`src/types/relation.ts`); arrays and `X | null` unions are already safe.
+
 Feature modules live under `src/modules/<feature>/` and follow a consistent layering:
 
 - `controller/` — HTTP boundary; validates input DTOs, delegates to services, maps domain objects to response DTOs.
@@ -81,11 +83,11 @@ Feature modules live under `src/modules/<feature>/` and follow a consistent laye
 - `dtos/` — request/response shapes; response DTOs expose a static `fromX(...)` mapper (see `DomainDto.fromDomain`).
 - `mappers/` — where a model carries secrets, a mapper projects it to the public interface (`user.mapper.ts` strips the password hash — the single chokepoint that keeps hashes out of every layer above persistence).
 
-Cross-cutting wiring (`app.module.ts`): `ConfigModule` (global, reads root `.env`), `SequelizeModule` (Postgres), `CacheModule` (Redis via `@keyv/redis`, global), `JwtModule` (global, 31-day tokens). The setup module registers the first user via public endpoints (GET /setup/status, POST /setup/user); no admin user is seeded.
+Cross-cutting wiring (`app.module.ts`): `ConfigModule` (global, reads root `.env`, validated at boot by the Zod `envSchema` in `src/config/env.schema.ts` — the single home for env defaults and coercion; read values via `ConfigService<Env, true>` + `get(key, { infer: true })`), `SequelizeModule` (Postgres), `CacheModule` (Redis via `@keyv/redis`, global), `JwtModule` (global, 31-day tokens). The setup module registers the first user via public endpoints (GET /setup/status, POST /setup/user); no admin user is seeded.
 
 **Auth flow:** Passport with `local` and `jwt` strategies. `JwtAuthGuard` extends the passport JWT guard but honors a `@Public()` metadata marker to skip auth. Apply `@JwtAuth()` (composed decorator) to controllers/routes that require a token. `@Principal()` is a param decorator that returns the authenticated `User` (401s if absent).
 
-**Migrations:** `umzug` over Sequelize, driven by `src/migrate.ts` (not Sequelize CLI). Migration files are `src/migrations/NNN-*.ts` with `up`/`down` taking `{ context: QueryInterface }`. `migrate.ts` resolves migrations via `require` so `ts-node` transpiles them (umzug's default dynamic `import()` bypasses the ts-node hook). `autoLoadModels` builds tables in dev, but migrations are the source of truth for schema.
+**Migrations:** `umzug` over Sequelize, driven by `src/migrate.ts` (not Sequelize CLI). Migration files are `src/migrations/NNN-*.ts` with `up`/`down` taking `{ context: QueryInterface }`. `pnpm migrate` runs `migrate.ts` under `tsx`, which imports each migration itself because umzug's default resolver rejects `.ts` files. `autoLoadModels` builds tables in dev, but migrations are the source of truth for schema.
 
 ### Frontend (Vue 3)
 
@@ -100,7 +102,7 @@ Feature-based structure under `src/modules/<feature>/` split into `views/`, `lay
 
 - **Type-safe test doubles:** type every `vi.fn` with its call signature and hold it as `Mock<…>` — prefer binding to the real collaborator's method (`vi.fn<DomainService['createDomain']>()`) so a signature change breaks the test instead of silently passing. Declare mock inputs/return values with their domain interface or DTO type (`const dkim: DomainDkim = {…}`), never loose literals or `as` casts. For a Sequelize row, model the instance as `Interface & { get(options): Interface }`.
 - **Backend unit** (`*.spec.ts` beside source): Vitest with the SWC transform (`vitest.config.ts`). SWC is required — Nest's `emitDecoratorMetadata` (needed for DI) is dropped by the default esbuild/Oxc transform, so `oxc: false` is set.
-- **Backend e2e** (`test/**/*.e2e-spec.ts`, `vitest.config.e2e.ts`): a global setup starts throwaway Postgres + Redis via Testcontainers, runs migrations, and publishes connection env through Vitest `provide`/`inject`. `test/support/app.ts` boots the real `AppModule` mirroring `main.ts`. Requires Docker; first run pulls images (long timeouts are set intentionally).
+- **Backend e2e** (`test/**/*.e2e-spec.ts`, `vitest.config.e2e.ts`): a global setup starts throwaway Postgres + Redis via Testcontainers, runs migrations, and publishes connection env through Vitest `provide`/`inject`; the `test/support/env.ts` setup file copies it into `process.env` before any test file imports `AppModule` (config is validated at import). `test/support/app.ts` boots the real `AppModule` with the shared `appOptions`, mirroring `main.ts`. Requires Docker; first run pulls images (long timeouts are set intentionally).
 - **Frontend** (`src/**/__tests__/*`, `vitest.config.ts`): jsdom environment. `src/__tests__/setup.ts` stubs browser APIs Vuetify needs; `src/__tests__/support.ts` provides `mountView` (mounts with Vuetify/i18n/Vue Query) and `withVueQuery` (runs a composable in a throwaway app). Vuetify is inlined so Vite strips its per-component CSS imports. E2E is Playwright under `e2e/`.
 
 ## Tooling notes

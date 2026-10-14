@@ -3,15 +3,20 @@
         <template #prepend>
             <DomainVerificationChip :domain="domain" />
         </template>
-        <template #append>
+        <template v-if="canDelete" #append>
             <div class="mr-n1">
                 <VMenu location="bottom end" offset="8">
                     <template #activator="{ props }">
-                        <VIconBtn icon="mdi-dots-vertical" v-bind="props" />
+                        <VIconBtn
+                            icon="mdi-dots-vertical"
+                            :aria-label="t('module.domains.delete.title')"
+                            v-bind="props"
+                            @click.stop
+                        />
                     </template>
                     <VList elevation="1" density="compact">
-                        <DeleteDomainDialog v-slot="{ props }">
-                            <VListItem base-color="error" title="Delete" v-bind="props" />
+                        <DeleteDomainDialog :domain="domain" v-slot="{ props }">
+                            <VListItem base-color="error" :title="t('module.domains.delete.action')" v-bind="props" />
                         </DeleteDomainDialog>
                     </VList>
                 </VMenu>
@@ -24,7 +29,10 @@
 </template>
 
 <script lang="ts" setup>
+    import { computed } from 'vue'
     import type { DomainDto } from 'api'
+    import { useAbility } from '@casl/vue'
+    import { useI18n } from 'vue-i18n'
     import DeleteDomainDialog from '@/modules/domains/components/dialogs/DeleteDomainDialog.vue'
     import { useRouter } from 'vue-router'
     import { RouteNames } from '@/router/RouteNames.ts'
@@ -35,6 +43,11 @@
     }>()
 
     const router = useRouter()
+    const { t } = useI18n()
+    const userAbility = useAbility()
+    const can = userAbility.can.bind(userAbility)
+
+    const canDelete = computed(() => can('delete', 'Domain'))
 
     function openDetails() {
         void router.push({

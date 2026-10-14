@@ -1,10 +1,10 @@
 import { Expose, Type } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
-import { InboundFormTemplateSummary } from '../interfaces/inbound-form-template.interface'
-import { InboundFormFieldDto } from './inbound-form-field.dto'
-import { InboundFormSecurityDto } from './inbound-form-security.dto'
-import { InboundFormReceiverDto } from './inbound-form-receiver.dto'
+import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { InboundFormTemplateSummary } from '../interfaces/inbound-form-template.interface.js'
+import { InboundFormFieldDto } from './inbound-form-field.dto.js'
+import { InboundFormSecurityDto } from './inbound-form-security.dto.js'
+import { InboundFormReceiverDto } from './inbound-form-receiver.dto.js'
 
 export class InboundFormDto {
     @Expose()

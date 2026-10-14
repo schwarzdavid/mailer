@@ -11,7 +11,7 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { EmailBlock, EmailBlockCreate } from '../interfaces/email-block.interface'
+import { EmailBlock, EmailBlockCreate } from '../interfaces/email-block.interface.js'
 
 @Table({
     tableName: 'email_block',

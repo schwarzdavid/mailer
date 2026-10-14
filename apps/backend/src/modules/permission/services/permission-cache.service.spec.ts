@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { CACHE_MANAGER } from '@nestjs/cache-manager'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { PermissionCacheService } from './permission-cache.service'
+import { PermissionCacheService } from './permission-cache.service.js'
 
 describe('PermissionCacheService', () => {
     let service: PermissionCacheService

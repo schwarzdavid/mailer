@@ -1,35 +1,41 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
 import { Sequelize } from 'sequelize-typescript'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { InboundFormSubmissionService, PublicSubmission } from './inbound-form-submission.service'
-import { ProjectModel } from '../../project/models/project.model'
-import { InboundFormModel } from '../models/inbound-form.model'
-import { InboundFormFieldModel } from '../models/inbound-form-field.model'
-import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
-import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
-import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model'
-import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model'
-import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service'
-import { InboundFormTemplateService } from './inbound-form-template.service'
-import { TemplateRendererService } from '../../mail/services/template-renderer.service'
-import { MailService } from '../../mail/services/mail.service'
-import { InboundFormFull } from '../interfaces/inbound-form.interface'
-import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface'
-import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface'
+import { InboundFormSubmissionService, PublicSubmission } from './inbound-form-submission.service.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { InboundFormModel } from '../models/inbound-form.model.js'
+import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
+import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
+import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.js'
+import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model.js'
+import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.js'
+import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
+import { InboundFormTemplateService } from './inbound-form-template.service.js'
+import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
+import { MailService } from '../../mail/services/mail.service.js'
+import { INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface.js'
+import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
 import {
     InboundFormSubmission,
     InboundFormSubmissionCreate,
     InboundFormSubmissionStatus,
-} from '../interfaces/inbound-form-submission.interface'
+} from '../interfaces/inbound-form-submission.interface.js'
 import {
     InboundFormDelivery,
     InboundFormDeliveryCreate,
     InboundFormDeliveryStatus,
-} from '../interfaces/inbound-form-delivery.interface'
-import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface'
+} from '../interfaces/inbound-form-delivery.interface.js'
+import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface.js'
+import {
+    InboundFormSecurity,
+    InboundFormSecurityLocation,
+    InboundFormSecurityType,
+} from '../interfaces/inbound-form-security.interface.js'
 
 const emailField: InboundFormField = {
     inboundFormFieldId: 21,
@@ -39,6 +45,7 @@ const emailField: InboundFormField = {
     type: InboundFormFieldType.EMAIL,
     defaultValue: null,
     validation: { required: true },
+    position: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -49,6 +56,7 @@ const nameField: InboundFormField = {
     key: 'firstName',
     label: 'First name',
     type: InboundFormFieldType.TEXT,
+    position: 1,
 }
 
 const ownerReceiver: InboundFormReceiver = {
@@ -133,7 +141,10 @@ describe('InboundFormSubmissionService', () => {
                           ...field,
                           get: () => field,
                       })),
-                      inboundFormSecurity: [],
+                      inboundFormSecurity: form.inboundFormSecurity.map((scheme) => ({
+                          ...scheme,
+                          get: () => scheme,
+                      })),
                       inboundFormReceivers: form.inboundFormReceivers.map((receiver) => ({
                           ...receiver,
                           get: () => receiver,
@@ -217,6 +228,7 @@ describe('InboundFormSubmissionService', () => {
                 InboundFormReceiverModel,
                 { model: ProjectModel, required: true },
             ],
+            order: INCLUDED_FIELD_ORDER,
         })
     })
 
@@ -373,5 +385,194 @@ describe('InboundFormSubmissionService', () => {
             ),
         )
         expect(sendMail).not.toHaveBeenCalled()
+    })
+
+    it('forwards the form schemes, submitted security values, headers and query to the security check', async () => {
+        const honeypot: InboundFormSecurity = {
+            inboundFormSecurityId: 51,
+            inboundFormId: 1,
+            type: InboundFormSecurityType.HONEYPOT,
+            location: InboundFormSecurityLocation.BODY,
+            key: 'website',
+            config: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+        mockForm({ ...formFull, inboundFormSecurity: [honeypot] })
+
+        await service.submitForm(
+            'contact',
+            { security: { website: '' }, data: submission.data },
+            { 'x-captcha': 'token' },
+            { ref: 'landing' },
+        )
+
+        expect(checkSubmission).toHaveBeenCalledWith([honeypot], {
+            security: { website: '' },
+            headers: { 'x-captcha': 'token' },
+            query: { ref: 'landing' },
+        })
+    })
+
+    it('defaults missing security values to an empty object', async () => {
+        mockForm(formFull)
+
+        await service.submitForm('contact', { data: submission.data }, {}, {})
+
+        expect(checkSubmission).toHaveBeenCalledWith([], { security: {}, headers: {}, query: {} })
+    })
+
+    it('stores nothing and sends nothing when the security check rejects', async () => {
+        mockForm(formFull)
+        checkSubmission.mockRejectedValue(new ForbiddenException('Captcha verification failed'))
+
+        await expect(service.submitForm('contact', submission, {}, {})).rejects.toThrow(ForbiddenException)
+
+        expect(submissionCreate).not.toHaveBeenCalled()
+        expect(transaction).not.toHaveBeenCalled()
+        expect(sendMail).not.toHaveBeenCalled()
+    })
+
+    it('rejects a missing data payload when the form has required fields', async () => {
+        mockForm(formFull)
+
+        await expect(service.submitForm('contact', { security: {} }, {}, {})).rejects.toThrow(BadRequestException)
+        expect(submissionCreate).not.toHaveBeenCalled()
+    })
+
+    it('persists only the declared fields of an accepted submission', async () => {
+        mockForm({ ...formFull, inboundFormReceivers: [] })
+
+        await service.submitForm(
+            'contact',
+            { data: { email: 'max@example.com', firstName: 'Max', isAdmin: true, script: '<script>' } },
+            {},
+            {},
+        )
+
+        expect(submissionCreate).toHaveBeenCalledWith(
+            {
+                inboundFormId: 1,
+                data: { email: 'max@example.com', firstName: 'Max' },
+                status: InboundFormSubmissionStatus.ACCEPTED,
+            },
+            expect.objectContaining({ returning: true }),
+        )
+    })
+
+    it('creates the submission and its deliveries inside one transaction', async () => {
+        mockForm(formFull)
+        const transactionHandle = { id: 'tx' }
+        transaction.mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) =>
+            callback(transactionHandle),
+        )
+
+        await service.submitForm('contact', submission, {}, {})
+
+        expect(submissionCreate).toHaveBeenCalledWith(expect.anything(), {
+            returning: true,
+            transaction: transactionHandle,
+        })
+        expect(deliveryCreate).toHaveBeenCalledTimes(2)
+        for (const [, options] of deliveryCreate.mock.calls) {
+            expect(options).toEqual({ returning: true, transaction: transactionHandle })
+        }
+        expect(deliveryCreate).toHaveBeenCalledWith(
+            expect.objectContaining({ inboundFormSubmissionId: 91, inboundFormTemplateId: 41 }),
+            expect.anything(),
+        )
+    })
+
+    it('sends nothing when persisting the submission fails', async () => {
+        mockForm(formFull)
+        transaction.mockRejectedValue(new Error('deadlock detected'))
+
+        await expect(service.submitForm('contact', submission, {}, {})).rejects.toThrow('deadlock detected')
+        expect(sendMail).not.toHaveBeenCalled()
+    })
+
+    it('resolves before the mail transport finishes delivering', async () => {
+        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
+        let finishSending: () => void = () => undefined
+        sendMail.mockImplementation(
+            () =>
+                new Promise<void>((resolve) => {
+                    finishSending = resolve
+                }),
+        )
+
+        await service.submitForm('contact', submission, {}, {})
+
+        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledOnce())
+        expect(deliveryRows[0]!.update).not.toHaveBeenCalled()
+        finishSending()
+        await vi.waitFor(() =>
+            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
+                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT }),
+            ),
+        )
+    })
+
+    it('logs instead of crashing when recording a failed delivery also fails', async () => {
+        const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
+        sendMail.mockRejectedValue(new Error('SMTP down'))
+        deliveryCreate.mockImplementationOnce((values) => {
+            const row = {
+                inboundFormDeliveryId: 1,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                ...(values as Omit<InboundFormDelivery, 'inboundFormDeliveryId' | 'createdAt' | 'updatedAt'>),
+                update: vi.fn<DeliveryRow['update']>().mockRejectedValue(new Error('db gone')),
+            } as DeliveryRow
+            deliveryRows.push(row)
+            return Promise.resolve(row as unknown as InboundFormDeliveryModel)
+        })
+
+        await expect(service.submitForm('contact', submission, {}, {})).resolves.toBeUndefined()
+
+        await vi.waitFor(() =>
+            expect(logError).toHaveBeenCalledWith('Recording the outcome of delivery 1 failed: db gone'),
+        )
+    })
+
+    it('keeps processing the remaining deliveries when recording a failed one throws', async () => {
+        mockForm(formFull)
+        sendMail.mockRejectedValueOnce(new Error('SMTP down'))
+        deliveryCreate.mockImplementationOnce((values) => {
+            const row = {
+                inboundFormDeliveryId: 1,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                ...(values as Omit<InboundFormDelivery, 'inboundFormDeliveryId' | 'createdAt' | 'updatedAt'>),
+                update: vi.fn<DeliveryRow['update']>().mockRejectedValue(new Error('db gone')),
+            } as DeliveryRow
+            deliveryRows.push(row)
+            return Promise.resolve(row as unknown as InboundFormDeliveryModel)
+        })
+
+        await service.submitForm('contact', submission, {}, {})
+
+        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(2))
+        await vi.waitFor(() =>
+            expect(deliveryRows[1]!.update).toHaveBeenCalledWith(
+                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT, emailTo: 'max@example.com' }),
+            ),
+        )
+    })
+
+    it('renders the subject without html escaping', async () => {
+        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
+
+        await service.submitForm('contact', { data: { email: 'max@example.com', firstName: "O'Brien & Co" } }, {}, {})
+
+        await vi.waitFor(() =>
+            expect(sendMail).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    subject: "Message from O'Brien & Co",
+                    html: '<p>O&#x27;Brien &amp; Co wrote in</p>',
+                }),
+            ),
+        )
     })
 })

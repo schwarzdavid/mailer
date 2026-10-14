@@ -4,9 +4,10 @@ import { Interval } from '@nestjs/schedule'
 import { QueryTypes } from 'sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { ImapFlow } from 'imapflow'
-import { DsnParserService } from './dsn-parser.service'
-import { BounceService } from './bounce.service'
-import { BOUNCE_POLL_INTERVAL_MS, BOUNCE_POLL_LOCK_KEY } from '../bounce.constants'
+import { DsnParserService } from './dsn-parser.service.js'
+import { BounceService } from './bounce.service.js'
+import { BOUNCE_POLL_INTERVAL_MS, BOUNCE_POLL_LOCK_KEY } from '../bounce.constants.js'
+import type { Env } from '../../../config/env.schema.js'
 
 @Injectable()
 export class BounceMailboxService implements OnApplicationBootstrap {
@@ -14,14 +15,14 @@ export class BounceMailboxService implements OnApplicationBootstrap {
     private roundRunning = false
 
     constructor(
-        private readonly configService: ConfigService,
+        private readonly configService: ConfigService<Env, true>,
         private readonly sequelize: Sequelize,
         private readonly dsnParserService: DsnParserService,
         private readonly bounceService: BounceService,
     ) {}
 
     onApplicationBootstrap(): void {
-        if (!this.configService.get<string>('IMAP_HOST')) {
+        if (!this.configService.get('IMAP_HOST', { infer: true })) {
             this.logger.warn('IMAP_HOST is not configured, bounce mailbox polling is disabled')
             return
         }
@@ -31,7 +32,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
 
     @Interval(BOUNCE_POLL_INTERVAL_MS)
     async handlePollInterval(): Promise<void> {
-        if (!this.configService.get<string>('IMAP_HOST')) {
+        if (!this.configService.get('IMAP_HOST', { infer: true })) {
             return
         }
 
@@ -68,12 +69,12 @@ export class BounceMailboxService implements OnApplicationBootstrap {
 
     private async processMailbox(): Promise<void> {
         const client = new ImapFlow({
-            host: this.configService.getOrThrow<string>('IMAP_HOST'),
-            port: Number(this.configService.get<string>('IMAP_PORT', '993')),
-            secure: this.configService.get<string>('IMAP_SECURE', 'true') === 'true',
+            host: this.configService.getOrThrow('IMAP_HOST', { infer: true }),
+            port: this.configService.get('IMAP_PORT', { infer: true }),
+            secure: this.configService.get('IMAP_SECURE', { infer: true }),
             auth: {
-                user: this.configService.getOrThrow<string>('IMAP_USER'),
-                pass: this.configService.getOrThrow<string>('IMAP_PASSWORD'),
+                user: this.configService.getOrThrow('IMAP_USER', { infer: true }),
+                pass: this.configService.getOrThrow('IMAP_PASSWORD', { infer: true }),
             },
             logger: false,
         })

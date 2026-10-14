@@ -1,18 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { Principal } from '../../auth/decorators/Principal'
-import { RequireAbility } from '../../permission/decorators/RequireAbility'
-import { CurrentAbility } from '../../permission/decorators/CurrentAbility'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { ProjectService } from '../services/project.service'
-import { ProjectMemberService } from '../../permission/services/project-member.service'
-import { ProjectCreateDto, ProjectUpdateDto } from '../dtos/project-create.dto'
-import { ProjectDomainAssignDto } from '../dtos/project-domain-assign.dto'
-import { ProjectMemberDto, ProjectMemberPutDto } from '../dtos/project-member.dto'
-import { DeletedProjectDto, ProjectDetailDto, ProjectDto, ProjectListDto } from '../dtos/project.dto'
-import type { UserWithRole } from '../../user/interfaces/user.interface'
-import type { AppAbility } from '../../permission/interfaces/app-ability'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { Principal } from '../../auth/decorators/Principal.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { ProjectService } from '../services/project.service.js'
+import { ProjectMemberService } from '../../permission/services/project-member.service.js'
+import { ProjectCreateDto, ProjectUpdateDto } from '../dtos/project-create.dto.js'
+import { ProjectDomainAssignDto } from '../dtos/project-domain-assign.dto.js'
+import { ProjectMemberDto, ProjectMemberPutDto } from '../dtos/project-member.dto.js'
+import { DeletedProjectDto, ProjectDetailDto, ProjectDto, ProjectListDto } from '../dtos/project.dto.js'
+import type { UserWithRole } from '../../user/interfaces/user.interface.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 @JwtAuth()
 @ApiTags('project')
@@ -51,7 +51,7 @@ export class ProjectController {
     @ResponseDto(ProjectDetailDto)
     @Get(':projectId')
     async getProject(
-        @Param('projectId') projectId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<ProjectDetailDto> {
         const project = await this.projectService.getProjectById(projectId, ability)
@@ -62,7 +62,7 @@ export class ProjectController {
     @ResponseDto(ProjectDto)
     @Patch(':projectId')
     async updateProject(
-        @Param('projectId') projectId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
         @Body() body: ProjectUpdateDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<ProjectDto> {
@@ -72,14 +72,17 @@ export class ProjectController {
     }
 
     @Delete(':projectId')
-    async deleteProject(@Param('projectId') projectId: number, @CurrentAbility() ability: AppAbility): Promise<void> {
+    async deleteProject(
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<void> {
         await this.projectService.deleteProject(projectId, ability)
     }
 
     @ResponseDto(ProjectDto)
     @Post(':projectId/restore')
     async restoreProject(
-        @Param('projectId') projectId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<ProjectDto> {
         const project = await this.projectService.restoreProject(projectId, ability)
@@ -89,7 +92,7 @@ export class ProjectController {
 
     @Post(':projectId/domains')
     async assignProjectDomain(
-        @Param('projectId') projectId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
         @Body() body: ProjectDomainAssignDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
@@ -98,8 +101,8 @@ export class ProjectController {
 
     @Delete(':projectId/domains/:domainId')
     async unassignProjectDomain(
-        @Param('projectId') projectId: number,
-        @Param('domainId') domainId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @Param('domainId', ParseIntPipe) domainId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
         await this.projectService.unassignDomain(projectId, domainId, ability)
@@ -108,7 +111,7 @@ export class ProjectController {
     @SerializeOptions({ type: ProjectMemberDto })
     @Get(':projectId/members')
     async getProjectMembers(
-        @Param('projectId') projectId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<ProjectMemberDto[]> {
         return await this.projectMemberService.getMembers(projectId, ability)
@@ -116,8 +119,8 @@ export class ProjectController {
 
     @Put(':projectId/members/:userId')
     async setProjectMember(
-        @Param('projectId') projectId: number,
-        @Param('userId') userId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @Param('userId', ParseIntPipe) userId: number,
         @Body() body: ProjectMemberPutDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
@@ -126,8 +129,8 @@ export class ProjectController {
 
     @Delete(':projectId/members/:userId')
     async removeProjectMember(
-        @Param('projectId') projectId: number,
-        @Param('userId') userId: number,
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @Param('userId', ParseIntPipe) userId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
         await this.projectMemberService.removeMember(projectId, userId, ability)

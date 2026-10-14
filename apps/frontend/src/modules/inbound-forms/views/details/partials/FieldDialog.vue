@@ -3,6 +3,7 @@
         <VCard :title="field ? t('cta.edit') : t('module.inboundForms.details.fields.add')">
             <form @submit.prevent="onSubmit">
                 <VCardItem>
+                    <VAlert v-if="error" type="error" class="mb-4" :text="error" />
                     <VRow dense>
                         <VCol cols="6">
                             <VTextField
@@ -112,6 +113,7 @@
         modelValue: boolean
         field: InboundFormFieldDto | null
         saving: boolean
+        error?: string | null
     }>()
 
     const emit = defineEmits<{

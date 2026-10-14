@@ -1,13 +1,13 @@
-import { Body, Controller, Get, Param, Post, SerializeOptions } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { RequireAbility } from '../../permission/decorators/RequireAbility'
-import { DomainCreateDto } from '../dtos/domain-create.dto'
-import { DomainDto } from '../dtos/domain.dto'
-import { DomainService } from '../services/domain.service'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { DomainDnsDto } from '../dtos/domain-dns.dto'
-import { DomainDnsService } from '../services/domain-dns.service'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
+import { DomainCreateDto } from '../dtos/domain-create.dto.js'
+import { DomainDto } from '../dtos/domain.dto.js'
+import { DomainService } from '../services/domain.service.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { DomainDnsDto } from '../dtos/domain-dns.dto.js'
+import { DomainDnsService } from '../services/domain-dns.service.js'
 
 @JwtAuth()
 @ApiTags('domain')
@@ -45,7 +45,7 @@ export class DomainController {
     @RequireAbility({ action: 'read', subject: 'Domain' })
     @ResponseDto(DomainDto)
     @Get(':domainId')
-    async getDomain(@Param('domainId') domainId: number): Promise<DomainDto> {
+    async getDomain(@Param('domainId', ParseIntPipe) domainId: number): Promise<DomainDto> {
         const domain = await this.domainService.getDomainById(domainId)
 
         return {
@@ -57,12 +57,18 @@ export class DomainController {
     @RequireAbility({ action: 'update', subject: 'Domain' })
     @ResponseDto(DomainDto)
     @Post(':domainId/refresh')
-    async refreshDomainRecords(@Param('domainId') domainId: number): Promise<DomainDto> {
+    async refreshDomainRecords(@Param('domainId', ParseIntPipe) domainId: number): Promise<DomainDto> {
         const domain = await this.domainDnsService.reloadDnsRecords(domainId)
 
         return {
             ...domain,
             dns: DomainDnsDto.fromArray(domain.dnsRecords),
         }
+    }
+
+    @RequireAbility({ action: 'delete', subject: 'Domain' })
+    @Delete(':domainId')
+    async deleteDomain(@Param('domainId', ParseIntPipe) domainId: number): Promise<void> {
+        await this.domainService.deleteUnusedDomain(domainId)
     }
 }

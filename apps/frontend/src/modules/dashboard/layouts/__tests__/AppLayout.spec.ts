@@ -4,8 +4,12 @@ import { defineComponent, h } from 'vue'
 import { VApp } from 'vuetify/components'
 import { SettingsApi, type SettingsDto } from 'api'
 import AppLayout from '../AppLayout.vue'
+import { flushPromises } from '@vue/test-utils'
+import { QueryClient } from '@tanstack/vue-query'
 import { mountView } from '@/__tests__/support.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
+import { JWT_KEY } from '@/constants/jwtKey.ts'
+import { ability } from '@/plugins/casl.ts'
 
 const AppLayoutHost = defineComponent({
     setup: () => () => h(VApp, () => h(AppLayout)),
@@ -102,6 +106,55 @@ describe('AppLayout', () => {
             expect(wrapper.text()).not.toContain('Bounces')
             expect(wrapper.text()).not.toContain('Users')
             expect(wrapper.text()).not.toContain('Settings')
+        })
+
+        it.each([
+            ['Domain', 'Domains'],
+            ['Bounce', 'Bounces'],
+            ['User', 'Users'],
+        ])('shows only the tab granted by read %s', async (subject, label) => {
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [
+                { action: 'read', subject },
+            ])
+
+            await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
+            const gatedTabs = ['Domains', 'Bounces', 'Users', 'Settings'].filter((tab) => wrapper.text().includes(tab))
+            expect(gatedTabs).toEqual([label])
+        })
+
+        it('does not poll the settings without the settings permission', async () => {
+            const getSettings = vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [createTestRouter()] } }, [
+                { action: 'read', subject: 'Domain' },
+            ])
+
+            await vi.waitFor(() => expect(wrapper.text()).toContain('Domains'))
+            await flushPromises()
+            expect(getSettings).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('logout', () => {
+        afterEach(() => {
+            localStorage.clear()
+            ability.update([])
+        })
+
+        it('clears the session, cached data and abilities and returns to the login', async () => {
+            vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+            localStorage.setItem(JWT_KEY, JSON.stringify('jwt-token'))
+            ability.update([{ action: 'manage', subject: 'all' }])
+            const removeQueries = vi.spyOn(QueryClient.prototype, 'removeQueries')
+            const router = createTestRouter()
+            const wrapper = mountView(AppLayoutHost, { global: { plugins: [router] } })
+
+            const logoutButton = wrapper.findAll('button').find((button) => button.text() === 'Logout')
+            await logoutButton!.trigger('click')
+
+            await vi.waitFor(() => expect(router.currentRoute.value.name).toBe(RouteNames.LOGIN))
+            expect(localStorage.getItem(JWT_KEY)).toBeNull()
+            expect(removeQueries).toHaveBeenCalledWith()
+            expect(ability.rules).toEqual([])
         })
     })
 })

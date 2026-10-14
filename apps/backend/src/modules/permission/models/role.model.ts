@@ -11,9 +11,9 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import type { Role } from '../interfaces/role.interface'
-import type { RoleType } from '../permission.constants'
-import { RolePermissionModel } from './role-permission.model'
+import type { Role } from '../interfaces/role.interface.js'
+import type { RoleType } from '../permission.constants.js'
+import { RolePermissionModel } from './role-permission.model.js'
 
 export type RoleCreate = Omit<Role, 'roleId' | 'createdAt' | 'updatedAt'>
 
@@ -37,7 +37,10 @@ export class RoleModel extends Model<Role, RoleCreate> implements Role {
     @Column(DataType.STRING(32))
     declare type: RoleType
 
-    @HasMany(() => RolePermissionModel)
+    @HasMany(() => RolePermissionModel, {
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+    })
     declare permissions: RolePermissionModel[]
 
     @CreatedAt

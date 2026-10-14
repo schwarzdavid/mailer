@@ -2,10 +2,10 @@ import { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { PoliciesGuard } from './policies.guard'
-import { AbilityFactory } from '../services/ability-factory.service'
-import { AppAbility } from '../interfaces/app-ability'
-import { User } from '../../user/interfaces/user.interface'
+import { PoliciesGuard } from './policies.guard.js'
+import { AbilityFactory } from '../services/ability-factory.service.js'
+import { AppAbility } from '../interfaces/app-ability.js'
+import { User } from '../../user/interfaces/user.interface.js'
 
 const user: User = {
     userId: 5,

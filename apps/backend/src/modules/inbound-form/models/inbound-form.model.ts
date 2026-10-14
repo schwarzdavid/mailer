@@ -14,12 +14,13 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { InboundForm, InboundFormCreate, InboundFormFull } from '../interfaces/inbound-form.interface'
-import { DomainModel } from '../../domain/models/domain.model'
-import { InboundFormFieldModel } from './inbound-form-field.model'
-import { InboundFormReceiverModel } from './inbound-form-receiver.model'
-import { InboundFormSecurityModel } from './inbound-form-security.model'
-import { ProjectModel } from '../../project/models/project.model'
+import { InboundForm, InboundFormCreate, InboundFormFull } from '../interfaces/inbound-form.interface.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
+import { InboundFormFieldModel } from './inbound-form-field.model.js'
+import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
+import { InboundFormSecurityModel } from './inbound-form-security.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'inbound_form',
@@ -66,7 +67,7 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     })
-    declare project?: ProjectModel
+    declare project?: Relation<ProjectModel>
 
     @HasMany(() => InboundFormFieldModel)
     declare inboundFormFields: InboundFormFieldModel[]

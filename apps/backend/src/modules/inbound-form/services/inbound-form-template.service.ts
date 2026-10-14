@@ -1,14 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Op, UniqueConstraintError } from 'sequelize'
-import { InboundFormTemplateModel } from '../models/inbound-form-template.model'
+import { InboundFormTemplateModel } from '../models/inbound-form-template.model.js'
 import {
     InboundFormTemplate,
     InboundFormTemplateDraft,
     InboundFormTemplateStatus,
     InboundFormTemplateSummary,
-} from '../interfaces/inbound-form-template.interface'
-import { TemplateRendererService, TemplateRenderError } from '../../mail/services/template-renderer.service'
+} from '../interfaces/inbound-form-template.interface.js'
+import { TemplateRendererService, TemplateRenderError } from '../../mail/services/template-renderer.service.js'
 
 @Injectable()
 export class InboundFormTemplateService {

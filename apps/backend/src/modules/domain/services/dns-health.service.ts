@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Interval } from '@nestjs/schedule'
 import { InjectModel } from '@nestjs/sequelize'
-import { DomainModel } from '../models/domain.model'
-import { DomainDnsService } from './domain-dns.service'
-import { DNS_CHECK_INTERVAL_MS } from '../domain.constants'
+import { DomainModel } from '../models/domain.model.js'
+import { DomainDnsService } from './domain-dns.service.js'
+import { DNS_CHECK_INTERVAL_MS } from '../domain.constants.js'
 
 @Injectable()
 export class DnsHealthService {

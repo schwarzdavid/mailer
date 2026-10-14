@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
-import type { App } from 'supertest/types'
+import type { App } from 'supertest/types.js'
 
 export async function configureSendingDomain(
     app: INestApplication<App>,

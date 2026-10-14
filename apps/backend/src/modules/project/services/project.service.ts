@@ -2,25 +2,25 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { Op, UniqueConstraintError } from 'sequelize'
-import { ProjectModel } from '../models/project.model'
-import { ProjectDomainModel } from '../models/project-domain.model'
-import { DomainModel } from '../../domain/models/domain.model'
-import { InboundFormModel } from '../../inbound-form/models/inbound-form.model'
-import { DomainService } from '../../domain/services/domain.service'
-import { AbilityFactory } from '../../permission/services/ability-factory.service'
-import { PermissionCacheService } from '../../permission/services/permission-cache.service'
-import { ProjectMemberModel } from '../../permission/models/project-member.model'
+import { ProjectModel } from '../models/project.model.js'
+import { ProjectDomainModel } from '../models/project-domain.model.js'
+import { DomainModel } from '../../domain/models/domain.model.js'
+import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
+import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
+import { ProjectMemberModel } from '../../permission/models/project-member.model.js'
 import {
     assertProjectDeletable,
     assertProjectReadable,
     assertProjectUpdatable,
-} from '../../permission/helpers/project-access'
-import { PROJECT_PERMISSIONS } from '../../permission/permission.constants'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { User } from '../../user/interfaces/user.interface'
-import { Domain } from '../../domain/interfaces/domain.interface'
-import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface'
-import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface'
+} from '../../permission/helpers/project-access.js'
+import { PROJECT_PERMISSIONS } from '../../permission/permission.constants.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { User } from '../../user/interfaces/user.interface.js'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { InboundForm } from '../../inbound-form/interfaces/inbound-form.interface.js'
+import { DeletedProject, Project, ProjectWithCounts, ProjectWithDomains } from '../interfaces/project.interface.js'
 
 @Injectable()
 export class ProjectService {

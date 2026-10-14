@@ -14,9 +14,9 @@ import {
     Unique,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { Domain } from '../interfaces/domain.interface'
-import { DomainDkimModel } from './domain-dkim.model'
-import { DomainDnsModel } from './domain-dns.model'
+import { Domain } from '../interfaces/domain.interface.js'
+import { DomainDkimModel } from './domain-dkim.model.js'
+import { DomainDnsModel } from './domain-dns.model.js'
 
 @DefaultScope(() => ({
     include: [DomainDnsModel],

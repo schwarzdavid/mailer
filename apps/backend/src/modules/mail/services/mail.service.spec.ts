@@ -2,16 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Transporter } from 'nodemailer'
-import { MailService, SendMail } from './mail.service'
-import { MAIL_TRANSPORTER } from '../mail.constants'
-import { DomainService } from '../../domain/services/domain.service'
-import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service'
-import { Domain, DomainWithActiveDkim } from '../../domain/interfaces/domain.interface'
-import { DomainDkimAlgorithm } from '../../domain/interfaces/domain-dkim.interface'
-import { EmailBlockService } from '../../bounce/services/email-block.service'
-import { BounceService } from '../../bounce/services/bounce.service'
-import { BounceType } from '../../bounce/interfaces/bounce.interface'
-import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception'
+import { MailService, SendMail } from './mail.service.js'
+import { MAIL_TRANSPORTER } from '../mail.constants.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { DkimEncryptionService } from '../../domain/services/dkim-encryption.service.js'
+import { Domain, DomainWithActiveDkim } from '../../domain/interfaces/domain.interface.js'
+import { DomainDkimAlgorithm } from '../../domain/interfaces/domain-dkim.interface.js'
+import { EmailBlockService } from '../../bounce/services/email-block.service.js'
+import { BounceService } from '../../bounce/services/bounce.service.js'
+import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
+import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
 
 describe('MailService', () => {
     let service: MailService
@@ -178,5 +178,26 @@ describe('MailService', () => {
         recordBounce.mockRejectedValue(new Error('db down'))
 
         await expect(service.sendMail(mail)).rejects.toThrow('550 rejected')
+    })
+
+    it('never sends unsigned mail when the DKIM key cannot be decrypted', async () => {
+        decryptDkimPrivateKey.mockRejectedValue(new Error('Unsupported state or unable to authenticate data'))
+
+        await expect(service.sendMail(mail)).rejects.toThrow('Unsupported state or unable to authenticate data')
+        expect(sendMail).not.toHaveBeenCalled()
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a bounce for connection errors without an SMTP response code', async () => {
+        sendMail.mockRejectedValue(new Error('connect ECONNREFUSED'))
+
+        await expect(service.sendMail(mail)).rejects.toThrow('connect ECONNREFUSED')
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('resolves the sending domain from the part after the @ of the from address', async () => {
+        await service.sendMail({ ...mail, from: 'Support.Team@mail.example.com' })
+
+        expect(getSendingDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
     })
 })

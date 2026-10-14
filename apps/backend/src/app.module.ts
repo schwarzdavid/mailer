@@ -1,28 +1,30 @@
 import { Logger, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { SequelizeModule } from '@nestjs/sequelize'
-import { createSequelizeOptions, envFilePath } from './factories/database.config'
-import { AuthModule } from './modules/auth/auth.module'
-import { UserModule } from './modules/user/user.module'
+import { createSequelizeOptions, envFilePath } from './factories/database.config.js'
+import { AuthModule } from './modules/auth/auth.module.js'
+import { UserModule } from './modules/user/user.module.js'
 import { CacheModule } from '@nestjs/cache-manager'
 import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
-import { DomainModule } from './modules/domain/domain.module'
-import { ProjectModule } from './modules/project/project.module'
-import { InboundFormModule } from './modules/inbound-form/inbound-form.module'
-import { MailModule } from './modules/mail/mail.module'
-import { BounceModule } from './modules/bounce/bounce.module'
-import { SettingsModule } from './modules/settings/settings.module'
-import { SetupModule } from './modules/setup/setup.module'
-import { PermissionModule } from './modules/permission/permission.module'
+import { DomainModule } from './modules/domain/domain.module.js'
+import { ProjectModule } from './modules/project/project.module.js'
+import { InboundFormModule } from './modules/inbound-form/inbound-form.module.js'
+import { MailModule } from './modules/mail/mail.module.js'
+import { BounceModule } from './modules/bounce/bounce.module.js'
+import { SettingsModule } from './modules/settings/settings.module.js'
+import { SetupModule } from './modules/setup/setup.module.js'
+import { PermissionModule } from './modules/permission/permission.module.js'
+import { Env, envSchema } from './config/env.schema.js'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
             envFilePath,
+            validationSchema: envSchema,
         }),
         SequelizeModule.forRootAsync({
             imports: [ConfigModule],
@@ -33,10 +35,10 @@ import { PermissionModule } from './modules/permission/permission.module'
             isGlobal: true,
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory(configService: ConfigService) {
+            useFactory(configService: ConfigService<Env, true>) {
                 const logger = new Logger('CacheModule')
-                const host = configService.get<string>('REDIS_HOST', '127.0.0.1')
-                const port = configService.get<string>('REDIS_PORT', '6379')
+                const host = configService.get('REDIS_HOST', { infer: true })
+                const port = configService.get('REDIS_PORT', { infer: true })
 
                 const keyv = createKeyv(
                     {
@@ -63,9 +65,9 @@ import { PermissionModule } from './modules/permission/permission.module'
             global: true,
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory(configService: ConfigService) {
+            useFactory(configService: ConfigService<Env, true>) {
                 return {
-                    secret: configService.get<string>('BACKEND_JWT_SECRET', 'no-secret'),
+                    secret: configService.get('BACKEND_JWT_SECRET', { infer: true }),
                     signOptions: {
                         expiresIn: '31d',
                     },

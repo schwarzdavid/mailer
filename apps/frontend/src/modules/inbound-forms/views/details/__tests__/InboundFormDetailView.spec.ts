@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { DomainApi, InboundFormApi, ProjectApi, type InboundFormDetailDto } from 'api'
 import type { Router } from 'vue-router'
 import InboundFormDetailView from '../InboundFormDetailView.vue'
@@ -83,5 +84,39 @@ describe('InboundFormDetailView', () => {
         expect(wrapper.text()).toContain('owner@business.com')
         expect(wrapper.text()).toContain('Published v2')
         expect(wrapper.html()).toContain('Acme')
+    })
+
+    it('loads the form addressed by the route', async () => {
+        const getSpy = vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(detail)
+        vi.spyOn(ProjectApi, 'getProject').mockRejectedValue(new Error('Forbidden'))
+        vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
+        const wrapper = mountView(InboundFormDetailView)
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('h1').exists()).toBe(true)
+        })
+        expect(getSpy).toHaveBeenCalledWith({ path: { inboundFormId: 1 } })
+    })
+
+    it('flags an inactive form in the header', async () => {
+        vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue({ ...detail, isActive: false })
+        vi.spyOn(ProjectApi, 'getProject').mockRejectedValue(new Error('Forbidden'))
+        vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
+        const wrapper = mountView(InboundFormDetailView)
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('h1').exists()).toBe(true)
+        })
+        expect(wrapper.get('.v-chip').text()).toBe('Inactive')
+    })
+
+    it('renders nothing when the form cannot be loaded', async () => {
+        vi.spyOn(InboundFormApi, 'getInboundForm').mockRejectedValue(new Error('Not found'))
+        const wrapper = mountView(InboundFormDetailView)
+
+        await flushPromises()
+
+        expect(wrapper.find('h1').exists()).toBe(false)
+        expect(wrapper.text()).toBe('')
     })
 })

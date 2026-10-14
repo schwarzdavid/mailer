@@ -9,10 +9,16 @@ import {
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { Bounce, BounceCreate, BounceType } from '../interfaces/bounce.interface'
+import { Bounce, BounceCreate, BounceType } from '../interfaces/bounce.interface.js'
 
 @Table({
     tableName: 'bounce',
+    indexes: [
+        {
+            name: 'bounce_email_address',
+            fields: ['emailAddress'],
+        },
+    ],
 })
 export class BounceModel extends Model<Bounce, BounceCreate> implements Bounce {
     @PrimaryKey

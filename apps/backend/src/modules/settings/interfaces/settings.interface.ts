@@ -1,4 +1,4 @@
-import { DomainDnsRecord } from '../../domain/interfaces/domain-dns.interface'
+import { DomainDnsRecord } from '../../domain/interfaces/domain-dns.interface.js'
 
 export interface Settings {
     settingId: number

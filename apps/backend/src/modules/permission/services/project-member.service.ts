@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { ProjectMemberModel } from '../models/project-member.model'
-import { ProjectModel } from '../../project/models/project.model'
-import { UserModel } from '../../user/models/user.model'
-import { PermissionCacheService } from './permission-cache.service'
-import { assertProjectUpdatable } from '../helpers/project-access'
-import { AppAbility } from '../interfaces/app-ability'
-import { ProjectMemberInfo, ProjectMembership } from '../interfaces/project-member.interface'
-import { ProjectPermission } from '../permission.constants'
+import { ProjectMemberModel } from '../models/project-member.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { UserModel } from '../../user/models/user.model.js'
+import { PermissionCacheService } from './permission-cache.service.js'
+import { assertProjectUpdatable } from '../helpers/project-access.js'
+import { AppAbility } from '../interfaces/app-ability.js'
+import { ProjectMemberInfo, ProjectMembership } from '../interfaces/project-member.interface.js'
+import { ProjectPermission } from '../permission.constants.js'
 
 @Injectable()
 export class ProjectMemberService {

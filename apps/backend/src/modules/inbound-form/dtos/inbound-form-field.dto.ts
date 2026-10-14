@@ -18,7 +18,7 @@ import {
     InboundFormField,
     InboundFormFieldType,
     InboundFormFieldValidation,
-} from '../interfaces/inbound-form-field.interface'
+} from '../interfaces/inbound-form-field.interface.js'
 
 export class InboundFormFieldValidationDto implements InboundFormFieldValidation {
     @Expose()

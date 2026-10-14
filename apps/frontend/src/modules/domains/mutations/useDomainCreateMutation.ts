@@ -13,13 +13,8 @@ export function useDomainCreateMutation() {
                 }),
             ),
         onSuccess(domain) {
-            client.setQueryData(['domain', domain.domainId], domain)
-
-            const domains = client.getQueryData<DomainDto[]>(['domains'])
-            if (domains) {
-                domains.push(domain)
-                client.setQueryData(['domains'], domains)
-            }
+            client.setQueryData(['domains', domain.domainId], domain)
+            client.setQueryData<DomainDto[]>(['domains'], (domains) => (domains ? [...domains, domain] : domains))
         },
     })
 }

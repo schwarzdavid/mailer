@@ -2,6 +2,7 @@
     <VCard :title="t('module.inboundForms.details.general.title')">
         <form @submit.prevent="onSubmit">
             <VCardItem>
+                <VAlert v-if="errorMessage" type="error" class="mb-4" :text="errorMessage" />
                 <VTextField name="name" :label="t('field.name')" v-model="name" :error-messages="errors.name" />
                 <VTextField name="slug" :label="t('field.slug')" v-model="slug" :error-messages="errors.slug" />
                 <VTextField :label="t('field.project')" :model-value="project?.name" readonly />
@@ -46,6 +47,7 @@
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
     import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto }>()
 
@@ -53,6 +55,7 @@
     const { data: project } = useQuery(useProjectQuery(() => props.form.projectId))
     const { mutateAsync, isPending } = useInboundFormUpdateMutation()
     const copied = ref(false)
+    const errorMessage = ref<string | null>(null)
 
     const endpointUrl = computed(() => formEndpointUrl(props.form.slug))
 
@@ -89,14 +92,19 @@
     }
 
     const onSubmit = handleSubmit(async (values) => {
-        await mutateAsync({
-            inboundFormId: props.form.inboundFormId,
-            update: {
-                name: values.name,
-                slug: values.slug,
-                domainId: values.domainId ?? null,
-                isActive: values.isActive,
-            },
-        })
+        errorMessage.value = null
+        try {
+            await mutateAsync({
+                inboundFormId: props.form.inboundFormId,
+                update: {
+                    name: values.name,
+                    slug: values.slug,
+                    domainId: values.domainId ?? null,
+                    isActive: values.isActive,
+                },
+            })
+        } catch (error) {
+            errorMessage.value = apiErrorMessage(error, t('module.inboundForms.details.general.error'))
+        }
     })
 </script>

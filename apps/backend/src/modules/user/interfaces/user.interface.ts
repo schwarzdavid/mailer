@@ -1,6 +1,6 @@
-import { Role } from '../../permission/interfaces/role.interface'
-import { Permission } from '../../permission/permission.constants'
-import { ProjectMembership } from '../../permission/interfaces/project-member.interface'
+import { Role } from '../../permission/interfaces/role.interface.js'
+import { Permission } from '../../permission/permission.constants.js'
+import { ProjectMembership } from '../../permission/interfaces/project-member.interface.js'
 
 export interface User {
     userId: number

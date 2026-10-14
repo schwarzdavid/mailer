@@ -11,14 +11,26 @@ import {
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
-import type { ProjectMember, ProjectMemberCreate } from '../interfaces/project-member.interface'
-import type { ProjectPermission } from '../permission.constants'
-import { ProjectModel } from '../../project/models/project.model'
-import { UserModel } from '../../user/models/user.model'
+import type { ProjectMember, ProjectMemberCreate } from '../interfaces/project-member.interface.js'
+import type { ProjectPermission } from '../permission.constants.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { UserModel } from '../../user/models/user.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     timestamps: true,
     tableName: 'project_members',
+    indexes: [
+        {
+            name: 'project_members_unique',
+            unique: true,
+            fields: ['projectId', 'userId', 'permission'],
+        },
+        {
+            name: 'project_members_user',
+            fields: ['userId'],
+        },
+    ],
 })
 export class ProjectMemberModel extends Model<ProjectMember, ProjectMemberCreate> implements ProjectMember {
     @PrimaryKey
@@ -41,11 +53,17 @@ export class ProjectMemberModel extends Model<ProjectMember, ProjectMemberCreate
     @Column(DataType.STRING(16))
     declare permission: ProjectPermission
 
-    @BelongsTo(() => ProjectModel)
-    declare project?: ProjectModel
+    @BelongsTo(() => ProjectModel, {
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+    })
+    declare project?: Relation<ProjectModel>
 
-    @BelongsTo(() => UserModel)
-    declare user?: UserModel
+    @BelongsTo(() => UserModel, {
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+    })
+    declare user?: Relation<UserModel>
 
     @CreatedAt
     declare createdAt: Date

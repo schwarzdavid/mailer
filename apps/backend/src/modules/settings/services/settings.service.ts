@@ -1,10 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
-import { SettingsModel } from '../models/settings.model'
-import { SendingDomain, SendingDomainConfigure, Settings } from '../interfaces/settings.interface'
-import { DomainService } from '../../domain/services/domain.service'
-import { DomainDnsService } from '../../domain/services/domain-dns.service'
-import { Domain, SendingDomainIps } from '../../domain/interfaces/domain.interface'
+import { SettingsModel } from '../models/settings.model.js'
+import { SendingDomain, SendingDomainConfigure, Settings } from '../interfaces/settings.interface.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { DomainDnsService } from '../../domain/services/domain-dns.service.js'
+import { Domain, SendingDomainIps } from '../../domain/interfaces/domain.interface.js'
 
 @Injectable()
 export class SettingsService {

@@ -1,27 +1,32 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { InboundFormModel } from '../models/inbound-form.model'
-import { InboundFormFieldModel } from '../models/inbound-form-field.model'
-import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
-import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
-import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model'
-import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model'
-import { ProjectModel } from '../../project/models/project.model'
-import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service'
-import { InboundFormTemplateService } from './inbound-form-template.service'
-import { TemplateRendererService } from '../../mail/services/template-renderer.service'
-import { MailService } from '../../mail/services/mail.service'
-import { InboundFormSubmissionStatus } from '../interfaces/inbound-form-submission.interface'
-import { InboundFormDeliveryStatus } from '../interfaces/inbound-form-delivery.interface'
-import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface'
-import { InboundFormTemplate } from '../interfaces/inbound-form-template.interface'
-import { buildDataSchema } from '../helpers/field-schema'
-import { parsePlaceholder } from '../helpers/placeholder'
+import { InboundFormModel } from '../models/inbound-form.model.js'
+import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
+import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
+import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.js'
+import { InboundFormSubmissionModel } from '../models/inbound-form-submission.model.js'
+import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.js'
+import { ProjectModel } from '../../project/models/project.model.js'
+import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
+import { InboundFormTemplateService } from './inbound-form-template.service.js'
+import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
+import { MailService } from '../../mail/services/mail.service.js'
+import { InboundFormSubmissionStatus } from '../interfaces/inbound-form-submission.interface.js'
+import { InboundFormDeliveryStatus } from '../interfaces/inbound-form-delivery.interface.js'
+import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
+import { InboundFormTemplate } from '../interfaces/inbound-form-template.interface.js'
+import { buildDataSchema } from '../helpers/field-schema.js'
+import { parsePlaceholder } from '../helpers/placeholder.js'
+import { INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 
 export interface PublicSubmission {
     security?: Record<string, unknown>
     data?: Record<string, unknown>
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
 }
 
 interface PendingDelivery {
@@ -61,6 +66,7 @@ export class InboundFormSubmissionService {
                 InboundFormReceiverModel,
                 { model: ProjectModel, required: true },
             ],
+            order: INCLUDED_FIELD_ORDER,
         })
 
         if (!form) {
@@ -134,38 +140,50 @@ export class InboundFormSubmissionService {
         })
 
         void this.processDeliveries(pendingDeliveries, data).catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error)
             this.logger.error(
-                `Processing deliveries for submission ${submissionRow.inboundFormSubmissionId} failed: ${message}`,
+                `Processing deliveries for submission ${submissionRow.inboundFormSubmissionId} failed: ${errorMessage(error)}`,
             )
         })
     }
 
     private async processDeliveries(deliveries: PendingDelivery[], data: Record<string, unknown>): Promise<void> {
-        for (const { delivery, receiver, template } of deliveries) {
+        for (const pending of deliveries) {
             try {
-                const emailTo = this.resolveAddress(receiver.emailReceiver, data)
-                const replyTo =
-                    receiver.emailReplyTo !== null ? this.resolveAddress(receiver.emailReplyTo, data) : undefined
-
-                await this.mailService.sendMail({
-                    from: receiver.emailFrom,
-                    to: emailTo,
-                    replyTo,
-                    subject: this.templateRendererService.render(template.subject, data),
-                    html: this.templateRendererService.render(template.template, data),
-                })
-
-                await delivery.update({
-                    status: InboundFormDeliveryStatus.SENT,
-                    emailTo,
-                    sentAt: new Date(),
-                })
+                await this.processDelivery(pending, data)
             } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
-                this.logger.error(`Delivery ${delivery.inboundFormDeliveryId} failed: ${message}`)
-                await delivery.update({ status: InboundFormDeliveryStatus.FAILED, error: message })
+                this.logger.error(
+                    `Recording the outcome of delivery ${pending.delivery.inboundFormDeliveryId} failed: ${errorMessage(error)}`,
+                )
             }
+        }
+    }
+
+    private async processDelivery(
+        { delivery, receiver, template }: PendingDelivery,
+        data: Record<string, unknown>,
+    ): Promise<void> {
+        try {
+            const emailTo = this.resolveAddress(receiver.emailReceiver, data)
+            const replyTo =
+                receiver.emailReplyTo !== null ? this.resolveAddress(receiver.emailReplyTo, data) : undefined
+
+            await this.mailService.sendMail({
+                from: receiver.emailFrom,
+                to: emailTo,
+                replyTo,
+                subject: this.templateRendererService.renderSubject(template.subject, data),
+                html: this.templateRendererService.render(template.template, data),
+            })
+
+            await delivery.update({
+                status: InboundFormDeliveryStatus.SENT,
+                emailTo,
+                sentAt: new Date(),
+            })
+        } catch (error) {
+            const message = errorMessage(error)
+            this.logger.error(`Delivery ${delivery.inboundFormDeliveryId} failed: ${message}`)
+            await delivery.update({ status: InboundFormDeliveryStatus.FAILED, error: message })
         }
     }
 

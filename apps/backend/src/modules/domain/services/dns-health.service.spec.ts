@@ -2,10 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { DnsHealthService } from './dns-health.service'
-import { DomainDnsService } from './domain-dns.service'
-import { DomainModel } from '../models/domain.model'
-import { Domain } from '../interfaces/domain.interface'
+import { DnsHealthService } from './dns-health.service.js'
+import { DomainDnsService } from './domain-dns.service.js'
+import { DomainModel } from '../models/domain.model.js'
+import { Domain } from '../interfaces/domain.interface.js'
 
 type DomainListRow = Pick<Domain, 'domainId' | 'fqdn'>
 

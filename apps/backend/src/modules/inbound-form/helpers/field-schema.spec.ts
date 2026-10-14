@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildDataSchema } from './field-schema'
+import { buildDataSchema } from './field-schema.js'
 import {
     InboundFormField,
     InboundFormFieldType,
     InboundFormFieldValidation,
-} from '../interfaces/inbound-form-field.interface'
+} from '../interfaces/inbound-form-field.interface.js'
 
 function field(
     key: string,
@@ -20,6 +20,7 @@ function field(
         type,
         defaultValue,
         validation,
+        position: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
     }
@@ -114,5 +115,44 @@ describe('buildDataSchema', () => {
 
         expect(schema.safeParse({ code: 'AB' }).success).toBe(true)
         expect(schema.safeParse({ code: 'A' }).success).toBe(false)
+    })
+
+    it('caps a configured maxLength above the global limit at 5000 characters', () => {
+        const schema = buildDataSchema([
+            field('message', InboundFormFieldType.TEXT, { required: true, maxLength: 1_000_000 }),
+        ])
+
+        expect(schema.safeParse({ message: 'a'.repeat(5000) }).success).toBe(true)
+        expect(schema.safeParse({ message: 'a'.repeat(5001) }).success).toBe(false)
+    })
+
+    it('caps fields with a pattern at 1000 characters', () => {
+        const schema = buildDataSchema([
+            field('code', InboundFormFieldType.TEXT, { required: true, maxLength: 4000, pattern: '^a+$' }),
+        ])
+
+        expect(schema.safeParse({ code: 'a'.repeat(1000) }).success).toBe(true)
+        expect(schema.safeParse({ code: 'a'.repeat(1001) }).success).toBe(false)
+    })
+
+    it('does not run the pattern against input that already exceeds the length cap', () => {
+        const schema = buildDataSchema([field('code', InboundFormFieldType.TEXT, { required: true, pattern: '^a+$' })])
+
+        const result = schema.safeParse({ code: 'a'.repeat(1001) })
+
+        expect(result.success).toBe(false)
+        expect(result.error?.issues.map((issue) => issue.code)).toEqual(['too_big'])
+    })
+
+    it('skips a stored backtracking-prone pattern instead of running it', () => {
+        const schema = buildDataSchema([
+            field('code', InboundFormFieldType.TEXT, { required: true, pattern: '^(a+)+$' }),
+        ])
+        const started = Date.now()
+
+        const result = schema.safeParse({ code: `${'a'.repeat(40)}!` })
+
+        expect(result.success).toBe(true)
+        expect(Date.now() - started).toBeLessThan(1000)
     })
 })

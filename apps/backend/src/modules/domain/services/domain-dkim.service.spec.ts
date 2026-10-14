@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DomainDkimService } from './domain-dkim.service'
+import { DomainDkimService } from './domain-dkim.service.js'
 
 type GenerateRsaKeyPair = (
     type: 'rsa',
@@ -27,11 +27,11 @@ vi.mock('node:crypto', async (importOriginal) => {
                 : realGenerateKeyPair(type, options, callback)) satisfies GenerateRsaKeyPair,
     }
 })
-import { DkimEncryptionService } from './dkim-encryption.service'
-import { DomainDkimModel } from '../models/domain-dkim.model'
-import { DomainModel } from '../models/domain.model'
-import { DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
-import { Domain } from '../interfaces/domain.interface'
+import { DkimEncryptionService } from './dkim-encryption.service.js'
+import { DomainDkimModel } from '../models/domain-dkim.model.js'
+import { DomainModel } from '../models/domain.model.js'
+import { DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
+import { Domain } from '../interfaces/domain.interface.js'
 
 describe('DomainDkimService', () => {
     let service: DomainDkimService

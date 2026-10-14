@@ -3,9 +3,9 @@ import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Op } from 'sequelize'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { ProjectPurgeService } from './project-purge.service'
-import { ProjectModel } from '../models/project.model'
-import { PROJECT_PURGE_AFTER_MS } from '../project.constants'
+import { ProjectPurgeService } from './project-purge.service.js'
+import { ProjectModel } from '../models/project.model.js'
+import { PROJECT_PURGE_AFTER_MS } from '../project.constants.js'
 
 describe('ProjectPurgeService', () => {
     let service: ProjectPurgeService

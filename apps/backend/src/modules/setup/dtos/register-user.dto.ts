@@ -1,16 +1,18 @@
 import { Expose } from 'class-transformer'
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator'
-import { UserCreate } from '../../user/interfaces/user.interface'
+import { UserCreate } from '../../user/interfaces/user.interface.js'
 
 export class RegisterUserDto implements Omit<UserCreate, 'roleId'> {
     @Expose()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     firstName!: string
 
     @Expose()
     @IsString()
     @IsNotEmpty()
+    @MinLength(1)
     lastName!: string
 
     @Expose()

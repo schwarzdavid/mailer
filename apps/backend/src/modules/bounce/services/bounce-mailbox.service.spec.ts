@@ -4,10 +4,11 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { Sequelize } from 'sequelize-typescript'
 import { ImapFlow } from 'imapflow'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { BounceMailboxService } from './bounce-mailbox.service'
-import { DsnParserService, ParsedDsn } from './dsn-parser.service'
-import { BounceService } from './bounce.service'
-import { BounceType } from '../interfaces/bounce.interface'
+import { BounceMailboxService } from './bounce-mailbox.service.js'
+import { DsnParserService, ParsedDsn } from './dsn-parser.service.js'
+import { BounceService } from './bounce.service.js'
+import { BounceType } from '../interfaces/bounce.interface.js'
+import type { Env } from '../../../config/env.schema.js'
 
 const { imapClient } = vi.hoisted(() => ({
     imapClient: {
@@ -45,7 +46,7 @@ describe('BounceMailboxService', () => {
     let recordBounce: Mock<BounceService['recordBounce']>
     let query: Mock<(sql: string, options: unknown) => Promise<{ acquired: boolean }[]>>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
-    let config: Record<string, string>
+    let config: Partial<Env>
     let errorSpy: Mock<Logger['error']>
     let warnSpy: Mock<Logger['warn']>
 
@@ -56,6 +57,8 @@ describe('BounceMailboxService', () => {
 
         config = {
             IMAP_HOST: 'imap.example.com',
+            IMAP_PORT: 993,
+            IMAP_SECURE: true,
             IMAP_USER: 'bounces',
             IMAP_PASSWORD: 'secret',
         }
@@ -80,8 +83,8 @@ describe('BounceMailboxService', () => {
                 {
                     provide: ConfigService,
                     useValue: {
-                        get: (key: string, fallback?: string) => config[key] ?? fallback,
-                        getOrThrow: (key: string) => {
+                        get: (key: keyof Env) => config[key],
+                        getOrThrow: (key: keyof Env) => {
                             const value = config[key]
                             if (value === undefined) {
                                 throw new Error(`Missing ${key}`)

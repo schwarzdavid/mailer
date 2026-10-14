@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ThrottlerGuard } from '@nestjs/throttler'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { SetupController } from './setup.controller'
-import { SetupService } from '../services/setup.service'
-import { JwtHelperService } from '../../auth/services/jwt-helper.service'
-import { UserWithRole } from '../../user/interfaces/user.interface'
-import { Role } from '../../permission/interfaces/role.interface'
-import { RegisterUserDto } from '../dtos/register-user.dto'
+import { SetupController } from './setup.controller.js'
+import { SetupService } from '../services/setup.service.js'
+import { JwtHelperService } from '../../auth/services/jwt-helper.service.js'
+import { UserWithRole } from '../../user/interfaces/user.interface.js'
+import { Role } from '../../permission/interfaces/role.interface.js'
+import { RegisterUserDto } from '../dtos/register-user.dto.js'
 
 describe('SetupController', () => {
     let controller: SetupController

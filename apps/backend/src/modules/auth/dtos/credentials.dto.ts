@@ -1,4 +1,4 @@
-import { Credentials } from '../interfaces/credentials.interface'
+import { Credentials } from '../interfaces/credentials.interface.js'
 import { IsEmail, IsString, MinLength } from 'class-validator'
 import { Expose } from 'class-transformer'
 

@@ -1,10 +1,12 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common'
-import { Credentials } from '../interfaces/credentials.interface'
-import { UserWithRole } from '../../user/interfaces/user.interface'
+import { Credentials } from '../interfaces/credentials.interface.js'
+import { UserWithRole } from '../../user/interfaces/user.interface.js'
 import bcrypt from 'bcryptjs'
 import { InjectModel } from '@nestjs/sequelize'
-import { UserModel } from '../../user/models/user.model'
-import { RoleModel } from '../../permission/models/role.model'
+import { UserModel } from '../../user/models/user.model.js'
+import { RoleModel } from '../../permission/models/role.model.js'
+import { userWithRoleFromRow } from '../../user/mappers/user.mapper.js'
+import { normalizeEmail } from '../../user/helpers/normalize-email.js'
 
 @Injectable()
 export class CredentialsService {
@@ -12,7 +14,7 @@ export class CredentialsService {
 
     async validateCredentials(credentials: Credentials): Promise<UserWithRole> {
         const user = await this.userModel.findOne({
-            where: { email: credentials.email },
+            where: { email: normalizeEmail(credentials.email) },
             attributes: { include: ['password'] },
             include: [RoleModel],
             rejectOnEmpty: true,
@@ -23,9 +25,6 @@ export class CredentialsService {
             throw new UnauthorizedException('Invalid credentials.')
         }
 
-        const { password, ...principal } = user.get({ plain: true }) as UserWithRole & { password: string }
-        void password
-
-        return principal
+        return userWithRoleFromRow(user)
     }
 }

@@ -7,7 +7,6 @@
     import * as monaco from 'monaco-editor'
     import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
     import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-
     ;(self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
         getWorker(_workerId: string, label: string) {
             if (label === 'html' || label === 'handlebars') {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DsnParserService } from './dsn-parser.service'
-import { BounceType } from '../interfaces/bounce.interface'
+import { DsnParserService } from './dsn-parser.service.js'
+import { BounceType } from '../interfaces/bounce.interface.js'
 
 function dsnMessage(deliveryStatusBody: string, messageId = '<dsn-1@relay.example.com>'): string {
     return [

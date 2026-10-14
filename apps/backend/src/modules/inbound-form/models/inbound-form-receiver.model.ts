@@ -11,8 +11,8 @@ import {
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
-import { InboundFormReceiver, InboundFormReceiverCreate } from '../interfaces/inbound-form-receiver.interface'
-import { InboundFormModel } from './inbound-form.model'
+import { InboundFormReceiver, InboundFormReceiverCreate } from '../interfaces/inbound-form-receiver.interface.js'
+import { InboundFormModel } from './inbound-form.model.js'
 
 @Table({
     tableName: 'inbound_form_receiver',

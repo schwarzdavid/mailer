@@ -2,30 +2,33 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { Op, UniqueConstraintError } from 'sequelize'
-import { InboundFormModel } from '../models/inbound-form.model'
-import { InboundFormFieldModel } from '../models/inbound-form-field.model'
-import { InboundFormSecurityModel } from '../models/inbound-form-security.model'
-import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model'
-import { DomainService } from '../../domain/services/domain.service'
-import { Domain } from '../../domain/interfaces/domain.interface'
-import { ProjectService } from '../../project/services/project.service'
-import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface'
+import { InboundFormModel } from '../models/inbound-form.model.js'
+import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
+import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
+import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.js'
+import { DomainService } from '../../domain/services/domain.service.js'
+import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { ProjectService } from '../../project/services/project.service.js'
+import { InboundForm, InboundFormFull } from '../interfaces/inbound-form.interface.js'
 import {
     InboundFormField,
     InboundFormFieldType,
     InboundFormFieldUpsert,
-} from '../interfaces/inbound-form-field.interface'
+} from '../interfaces/inbound-form-field.interface.js'
 import {
     InboundFormSecurity,
     InboundFormSecurityType,
     InboundFormSecurityUpsert,
-} from '../interfaces/inbound-form-security.interface'
-import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface'
-import { parsePlaceholder } from '../helpers/placeholder'
-import { AbilityFactory } from '../../permission/services/ability-factory.service'
-import { assertProjectReadable, assertProjectUpdatable } from '../../permission/helpers/project-access'
-import { AppAbility } from '../../permission/interfaces/app-ability'
-import { User } from '../../user/interfaces/user.interface'
+} from '../interfaces/inbound-form-security.interface.js'
+import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/inbound-form-receiver.interface.js'
+import { parsePlaceholder } from '../helpers/placeholder.js'
+import { pickDefined } from '../../../helpers/pick-defined.js'
+import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { findPatternProblem } from '../helpers/pattern-safety.js'
+import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
+import { assertProjectReadable, assertProjectUpdatable } from '../../permission/helpers/project-access.js'
+import { AppAbility } from '../../permission/interfaces/app-ability.js'
+import { User } from '../../user/interfaces/user.interface.js'
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
@@ -36,7 +39,23 @@ export interface InboundFormCreateRequest {
     projectId: number
 }
 
-export type InboundFormUpdateRequest = Partial<InboundFormCreateRequest & { isActive: boolean }>
+export type InboundFormUpdateRequest = Partial<
+    Pick<InboundFormCreateRequest, 'name' | 'slug' | 'domainId'> & { isActive: boolean }
+>
+
+const FORM_UPDATABLE_KEYS = [
+    'name',
+    'slug',
+    'domainId',
+    'isActive',
+] as const satisfies readonly (keyof InboundFormUpdateRequest)[]
+
+const RECEIVER_UPDATABLE_KEYS = [
+    'emailFrom',
+    'emailReceiver',
+    'emailReplyTo',
+    'isActive',
+] as const satisfies readonly (keyof InboundFormReceiverUpsert)[]
 
 @Injectable()
 export class InboundFormService {
@@ -95,10 +114,11 @@ export class InboundFormService {
 
     async updateForm(
         inboundFormId: number,
-        update: InboundFormUpdateRequest,
+        request: InboundFormUpdateRequest,
         ability: AppAbility,
     ): Promise<InboundFormFull> {
         const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const update = pickDefined(request, FORM_UPDATABLE_KEYS)
 
         if (update.domainId !== undefined && update.domainId !== form.domainId) {
             if (update.domainId === null) {
@@ -175,7 +195,7 @@ export class InboundFormService {
                 transaction,
             })
 
-            for (const field of fields) {
+            for (const [position, field] of fields.entries()) {
                 if (existingKeys.has(field.key)) {
                     await this.fieldModel.update(
                         {
@@ -183,18 +203,19 @@ export class InboundFormService {
                             type: field.type,
                             defaultValue: field.defaultValue,
                             validation: field.validation,
+                            position,
                         },
                         { where: { inboundFormId, key: field.key }, transaction },
                     )
                 } else {
-                    await this.fieldModel.create({ ...field, inboundFormId }, { transaction })
+                    await this.fieldModel.create({ ...field, inboundFormId, position }, { transaction })
                 }
             }
         })
 
         const result = await this.fieldModel.findAll({
             where: { inboundFormId },
-            order: [['inboundFormFieldId', 'ASC']],
+            order: FIELD_ORDER,
         })
 
         return result.map((field) => field.get({ plain: true }))
@@ -249,11 +270,12 @@ export class InboundFormService {
     async updateReceiver(
         inboundFormId: number,
         inboundFormReceiverId: number,
-        update: Partial<InboundFormReceiverUpsert>,
+        request: Partial<InboundFormReceiverUpsert>,
         ability: AppAbility,
     ): Promise<InboundFormReceiver> {
         const form = await this.loadFormChecked(inboundFormId, ability, 'update')
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
+        const update = pickDefined(request, RECEIVER_UPDATABLE_KEYS)
 
         await this.assertReceiverValid(form, { ...receiver.get({ plain: true }), ...update })
         await receiver.update(update)
@@ -283,6 +305,7 @@ export class InboundFormService {
     private async loadForm(inboundFormId: number): Promise<InboundFormModel> {
         const form = await this.formModel.findByPk(inboundFormId, {
             include: [InboundFormFieldModel, InboundFormSecurityModel, InboundFormReceiverModel],
+            order: INCLUDED_FIELD_ORDER,
         })
 
         if (!form) {
@@ -352,10 +375,9 @@ export class InboundFormService {
         if (pattern === undefined) {
             return
         }
-        try {
-            new RegExp(pattern)
-        } catch {
-            throw new BadRequestException(`Invalid pattern for field "${field.key}"`)
+        const problem = findPatternProblem(pattern)
+        if (problem !== null) {
+            throw new BadRequestException(`Invalid pattern for field "${field.key}": the pattern ${problem}`)
         }
     }
 

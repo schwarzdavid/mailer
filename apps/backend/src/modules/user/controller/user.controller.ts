@@ -1,15 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { JwtAuth } from '../../auth/decorators/JwtAuth'
-import { Principal } from '../../auth/decorators/Principal'
-import { RequireAbility } from '../../permission/decorators/RequireAbility'
-import { CurrentAbility } from '../../permission/decorators/CurrentAbility'
-import { ResponseDto } from '../../../decorators/ResponseDto'
-import { UserService } from '../services/user.service'
-import { UserDetailDto, UserDto } from '../dtos/user.dto'
-import { UserCreateDto, UserPermissionsPutDto, UserUpdateDto } from '../dtos/user-create.dto'
-import type { UserWithRole } from '../interfaces/user.interface'
-import type { AppAbility } from '../../permission/interfaces/app-ability'
+import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
+import { Principal } from '../../auth/decorators/Principal.js'
+import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
+import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
+import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { UserService } from '../services/user.service.js'
+import { UserDetailDto, UserDto } from '../dtos/user.dto.js'
+import { UserCreateDto, UserPermissionsPutDto, UserUpdateDto } from '../dtos/user-create.dto.js'
+import type { UserWithRole } from '../interfaces/user.interface.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 @JwtAuth()
 @ApiTags('user')
@@ -34,7 +34,7 @@ export class UserController {
     @RequireAbility({ action: 'read', subject: 'User' })
     @ResponseDto(UserDetailDto)
     @Get(':userId')
-    async getUser(@Param('userId') userId: number): Promise<UserDetailDto> {
+    async getUser(@Param('userId', ParseIntPipe) userId: number): Promise<UserDetailDto> {
         return await this.userService.getUserById(userId)
     }
 
@@ -42,7 +42,7 @@ export class UserController {
     @ResponseDto(UserDto)
     @Patch(':userId')
     async updateUser(
-        @Param('userId') userId: number,
+        @Param('userId', ParseIntPipe) userId: number,
         @Body() body: UserUpdateDto,
         @Principal() principal: UserWithRole,
         @CurrentAbility() ability: AppAbility,
@@ -53,7 +53,7 @@ export class UserController {
     @RequireAbility({ action: 'delete', subject: 'User' })
     @Delete(':userId')
     async deleteUser(
-        @Param('userId') userId: number,
+        @Param('userId', ParseIntPipe) userId: number,
         @Principal() principal: UserWithRole,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
@@ -64,7 +64,7 @@ export class UserController {
     @ResponseDto(UserPermissionsPutDto)
     @Put(':userId/permissions')
     async replaceUserPermissions(
-        @Param('userId') userId: number,
+        @Param('userId', ParseIntPipe) userId: number,
         @Body() body: UserPermissionsPutDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<UserPermissionsPutDto> {

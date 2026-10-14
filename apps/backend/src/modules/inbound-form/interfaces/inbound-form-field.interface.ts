@@ -22,10 +22,11 @@ export interface InboundFormField {
     type: InboundFormFieldType
     defaultValue: string | null
     validation: InboundFormFieldValidation | null
+    position: number
     createdAt: Date
     updatedAt: Date
 }
 
 export type InboundFormFieldCreate = Omit<InboundFormField, 'inboundFormFieldId' | 'createdAt' | 'updatedAt'>
 
-export type InboundFormFieldUpsert = Omit<InboundFormFieldCreate, 'inboundFormId'>
+export type InboundFormFieldUpsert = Omit<InboundFormFieldCreate, 'inboundFormId' | 'position'>

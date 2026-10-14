@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing'
+import { ThrottlerGuard } from '@nestjs/throttler'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMongoAbility } from '@casl/ability'
-import { AuthController } from './auth.controller'
-import { JwtHelperService } from '../services/jwt-helper.service'
-import { PoliciesGuard } from '../../permission/guards/policies.guard'
-import { UserWithRole } from '../../user/interfaces/user.interface'
-import { Role } from '../../permission/interfaces/role.interface'
-import type { AppAbility } from '../../permission/interfaces/app-ability'
+import { AuthController } from './auth.controller.js'
+import { JwtHelperService } from '../services/jwt-helper.service.js'
+import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
+import { UserWithRole } from '../../user/interfaces/user.interface.js'
+import { Role } from '../../permission/interfaces/role.interface.js'
+import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 
 describe('AuthController', () => {
     let controller: AuthController
@@ -41,6 +42,8 @@ describe('AuthController', () => {
             controllers: [AuthController],
             providers: [{ provide: JwtHelperService, useValue: { createToken } }],
         })
+            .overrideGuard(ThrottlerGuard)
+            .useValue({ canActivate: () => true })
             .overrideGuard(PoliciesGuard)
             .useValue({ canActivate: vi.fn().mockResolvedValue(true) })
             .compile()

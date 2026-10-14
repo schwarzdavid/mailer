@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { describe, expect, it } from 'vitest'
-import { AuthenticationDto } from './authentication.dto'
+import { AuthenticationDto } from './authentication.dto.js'
 
 describe('AuthenticationDto serialization', () => {
     // Proves the @ResponseDto(AuthenticationDto) path: the nested principal (which now

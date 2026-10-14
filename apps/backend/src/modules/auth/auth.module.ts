@@ -1,10 +1,10 @@
 import { forwardRef, Module } from '@nestjs/common'
-import { CredentialsService } from './services/credentials.service'
-import { AuthController } from './controller/auth.controller'
-import { LocalStrategy } from './strategies/local.strategy'
-import { JwtStrategy } from './strategies/jwt.strategy'
-import { UserModule } from '../user/user.module'
-import { JwtHelperService } from './services/jwt-helper.service'
+import { CredentialsService } from './services/credentials.service.js'
+import { AuthController } from './controller/auth.controller.js'
+import { LocalStrategy } from './strategies/local.strategy.js'
+import { JwtStrategy } from './strategies/jwt.strategy.js'
+import { UserModule } from '../user/user.module.js'
+import { JwtHelperService } from './services/jwt-helper.service.js'
 
 @Module({
     imports: [forwardRef(() => UserModule)],

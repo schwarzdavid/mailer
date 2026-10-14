@@ -4,20 +4,20 @@ import { BadRequestException } from '@nestjs/common'
 import { Op } from 'sequelize'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { resolve, resolve4, resolve6, resolveMx, reverse } from 'node:dns/promises'
-import { DomainDnsService } from './domain-dns.service'
-import { DomainDnsModel } from '../models/domain-dns.model'
-import { DomainModel } from '../models/domain.model'
-import { Domain, SendingDomainIps } from '../interfaces/domain.interface'
-import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface'
+import { DomainDnsService } from './domain-dns.service.js'
+import { DomainDnsModel } from '../models/domain-dns.model.js'
+import { DomainModel } from '../models/domain.model.js'
+import { Domain, SendingDomainIps } from '../interfaces/domain.interface.js'
+import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordCreate,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
-} from '../interfaces/domain-dns.interface'
-import { SettingsModel } from '../../settings/models/settings.model'
-import { Settings } from '../../settings/interfaces/settings.interface'
+} from '../interfaces/domain-dns.interface.js'
+import { SettingsModel } from '../../settings/models/settings.model.js'
+import { Settings } from '../../settings/interfaces/settings.interface.js'
 
 vi.mock('node:dns/promises', () => ({
     resolve: vi.fn(),

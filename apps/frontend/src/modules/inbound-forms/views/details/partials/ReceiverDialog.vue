@@ -3,6 +3,7 @@
         <VCard :title="receiver ? t('cta.edit') : t('module.inboundForms.details.receivers.add')">
             <form @submit.prevent="onSubmit">
                 <VCardItem>
+                    <VAlert v-if="error" type="error" class="mb-4" :text="error" />
                     <VTextField
                         name="emailFrom"
                         :label="t('module.inboundForms.details.receivers.from')"
@@ -55,6 +56,7 @@
         emailFieldKeys: string[]
         domainFqdn: string | null
         saving: boolean
+        error?: string | null
     }>()
 
     const emit = defineEmits<{
@@ -67,7 +69,7 @@
     const placeholderItems = computed(() => props.emailFieldKeys.map((key) => `{{${key}}}`))
     const placeholderExample = computed(() => placeholderItems.value[0] ?? '{{email}}')
 
-    const { defineField, handleSubmit, errors, resetForm } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, setFieldValue } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 emailFrom: z.email(),
@@ -91,7 +93,7 @@
             }
             resetForm({
                 values: {
-                    emailFrom: props.receiver?.emailFrom ?? (props.domainFqdn ? `noreply@${props.domainFqdn}` : ''),
+                    emailFrom: props.receiver?.emailFrom ?? defaultSender(props.domainFqdn),
                     emailReceiver: props.receiver?.emailReceiver ?? '',
                     emailReplyTo: props.receiver?.emailReplyTo ?? null,
                     isActive: props.receiver?.isActive ?? true,
@@ -99,6 +101,19 @@
             })
         },
     )
+
+    watch(
+        () => props.domainFqdn,
+        (fqdn) => {
+            if (props.modelValue && !props.receiver && fqdn && !emailFrom.value) {
+                setFieldValue('emailFrom', defaultSender(fqdn), false)
+            }
+        },
+    )
+
+    function defaultSender(fqdn: string | null): string {
+        return fqdn ? `noreply@${fqdn}` : ''
+    }
 
     const onSubmit = handleSubmit((values) => {
         emit('save', {
