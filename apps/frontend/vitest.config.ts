@@ -7,7 +7,7 @@ export default mergeConfig(
     defineConfig({
         test: {
             environment: 'jsdom',
-            exclude: [...configDefaults.exclude, 'e2e/**'],
+            exclude: [...configDefaults.exclude, 'e2e/**', '.tmp/**'],
             root: fileURLToPath(new URL('./', import.meta.url)),
             setupFiles: [fileURLToPath(new URL('./src/__tests__/setup.ts', import.meta.url))],
             // Vuetify's auto-import injects per-component `.css` imports. Inline the

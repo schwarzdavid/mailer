@@ -21,7 +21,7 @@ export default defineConfigWithVueTs(
         files: ['**/*.{vue,ts,mts,tsx}'],
     },
 
-    globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+    globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '**/.tmp/**']),
 
     // Vue-specific layers — own `.vue` parsing and type-aware Vue rules.
     ...pluginVue.configs['flat/essential'],
