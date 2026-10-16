@@ -14,5 +14,7 @@ export enum RouteNames {
     SETTINGS = 'settings::index',
     USER_LIST = 'users::list',
     USER_DETAILS = 'users::details',
+    ROLE_LIST = 'roles::list',
+    ROLE_DETAILS = 'roles::details',
     NOT_FOUND = 'app::notFound',
 }

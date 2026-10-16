@@ -13,16 +13,17 @@ export function assertProjectReadable(ability: AppAbility, projectId: number): v
     }
 }
 
-export function assertProjectUpdatable(ability: AppAbility, projectId: number): void {
+export function assertProjectPermission(ability: AppAbility, permission: ProjectPermission, projectId: number): void {
     assertProjectReadable(ability, projectId)
-    if (!canOnProject(ability, 'update', projectId)) {
+    if (!canOnProject(ability, permission, projectId)) {
         throw new ForbiddenException('Missing project permission')
     }
 }
 
+export function assertProjectUpdatable(ability: AppAbility, projectId: number): void {
+    assertProjectPermission(ability, 'update', projectId)
+}
+
 export function assertProjectDeletable(ability: AppAbility, projectId: number): void {
-    assertProjectReadable(ability, projectId)
-    if (!canOnProject(ability, 'delete', projectId)) {
-        throw new ForbiddenException('Missing project permission')
-    }
+    assertProjectPermission(ability, 'delete', projectId)
 }

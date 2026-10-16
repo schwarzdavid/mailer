@@ -46,7 +46,9 @@ describe('SetupService', () => {
     const superAdminRole: Role = {
         roleId: 1,
         name: 'Super Admin',
+        scope: 'global',
         type: 'super_admin',
+        description: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     }

@@ -4,7 +4,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
-import { login, seedUser, type Credentials } from './support/session.js'
+import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import { configureSendingDomain } from './support/sending-domain.js'
 import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './support/mailhog.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
@@ -147,7 +147,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         await http()
             .put(`/api/project/${projectId}/members/${viewer.userId}`)
             .set('Authorization', asOwner())
-            .send({ permissions: ['read'] })
+            .send({ roleId: await projectRoleId(app, 'Viewer') })
             .expect(200)
     })
 

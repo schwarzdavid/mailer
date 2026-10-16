@@ -104,7 +104,7 @@
     )
 
     function canUpdate(projectId: number) {
-        return userAbility.can('update', subject('Project', { projectId }))
+        return userAbility.can('forms.manage', subject('Project', { projectId }))
     }
 
     function retry() {

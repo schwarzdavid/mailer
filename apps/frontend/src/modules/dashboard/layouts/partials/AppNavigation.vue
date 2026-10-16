@@ -31,6 +31,7 @@
         mdiCogOutline,
         mdiEmailAlertOutline,
         mdiFolderOutline,
+        mdiShieldAccountOutline,
         mdiViewDashboardOutline,
         mdiWeb,
     } from '@mdi/js'
@@ -97,6 +98,14 @@
             icon: mdiAccountMultipleOutline,
             to: { name: RouteNames.USER_LIST },
             can: userAbility.can('read', 'User'),
+        },
+        {
+            group: 'admin',
+            section: 'roles',
+            title: t('nav.roles'),
+            icon: mdiShieldAccountOutline,
+            to: { name: RouteNames.ROLE_LIST },
+            can: userAbility.can('read', 'Role'),
         },
         {
             group: 'admin',

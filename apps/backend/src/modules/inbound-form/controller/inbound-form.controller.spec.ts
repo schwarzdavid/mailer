@@ -62,7 +62,15 @@ const principal: UserWithRole = {
     lastName: 'Hopper',
     email: 'grace@example.com',
     roleId: 3,
-    role: { roleId: 3, name: 'User', type: 'user', createdAt: new Date(), updatedAt: new Date() },
+    role: {
+        roleId: 3,
+        name: 'User',
+        type: 'user',
+        scope: 'global',
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    },
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -279,14 +287,14 @@ describe('InboundFormController', () => {
     it('scopes template access to the form before saving a draft', async () => {
         await controller.saveInboundFormTemplateDraft(1, 31, { subject: 'S', template: 'T' }, manageAll)
 
-        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'update')
+        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'forms.manage')
         expect(saveDraft).toHaveBeenCalledWith(31, { subject: 'S', template: 'T' })
     })
 
     it('publishes the draft of a receiver', async () => {
         await controller.publishInboundFormTemplate(1, 31, manageAll)
 
-        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'update')
+        expect(getReceiver).toHaveBeenCalledWith(1, 31, manageAll, 'forms.manage')
         expect(publishDraft).toHaveBeenCalledWith(31)
     })
 

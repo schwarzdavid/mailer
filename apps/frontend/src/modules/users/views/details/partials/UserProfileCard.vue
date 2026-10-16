@@ -45,7 +45,7 @@
                 :error-messages="errors.roleId"
                 :locked="isSelf"
                 :locked-hint="t('module.users.details.profile.ownRole')"
-                :keep-super-admin="user.role.type === 'super_admin'"
+                :include-role-id="user.role.roleId"
             />
         </form>
         <div v-else class="form-grid form-grid--2">

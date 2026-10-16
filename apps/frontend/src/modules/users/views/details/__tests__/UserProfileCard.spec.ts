@@ -3,6 +3,7 @@ import { AuthApi, RoleApi, UserApi } from 'api'
 import UserProfileCard from '../partials/UserProfileCard.vue'
 import { findButton, mountInApp } from '@/__tests__/support.ts'
 import { roles, signedIn, userDetail } from '../../__tests__/userFixtures.ts'
+import { heldAll } from '@/modules/roles/__tests__/roleFixtures.ts'
 import { useNotificationHost } from '@/composables/useNotify.ts'
 
 vi.mock('@/helper/waitAtleast.ts', () => ({
@@ -27,6 +28,7 @@ afterEach(() => {
 function mountCard(props: { canUpdate?: boolean; isSelf?: boolean } = {}) {
     vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
     vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(signedIn())
+    vi.spyOn(AuthApi, 'getHeldPermissions').mockResolvedValue(heldAll())
     return mountInApp(UserProfileCard, { user: userDetail(), canUpdate: true, isSelf: false, ...props })
 }
 

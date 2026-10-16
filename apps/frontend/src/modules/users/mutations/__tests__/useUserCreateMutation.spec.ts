@@ -13,6 +13,7 @@ const body: UserCreateDto = {
     email: 'grace@example.com',
     password: 'cobol-1959',
     roleId: 3,
+    permissions: [],
 }
 
 const created: UserDto = {

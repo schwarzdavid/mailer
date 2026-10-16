@@ -56,6 +56,7 @@ async function layoutRouter(path: string): Promise<Router> {
             },
             { path: '/bounces', name: RouteNames.BOUNCE_LIST, component: Page },
             { path: '/users', name: RouteNames.USER_LIST, component: Page },
+            { path: '/roles', name: RouteNames.ROLE_LIST, component: Page },
             { path: '/settings', name: RouteNames.SETTINGS, component: Page },
         ],
     })
@@ -96,7 +97,7 @@ describe('AppLayout', () => {
         const wrapper = await mountLayout('/')
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('Users'))
-        for (const label of ['Dashboard', 'Projects', 'Domains', 'Bounces', 'Administration', 'Settings']) {
+        for (const label of ['Dashboard', 'Projects', 'Domains', 'Bounces', 'Administration', 'Roles', 'Settings']) {
             expect(wrapper.text()).toContain(label)
         }
     })
@@ -105,7 +106,7 @@ describe('AppLayout', () => {
         const wrapper = await mountLayout('/', [{ action: 'read', subject: 'Project' }])
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('Projects'))
-        for (const label of ['Domains', 'Bounces', 'Users', 'Settings', 'Administration']) {
+        for (const label of ['Domains', 'Bounces', 'Users', 'Roles', 'Settings', 'Administration']) {
             expect(wrapper.text()).not.toContain(label)
         }
     })

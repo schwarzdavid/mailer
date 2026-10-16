@@ -10,12 +10,12 @@ import { DomainService } from '../../domain/services/domain.service.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
 import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
 import { ProjectMemberModel } from '../../permission/models/project-member.model.js'
+import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import {
     assertProjectDeletable,
     assertProjectReadable,
     assertProjectUpdatable,
 } from '../../permission/helpers/project-access.js'
-import { PROJECT_PERMISSIONS } from '../../permission/permission.constants.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
@@ -31,6 +31,7 @@ export class ProjectService {
         @InjectModel(InboundFormModel) private readonly inboundFormModel: typeof InboundFormModel,
         @InjectModel(ProjectMemberModel) private readonly projectMemberModel: typeof ProjectMemberModel,
         private readonly domainService: DomainService,
+        private readonly projectMemberService: ProjectMemberService,
         private readonly abilityFactory: AbilityFactory,
         private readonly permissionCacheService: PermissionCacheService,
         private readonly sequelize: Sequelize,
@@ -51,14 +52,7 @@ export class ProjectService {
             }
 
             if (!hasAllProjects) {
-                await this.projectMemberModel.bulkCreate(
-                    PROJECT_PERMISSIONS.map((permission) => ({
-                        projectId: row.projectId,
-                        userId: principal.userId,
-                        permission,
-                    })),
-                    { transaction },
-                )
+                await this.projectMemberService.grantFullAccess(row.projectId, principal.userId, transaction)
             }
 
             return row.get({ plain: true })

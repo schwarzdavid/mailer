@@ -4,7 +4,9 @@ import { ProjectApi, type DeletedProjectDto, type ProjectDetailDto, type Project
 import { useProjectQuery } from '../useProjectQuery.ts'
 import { useProjectMembersQuery } from '../useProjectMembersQuery.ts'
 import { useDeletedProjectsQuery } from '../useDeletedProjectsQuery.ts'
+import { useProjectRolesQuery } from '../useProjectRolesQuery.ts'
 import { withVueQuery } from '@/__tests__/support.ts'
+import { projectRoles } from '@/__tests__/fixtures.ts'
 
 const project: ProjectDetailDto = {
     projectId: 1,
@@ -15,7 +17,14 @@ const project: ProjectDetailDto = {
 }
 
 const members: ProjectMemberDto[] = [
-    { userId: 2, firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', permissions: ['read'] },
+    {
+        userId: 2,
+        firstName: 'Grace',
+        lastName: 'Hopper',
+        email: 'grace@example.com',
+        role: { roleId: 5, name: 'Viewer' },
+        permissions: ['read'],
+    },
 ]
 
 const deleted: DeletedProjectDto[] = [
@@ -66,6 +75,20 @@ describe('useProjectMembersQuery', () => {
 
         expect(listSpy).toHaveBeenCalledWith({ path: { projectId: 1 } })
         expect(queryClient.getQueryData(['projects', 1, 'members'])).toEqual(members)
+        unmount()
+    })
+})
+
+describe('useProjectRolesQuery', () => {
+    it('loads the project roles nested under the project key', async () => {
+        const roles = projectRoles()
+        const listSpy = vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue(roles)
+        const { result, queryClient, unmount } = withVueQuery(() => useQuery(useProjectRolesQuery(1)))
+
+        await vi.waitFor(() => expect(result.isSuccess.value).toBe(true))
+
+        expect(listSpy).toHaveBeenCalledWith({ path: { projectId: 1 } })
+        expect(queryClient.getQueryData(['projects', 1, 'roles'])).toEqual(roles)
         unmount()
     })
 })

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { UserController } from './user.controller.js'
+import { UserCreateDto } from '../dtos/user-create.dto.js'
 import { UserService } from '../services/user.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
 import { Role } from '../../permission/interfaces/role.interface.js'
@@ -11,7 +12,9 @@ import { UserDetail, UserListEntry, UserWithRole } from '../interfaces/user.inte
 const role: Role = {
     roleId: 3,
     name: 'User',
+    scope: 'global',
     type: 'user',
+    description: null,
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -79,10 +82,31 @@ describe('UserController', () => {
     })
 
     it('creates a user through the managed flow', async () => {
-        const body = { firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com', password: 'password-123' }
+        const body: UserCreateDto = {
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            email: 'grace@example.com',
+            password: 'password-123',
+            roleId: 3,
+        }
 
-        await expect(controller.createUser(body, principal)).resolves.toEqual(user)
-        expect(createManagedUser).toHaveBeenCalledWith(body, principal)
+        await expect(controller.createUser(body, principal, ability)).resolves.toEqual(user)
+        expect(createManagedUser).toHaveBeenCalledWith({ ...body, permissions: [] }, principal, ability)
+    })
+
+    it('passes extra permissions through when creating a user', async () => {
+        const body: UserCreateDto = {
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            email: 'grace@example.com',
+            password: 'password-123',
+            roleId: 3,
+            permissions: ['domains.read'],
+        }
+
+        await controller.createUser(body, principal, ability)
+
+        expect(createManagedUser).toHaveBeenCalledWith(body, principal, ability)
     })
 
     it('returns the user detail', async () => {

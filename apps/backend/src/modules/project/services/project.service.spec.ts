@@ -14,6 +14,7 @@ import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.j
 import { DomainService } from '../../domain/services/domain.service.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
 import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
+import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { ProjectMemberModel } from '../../permission/models/project-member.model.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
@@ -58,17 +59,6 @@ const invalidDkim: DomainDnsRecord = {
     host: 'mail._domainkey.mail.example.com',
     value: 'v=DKIM1; k=rsa; p=abc',
     current: null,
-}
-
-function membership(projectId: number, userId: number, permission: ProjectMember['permission']): ProjectMember {
-    return {
-        projectMemberId: projectId * 100 + userId,
-        projectId,
-        userId,
-        permission,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    }
 }
 
 const inboundForm: InboundForm = {
@@ -153,8 +143,8 @@ describe('ProjectService', () => {
     let projectDomainDestroy: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let formCount: Mock<(options: { where: { projectId: number; domainId: number } }) => Promise<number>>
     let getDomainById: Mock<DomainService['getDomainById']>
-    let memberBulkCreate: Mock<(rows: object[], options?: object) => Promise<object[]>>
-    let memberFindAll: Mock<(options: object) => Promise<ProjectMember[]>>
+    let grantFullAccess: Mock<ProjectMemberService['grantFullAccess']>
+    let memberFindAll: Mock<(options: object) => Promise<Pick<ProjectMember, 'projectId' | 'userId'>[]>>
     let hasAllProjectsAccess: Mock<AbilityFactory['hasAllProjectsAccess']>
     let getProjectIdsFor: Mock<AbilityFactory['getProjectIdsFor']>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
@@ -172,7 +162,7 @@ describe('ProjectService', () => {
         projectDomainDestroy = vi.fn<typeof projectDomainDestroy>().mockResolvedValue(0)
         formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(domain)
-        memberBulkCreate = vi.fn<typeof memberBulkCreate>().mockResolvedValue([])
+        grantFullAccess = vi.fn<typeof grantFullAccess>().mockResolvedValue(undefined)
         memberFindAll = vi.fn<typeof memberFindAll>().mockResolvedValue([])
         hasAllProjectsAccess = vi.fn<typeof hasAllProjectsAccess>().mockResolvedValue(false)
         getProjectIdsFor = vi.fn<typeof getProjectIdsFor>().mockResolvedValue([1])
@@ -200,9 +190,10 @@ describe('ProjectService', () => {
                 { provide: getModelToken(InboundFormModel), useValue: { count: formCount } },
                 {
                     provide: getModelToken(ProjectMemberModel),
-                    useValue: { bulkCreate: memberBulkCreate, findAll: memberFindAll },
+                    useValue: { findAll: memberFindAll },
                 },
                 { provide: DomainService, useValue: { getDomainById } },
+                { provide: ProjectMemberService, useValue: { grantFullAccess } },
                 { provide: AbilityFactory, useValue: { hasAllProjectsAccess, getProjectIdsFor } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
                 { provide: Sequelize, useValue: { transaction } },
@@ -213,7 +204,7 @@ describe('ProjectService', () => {
     })
 
     describe('createProject', () => {
-        it('grants the creator a full membership when they lack all-projects access', async () => {
+        it('grants the creator full access when they lack all-projects access', async () => {
             projectCreate.mockResolvedValue(projectRow())
 
             const created = await service.createProject('Acme', principal)
@@ -222,14 +213,7 @@ describe('ProjectService', () => {
                 { name: 'Acme' },
                 { returning: true, transaction: transactionStub },
             )
-            expect(memberBulkCreate).toHaveBeenCalledWith(
-                [
-                    { projectId: 1, userId: 5, permission: 'read' },
-                    { projectId: 1, userId: 5, permission: 'update' },
-                    { projectId: 1, userId: 5, permission: 'delete' },
-                ],
-                { transaction: transactionStub },
-            )
+            expect(grantFullAccess).toHaveBeenCalledWith(1, 5, transactionStub)
             expect(invalidateUser).toHaveBeenCalledWith(5)
             expect(created).toEqual(project)
         })
@@ -240,7 +224,7 @@ describe('ProjectService', () => {
 
             await service.createProject('Acme', principal)
 
-            expect(memberBulkCreate).not.toHaveBeenCalled()
+            expect(grantFullAccess).not.toHaveBeenCalled()
             expect(invalidateUser).not.toHaveBeenCalled()
         })
 
@@ -256,13 +240,13 @@ describe('ProjectService', () => {
             projectCreate.mockRejectedValue(new Error('connection lost'))
 
             await expect(service.createProject('Acme', principal)).rejects.toThrow('connection lost')
-            expect(memberBulkCreate).not.toHaveBeenCalled()
+            expect(grantFullAccess).not.toHaveBeenCalled()
             expect(invalidateUser).not.toHaveBeenCalled()
         })
 
         it('does not invalidate the permission cache when granting the membership fails', async () => {
             projectCreate.mockResolvedValue(projectRow())
-            memberBulkCreate.mockRejectedValue(new Error('constraint violated'))
+            grantFullAccess.mockRejectedValue(new Error('constraint violated'))
 
             await expect(service.createProject('Acme', principal)).rejects.toThrow('constraint violated')
             expect(invalidateUser).not.toHaveBeenCalled()
@@ -290,9 +274,9 @@ describe('ProjectService', () => {
                 projectRow({ projectId: 2, name: 'Beta', domains: [], inboundForms: [] }),
             ])
             memberFindAll.mockResolvedValue([
-                membership(1, 5, 'read'),
-                membership(1, 5, 'update'),
-                membership(1, 6, 'read'),
+                { projectId: 1, userId: 5 },
+                { projectId: 1, userId: 5 },
+                { projectId: 1, userId: 6 },
             ])
 
             const projects = await service.getProjects(principal)

@@ -20,6 +20,8 @@ describe('SetupController', () => {
         roleId: 1,
         name: 'Super Admin',
         type: 'super_admin',
+        scope: 'global',
+        description: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     }

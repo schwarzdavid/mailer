@@ -107,6 +107,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'POST /auth/login': { guards: ['ThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
     'GET /auth/user': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/ability': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'GET /auth/permissions': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
     'GET /project/:projectId/messages': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
@@ -163,6 +164,10 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'POST /v1/send': { guards: apiKeyAuth, abilities: [], scopedByPrincipal: true },
 
     'GET /role': { guards: jwt, abilities: ['read:Role'], scopedByPrincipal: false },
+    'GET /role/:roleId': { guards: jwt, abilities: ['read:Role'], scopedByPrincipal: false },
+    'POST /role': { guards: jwt, abilities: ['create:Role'], scopedByPrincipal: true },
+    'PATCH /role/:roleId': { guards: jwt, abilities: ['update:Role'], scopedByPrincipal: true },
+    'DELETE /role/:roleId': { guards: jwt, abilities: ['delete:Role'], scopedByPrincipal: false },
 
     'POST /project': { guards: jwt, abilities: ['create:Project'], scopedByPrincipal: true },
     'GET /project': { guards: jwt, abilities: [], scopedByPrincipal: true },
@@ -175,6 +180,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'DELETE /project/:projectId/domains/:domainId': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /project/:projectId/members': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /project/:projectId/implicit-access': { guards: jwt, abilities: [], scopedByPrincipal: true },
+    'GET /project/:projectId/roles': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'PUT /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'DELETE /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 

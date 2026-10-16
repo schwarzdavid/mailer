@@ -33,10 +33,11 @@
                     <span v-else>{{ member.firstName }} {{ member.lastName }}</span>
                 </template>
                 <template #meta>
+                    <TagLabel :label="member.role.name" />
                     <TagLabel
                         v-for="permission in sortedPermissions(member.permissions)"
                         :key="permission"
-                        :label="t(`permissions.project.${permission}`)"
+                        :label="t(permissionLabelKey('project', permission))"
                     />
                 </template>
                 <template #actions>
@@ -94,6 +95,7 @@
     import { useProjectMemberRemoveMutation } from '@/modules/projects/mutations/useProjectMemberRemoveMutation.ts'
     import ProjectMemberDialog from '@/modules/projects/views/details/partials/ProjectMemberDialog.vue'
     import { sortedPermissions } from '@/modules/projects/helpers/projectPermissions.ts'
+    import { permissionLabelKey } from '@/modules/roles/permissionCatalog.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 
     const props = defineProps<{ project: ProjectDetailDto }>()

@@ -44,6 +44,7 @@ describe('useUserPermissionsMutation', () => {
 
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] })
         expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['auth.ability'] })
+        expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['auth.permissions'] })
         unmount()
     })
 
@@ -57,6 +58,7 @@ describe('useUserPermissionsMutation', () => {
 
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] })
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth.ability'] })
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth.permissions'] })
         unmount()
     })
 })

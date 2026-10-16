@@ -3,7 +3,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createTestApp } from './support/app.js'
-import { login, seedUser, type Credentials } from './support/session.js'
+import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import { configureSendingDomain } from './support/sending-domain.js'
 import { waitForMessagesTo } from './support/mailhog.js'
 import { EmailBlockService } from '../src/modules/bounce/services/email-block.service.js'
@@ -98,7 +98,7 @@ describe('Public send API (e2e)', () => {
         await http()
             .put(`/api/project/${projectId}/members/${reader.userId}`)
             .set('Authorization', asOwner())
-            .send({ permissions: ['read'] })
+            .send({ roleId: await projectRoleId(app, 'Viewer') })
             .expect(200)
 
         const created = await createKey('Newsletter')

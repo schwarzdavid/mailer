@@ -26,9 +26,15 @@ export class UserCreateDto {
     password!: string
 
     @Expose()
-    @IsOptional()
     @IsInt()
-    roleId?: number
+    roleId!: number
+
+    @Expose()
+    @IsOptional()
+    @IsArray()
+    @IsIn(GLOBAL_PERMISSIONS, { each: true })
+    @ApiProperty({ enum: GLOBAL_PERMISSIONS, enumName: 'Permission', isArray: true, required: false })
+    permissions?: Permission[]
 }
 
 export class UserUpdateDto {

@@ -22,6 +22,8 @@ export interface UserWithRole extends User {
 
 export type UserCreate = Omit<FullUser, 'userId' | 'createdAt' | 'updatedAt'>
 
+export type ManagedUserCreate = UserCreate & { permissions: Permission[] }
+
 export interface UserUpdate {
     firstName?: string
     lastName?: string

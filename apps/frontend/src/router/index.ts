@@ -21,6 +21,8 @@ import SettingsView from '@/modules/settings/views/SettingsView.vue'
 import OnboardingView from '@/modules/onboarding/views/OnboardingView.vue'
 import UserListView from '@/modules/users/views/list/UserListView.vue'
 import UserDetailView from '@/modules/users/views/details/UserDetailView.vue'
+import RoleListView from '@/modules/roles/views/list/RoleListView.vue'
+import RoleDetailView from '@/modules/roles/views/details/RoleDetailView.vue'
 import { JWT_KEY } from '@/constants/jwtKey.ts'
 import type { SetupStatusDto } from 'api'
 
@@ -28,7 +30,7 @@ declare module 'vue-router' {
     interface RouteMeta {
         requiresAuth?: boolean
         ability?: { action: string; subject: string }
-        section?: 'dashboard' | 'projects' | 'domains' | 'bounces' | 'users' | 'settings'
+        section?: 'dashboard' | 'projects' | 'domains' | 'bounces' | 'users' | 'roles' | 'settings'
         rail?: boolean
         wide?: boolean
     }
@@ -138,6 +140,18 @@ export const router = createRouter({
                     name: RouteNames.USER_DETAILS,
                     component: UserDetailView,
                     meta: { section: 'users', ability: { action: 'read', subject: 'User' } },
+                },
+                {
+                    path: '/roles',
+                    name: RouteNames.ROLE_LIST,
+                    component: RoleListView,
+                    meta: { section: 'roles', ability: { action: 'read', subject: 'Role' } },
+                },
+                {
+                    path: '/roles/:roleId',
+                    name: RouteNames.ROLE_DETAILS,
+                    component: RoleDetailView,
+                    meta: { section: 'roles', ability: { action: 'read', subject: 'Role' } },
                 },
                 {
                     path: '/:pathMatch(.*)*',

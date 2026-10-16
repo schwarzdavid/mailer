@@ -18,7 +18,11 @@ type ApiKeyRow = ApiKeyRecord & {
     update: Mock<(values: Partial<ApiKeyRecord>) => Promise<unknown>>
 }
 
-const updater = createMongoAbility<AppAbility>([
+const keyManager = createMongoAbility<AppAbility>([
+    { action: 'read', subject: 'Project', conditions: { projectId: { $in: [3] } } },
+    { action: 'api_keys.manage', subject: 'Project', conditions: { projectId: { $in: [3] } } },
+])
+const projectUpdater = createMongoAbility<AppAbility>([
     { action: 'read', subject: 'Project', conditions: { projectId: { $in: [3] } } },
     { action: 'update', subject: 'Project', conditions: { projectId: { $in: [3] } } },
 ])
@@ -95,7 +99,7 @@ describe('ApiKeyService', () => {
 
     describe('createKey', () => {
         it('stores only the prefix and hash and returns the full key once', async () => {
-            const { apiKey, key } = await service.createKey(3, 'Newsletter', principal, updater)
+            const { apiKey, key } = await service.createKey(3, 'Newsletter', principal, keyManager)
 
             const stored = create.mock.calls[0]![0]
             expect(stored).toEqual({
@@ -110,7 +114,13 @@ describe('ApiKeyService', () => {
             expect(apiKey.apiKeyId).toBe(12)
         })
 
-        it('requires the project update permission', async () => {
+        it('does not let project updaters without api_keys.manage create keys', async () => {
+            await expect(service.createKey(3, 'Newsletter', principal, projectUpdater)).rejects.toThrow(
+                ForbiddenException,
+            )
+        })
+
+        it('requires the api_keys.manage permission', async () => {
             await expect(service.createKey(3, 'x', principal, reader)).rejects.toThrow(ForbiddenException)
             await expect(service.createKey(3, 'x', principal, outsider)).rejects.toThrow(NotFoundException)
             expect(create).not.toHaveBeenCalled()
@@ -136,7 +146,7 @@ describe('ApiKeyService', () => {
             const row = rowFor(record)
             findOne.mockResolvedValue(row)
 
-            await service.revokeKey(3, 11, updater)
+            await service.revokeKey(3, 11, keyManager)
 
             expect(findOne).toHaveBeenCalledWith({ where: { apiKeyId: 11, projectId: 3 } })
             expect(row.update).toHaveBeenCalledWith({ revokedAt: expect.any(Date) as Date })
@@ -146,7 +156,7 @@ describe('ApiKeyService', () => {
             const row = rowFor({ ...record, revokedAt: new Date() })
             findOne.mockResolvedValue(row)
 
-            await service.revokeKey(3, 11, updater)
+            await service.revokeKey(3, 11, keyManager)
 
             expect(row.update).not.toHaveBeenCalled()
         })
@@ -154,10 +164,11 @@ describe('ApiKeyService', () => {
         it('404s for a key of another project', async () => {
             findOne.mockResolvedValue(null)
 
-            await expect(service.revokeKey(3, 99, updater)).rejects.toThrow(NotFoundException)
+            await expect(service.revokeKey(3, 99, keyManager)).rejects.toThrow(NotFoundException)
         })
 
-        it('requires the project update permission', async () => {
+        it('requires the api_keys.manage permission', async () => {
+            await expect(service.revokeKey(3, 11, projectUpdater)).rejects.toThrow(ForbiddenException)
             await expect(service.revokeKey(3, 11, reader)).rejects.toThrow(ForbiddenException)
         })
     })

@@ -11,7 +11,7 @@ import {
     UpdatedAt,
 } from 'sequelize-typescript'
 import type { RolePermission, RolePermissionCreate } from '../interfaces/role.interface.js'
-import type { Permission } from '../permission.constants.js'
+import type { CatalogPermission } from '../permission.constants.js'
 import { RoleModel } from './role.model.js'
 
 @Table({
@@ -39,7 +39,7 @@ export class RolePermissionModel extends Model<RolePermission, RolePermissionCre
 
     @AllowNull(false)
     @Column(DataType.STRING(64))
-    declare permission: Permission
+    declare permission: CatalogPermission
 
     @CreatedAt
     declare createdAt: Date

@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs'
 import { UserModel } from '../models/user.model.js'
 import {
     FullUser,
+    ManagedUserCreate,
     UserCreate,
     UserDetail,
     UserListEntry,
@@ -19,10 +20,11 @@ import { UserPermissionModel } from '../../permission/models/user-permission.mod
 import { RoleService } from '../../permission/services/role.service.js'
 import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
-import { Role } from '../../permission/interfaces/role.interface.js'
+import { RoleWithPermissions } from '../../permission/interfaces/role.interface.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
-import { Permission } from '../../permission/permission.constants.js'
+import { isGlobalPermission, Permission } from '../../permission/permission.constants.js'
 import { holdsPermission } from '../../permission/helpers/holds-permission.js'
+import { assertPermissionChangesHeld, assertRoleGrantable } from '../../permission/helpers/permission-grants.js'
 import { userWithRoleFromRow } from '../mappers/user.mapper.js'
 import { normalizeEmail } from '../helpers/normalize-email.js'
 
@@ -61,18 +63,26 @@ export class UserService {
     }
 
     async createManagedUser(
-        user: Omit<UserCreate, 'roleId'> & { roleId?: number },
+        user: ManagedUserCreate,
         principal: UserWithRole,
+        ability: AppAbility,
     ): Promise<UserWithRole> {
-        const role =
-            user.roleId === undefined
-                ? await this.roleService.getRoleByType('user')
-                : await this.roleService.getRoleById(user.roleId)
+        const role = await this.loadGlobalRole(user.roleId)
+        this.assertRoleGrantableBy(role, principal, ability)
 
-        this.assertRoleAssignable(role, principal)
+        const permissions = [...new Set(user.permissions)]
+        assertPermissionChangesHeld([], permissions, (permission) => holdsPermission(ability, permission))
 
         try {
-            return await this.createUser({ ...user, roleId: role.roleId })
+            return await this.sequelize.transaction(async (transaction) => {
+                const created = await this.createUser({ ...user, roleId: role.roleId }, transaction)
+                await this.userPermissionModel.bulkCreate(
+                    permissions.map((permission) => ({ userId: created.userId, permission })),
+                    { transaction },
+                )
+
+                return created
+            })
         } catch (error) {
             if (error instanceof UniqueConstraintError) {
                 throw new BadRequestException('Email is already in use')
@@ -134,8 +144,8 @@ export class UserService {
             changes.password = await bcrypt.hash(update.password, 10)
         }
         if (update.roleId !== undefined && update.roleId !== target.roleId) {
-            const newRole = await this.roleService.getRoleById(update.roleId)
-            this.assertRoleAssignable(newRole, principal)
+            const newRole = await this.loadGlobalRole(update.roleId)
+            this.assertRoleGrantableBy(newRole, principal, ability)
             if (target.role.type === 'super_admin') {
                 await this.assertNotLastSuperAdmin()
             }
@@ -188,10 +198,10 @@ export class UserService {
 
         const uniquePermissions = [...new Set(permissions)]
         const current = await this.userPermissionModel.findAll({ where: { userId } })
-        this.assertPermissionChangesHeld(
+        assertPermissionChangesHeld(
             current.map((entry) => entry.permission),
             uniquePermissions,
-            ability,
+            (permission) => holdsPermission(ability, permission),
         )
 
         await this.sequelize.transaction(async (transaction) => {
@@ -213,24 +223,23 @@ export class UserService {
         }
     }
 
-    private assertPermissionChangesHeld(current: Permission[], requested: Permission[], ability: AppAbility): void {
-        const changed = [
-            ...requested.filter((permission) => !current.includes(permission)),
-            ...current.filter((permission) => !requested.includes(permission)),
-        ]
-        const notHeld = changed.filter((permission) => !holdsPermission(ability, permission))
-
-        if (notHeld.length > 0) {
-            throw new ForbiddenException(
-                `You cannot grant or revoke permissions you do not hold: ${notHeld.join(', ')}`,
-            )
+    private async loadGlobalRole(roleId: number): Promise<RoleWithPermissions> {
+        const role = await this.roleService.findRole(roleId)
+        if (!role || role.scope !== 'global') {
+            throw new BadRequestException('Unknown role')
         }
+
+        return role
     }
 
-    private assertRoleAssignable(role: Role, principal: UserWithRole): void {
+    private assertRoleGrantableBy(role: RoleWithPermissions, principal: UserWithRole, ability: AppAbility): void {
         if (role.type === 'super_admin' && principal.role.type !== 'super_admin') {
             throw new ForbiddenException('Only super admins can assign the super admin role')
         }
+
+        assertRoleGrantable(role.permissions.filter(isGlobalPermission), (permission) =>
+            holdsPermission(ability, permission),
+        )
     }
 
     private async assertNotLastSuperAdmin(): Promise<void> {

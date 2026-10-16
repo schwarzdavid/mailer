@@ -34,24 +34,30 @@ describe('ProjectDomainAssignDto', () => {
 })
 
 describe('ProjectMemberPutDto', () => {
-    it('accepts project permission levels', async () => {
-        await expect(violations(ProjectMemberPutDto, { permissions: ['read', 'update', 'delete'] })).resolves.toEqual(
-            [],
-        )
+    it('accepts a role with project permission levels', async () => {
+        await expect(
+            violations(ProjectMemberPutDto, { roleId: 5, permissions: ['read', 'update', 'delete'] }),
+        ).resolves.toEqual([])
     })
 
-    it('rejects an empty permission list', async () => {
-        await expect(violations(ProjectMemberPutDto, { permissions: [] })).resolves.toEqual(['permissions'])
+    it('accepts a role without extra permissions', async () => {
+        await expect(violations(ProjectMemberPutDto, { roleId: 5 })).resolves.toEqual([])
+    })
+
+    it.each([undefined, '5', 5.5])('rejects the role id %o', async (roleId) => {
+        await expect(violations(ProjectMemberPutDto, { roleId, permissions: [] })).resolves.toEqual(['roleId'])
     })
 
     it.each([['manage'], ['projects.all'], ['read', 'admin']])(
         'rejects permissions outside the project levels: %o',
         async (...permissions) => {
-            await expect(violations(ProjectMemberPutDto, { permissions })).resolves.toEqual(['permissions'])
+            await expect(violations(ProjectMemberPutDto, { roleId: 5, permissions })).resolves.toEqual(['permissions'])
         },
     )
 
     it('requires an array', async () => {
-        await expect(violations(ProjectMemberPutDto, { permissions: 'read' })).resolves.toEqual(['permissions'])
+        await expect(violations(ProjectMemberPutDto, { roleId: 5, permissions: 'read' })).resolves.toEqual([
+            'permissions',
+        ])
     })
 })

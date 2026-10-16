@@ -3,6 +3,7 @@ import { Expose, Type } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, ROLE_TYPES } from '../../permission/permission.constants.js'
 import type { Permission, ProjectPermission, RoleType } from '../../permission/permission.constants.js'
+import { ProjectMemberRoleDto } from '../../permission/dtos/project-member-role.dto.js'
 
 export class UserRoleDto {
     @Expose()
@@ -52,6 +53,10 @@ export class UserMembershipDto {
 
     @Expose()
     projectName!: string
+
+    @Expose()
+    @Type(() => ProjectMemberRoleDto)
+    role!: ProjectMemberRoleDto
 
     @Expose()
     @ApiProperty({ enum: PROJECT_PERMISSIONS, enumName: 'ProjectPermission', isArray: true })

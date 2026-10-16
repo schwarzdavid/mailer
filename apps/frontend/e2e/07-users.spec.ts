@@ -55,7 +55,7 @@ test('an administrator grants the user read access to the project', async ({ pag
     await expect(memberDialog).toBeHidden()
 
     await expect(members.getByText(member.email)).toBeVisible()
-    await expect(members.getByText('Read', { exact: true })).toBeVisible()
+    await expect(members.getByText('Viewer', { exact: true })).toBeVisible()
 })
 
 test('the limited user only sees what their permissions allow', async ({ page, request }) => {
@@ -63,7 +63,7 @@ test('the limited user only sees what their permissions allow', async ({ page, r
 
     await expect(navigation(page).getByRole('link', { name: 'Dashboard' })).toBeVisible()
     await expect(navigation(page).getByRole('link', { name: 'Projects' })).toBeVisible()
-    for (const hidden of ['Domains', 'Bounces', 'Users', 'Settings']) {
+    for (const hidden of ['Domains', 'Bounces', 'Users', 'Roles', 'Settings']) {
         await expect(navigation(page).getByRole('link', { name: hidden })).toBeHidden()
     }
 

@@ -1,6 +1,16 @@
 import { ForcedSubject, MongoAbility } from '@casl/ability'
 
-export type AbilityAction = 'manage' | 'read' | 'create' | 'update' | 'delete' | 'block' | 'unblock'
+export type AbilityAction =
+    | 'manage'
+    | 'read'
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'block'
+    | 'unblock'
+    | 'forms.manage'
+    | 'api_keys.manage'
+    | 'members.manage'
 
 export type AbilitySubjectName = 'Domain' | 'Project' | 'Bounce' | 'Settings' | 'User' | 'Role' | 'all'
 

@@ -18,11 +18,11 @@ describe('useProjectMemberSetMutation', () => {
         const { result, queryClient, unmount } = withVueQuery(() => useProjectMemberSetMutation())
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-        await result.mutateAsync({ projectId: 1, userId: 2, permissions: ['read', 'update'] })
+        await result.mutateAsync({ projectId: 1, userId: 2, roleId: 7, permissions: ['delete'] })
 
         expect(setSpy).toHaveBeenCalledWith({
             path: { projectId: 1, userId: 2 },
-            body: { permissions: ['read', 'update'] },
+            body: { roleId: 7, permissions: ['delete'] },
         })
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects', 1, 'members'] })
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['users'] })
@@ -34,7 +34,7 @@ describe('useProjectMemberSetMutation', () => {
         const { result, queryClient, unmount } = withVueQuery(() => useProjectMemberSetMutation())
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-        await expect(result.mutateAsync({ projectId: 1, userId: 2, permissions: ['read'] })).rejects.toThrow(
+        await expect(result.mutateAsync({ projectId: 1, userId: 2, roleId: 7, permissions: [] })).rejects.toThrow(
             'Forbidden',
         )
 

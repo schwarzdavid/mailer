@@ -1,6 +1,6 @@
 <template>
     <PageHeader :title="project?.name" :loading="isPending" :breadcrumbs="breadcrumbs">
-        <template v-if="project && !canUpdate" #status>
+        <template v-if="project && readOnly" #status>
             <TagLabel :label="t('module.projects.details.readOnly')" />
         </template>
         <template v-if="project" #meta>
@@ -36,15 +36,15 @@
     <PageSkeleton v-else-if="isPending" :cards="2" :label="t('module.projects.details.loading')" />
     <div v-else-if="project" class="page-stack">
         <InlineAlert
-            v-if="!canUpdate"
+            v-if="readOnly"
             tone="info"
             :title="t('module.projects.details.readOnlyAlert.title')"
             :text="t('module.projects.details.readOnlyAlert.text')"
         />
-        <ProjectFormsCard :project="project" :can-update="canUpdate" />
+        <ProjectFormsCard :project="project" :can-update="canManageForms" />
         <ProjectDomainsCard v-if="canReadDomains" :project="project" :can-update="canUpdate" />
         <ProjectMembersCard v-if="canManageMembers" :project="project" />
-        <ProjectApiKeysCard :project="project" :can-update="canUpdate" />
+        <ProjectApiKeysCard :project="project" :can-update="canManageApiKeys" />
         <ProjectGeneralCard :project="project" :can-update="canUpdate" />
         <ProjectDangerZone v-if="canDelete" :project="project" :form-count="forms?.length ?? 0" />
     </div>
@@ -87,8 +87,20 @@
     const projectSubject = computed(() => subject('Project', { projectId: projectId.value }))
     const canUpdate = computed(() => userAbility.can('update', projectSubject.value))
     const canDelete = computed(() => userAbility.can('delete', projectSubject.value))
+    const canManageForms = computed(() => userAbility.can('forms.manage', projectSubject.value))
+    const canManageApiKeys = computed(() => userAbility.can('api_keys.manage', projectSubject.value))
+    const canManageMembers = computed(
+        () => userAbility.can('update', 'User') || userAbility.can('members.manage', projectSubject.value),
+    )
     const canReadDomains = computed(() => userAbility.can('read', 'Domain'))
-    const canManageMembers = computed(() => userAbility.can('update', 'User') || canUpdate.value)
+    const readOnly = computed(
+        () =>
+            !canUpdate.value &&
+            !canDelete.value &&
+            !canManageForms.value &&
+            !canManageApiKeys.value &&
+            !userAbility.can('members.manage', projectSubject.value),
+    )
 
     const breadcrumbs = computed(() => [{ title: t('nav.projects'), to: { name: RouteNames.PROJECT_LIST } }])
 

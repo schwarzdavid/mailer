@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProjectApi } from 'api'
 import ProjectMembersCard from '../partials/ProjectMembersCard.vue'
 import { mountInApp } from '@/__tests__/support.ts'
-import { member, projectDetail } from '@/__tests__/fixtures.ts'
+import { member, projectDetail, projectRoles } from '@/__tests__/fixtures.ts'
 import { useNotificationHost } from '@/composables/useNotify.ts'
 
 vi.stubGlobal('visualViewport', null)
@@ -16,19 +16,20 @@ afterEach(() => {
 })
 
 function mockMembers() {
-    vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue([member({ permissions: ['update', 'read'] })])
+    vi.spyOn(ProjectApi, 'getProjectMembers').mockResolvedValue([member({ permissions: ['delete'] })])
     vi.spyOn(ProjectApi, 'getProjectImplicitAccess').mockResolvedValue({ superAdminCount: 1, allProjectsUserCount: 2 })
+    vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue(projectRoles())
 }
 
 describe('ProjectMembersCard', () => {
-    it('lists members with their permissions in a fixed order', async () => {
+    it('lists members with their role and extra permissions', async () => {
         mockMembers()
         const wrapper = mountInApp(ProjectMembersCard, { project: projectDetail() })
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('Lisa Schneider'))
         expect(wrapper.text()).toContain('lisa@acme.com')
         const tags = wrapper.findAll('.tag-label').map((tag) => tag.text())
-        expect(tags).toEqual(['Read', 'Update'])
+        expect(tags).toEqual(['Maintainer', 'Delete project'])
     })
 
     it('names who else can open the project', async () => {

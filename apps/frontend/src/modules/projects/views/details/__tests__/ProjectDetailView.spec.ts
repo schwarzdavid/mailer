@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiKeyApi, DomainApi, InboundFormApi, ProjectApi } from 'api'
 import ProjectDetailView from '../ProjectDetailView.vue'
 import { createTestRouter, findButton, mountView } from '@/__tests__/support.ts'
-import { apiKey, formListItem, projectDetail } from '@/__tests__/fixtures.ts'
+import { apiKey, formListItem, projectDetail, projectRoles } from '@/__tests__/fixtures.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 
 vi.mock('vue-router', async (importOriginal) => {
@@ -19,6 +19,7 @@ function mockProjectApis() {
     vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([formListItem()])
     vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([])
     vi.spyOn(ApiKeyApi, 'getApiKeys').mockResolvedValue([apiKey()])
+    vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue(projectRoles())
 }
 
 afterEach(() => {
@@ -49,6 +50,22 @@ describe('ProjectDetailView', () => {
         expect(wrapper.text()).toContain('Read only')
         expect(wrapper.text()).toContain('You can view this project')
         expect(findButton(wrapper, 'New form')).toBeUndefined()
+        expect(findButton(wrapper, 'Save')).toBeUndefined()
+        expect(wrapper.text()).not.toContain('Delete project')
+        expect(wrapper.text()).not.toContain('Members')
+    })
+
+    it('lets an editor add forms but not rename or delete the project', async () => {
+        mockProjectApis()
+        const wrapper = mountView(ProjectDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
+        expect(wrapper.text()).not.toContain('Read only')
+        expect(findButton(wrapper, 'New form')).toBeDefined()
+        expect(findButton(wrapper, 'New API key')).toBeUndefined()
         expect(findButton(wrapper, 'Save')).toBeUndefined()
         expect(wrapper.text()).not.toContain('Delete project')
         expect(wrapper.text()).not.toContain('Members')

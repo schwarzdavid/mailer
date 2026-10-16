@@ -30,7 +30,7 @@ import { pickDefined } from '../../../helpers/pick-defined.js'
 import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 import { findPatternProblem } from '../helpers/pattern-safety.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
-import { assertProjectReadable, assertProjectUpdatable } from '../../permission/helpers/project-access.js'
+import { assertProjectPermission, assertProjectReadable } from '../../permission/helpers/project-access.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 
@@ -82,7 +82,7 @@ export class InboundFormService {
 
     async createForm(create: InboundFormCreateRequest, ability: AppAbility): Promise<InboundForm> {
         await this.assertProjectExists(create.projectId)
-        assertProjectUpdatable(ability, create.projectId)
+        assertProjectPermission(ability, 'forms.manage', create.projectId)
 
         if (create.domainId !== null) {
             await this.assertDomainExists(create.domainId)
@@ -131,7 +131,7 @@ export class InboundFormService {
         request: InboundFormUpdateRequest,
         ability: AppAbility,
     ): Promise<InboundFormFull> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
         const update = pickDefined(request, FORM_UPDATABLE_KEYS)
 
         if (update.domainId !== undefined && update.domainId !== form.domainId) {
@@ -161,7 +161,7 @@ export class InboundFormService {
     }
 
     async deleteForm(inboundFormId: number, ability: AppAbility): Promise<void> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
 
         await form.destroy()
     }
@@ -171,7 +171,7 @@ export class InboundFormService {
         fields: InboundFormFieldUpsert[],
         ability: AppAbility,
     ): Promise<InboundFormField[]> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
 
         const keys = fields.map((field) => field.key)
         if (new Set(keys).size !== keys.length) {
@@ -240,7 +240,7 @@ export class InboundFormService {
         schemes: InboundFormSecurityUpsert[],
         ability: AppAbility,
     ): Promise<InboundFormSecurity[]> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
 
         const types = schemes.map((scheme) => scheme.type)
         if (new Set(types).size !== types.length) {
@@ -281,7 +281,7 @@ export class InboundFormService {
         create: InboundFormReceiverUpsert,
         ability: AppAbility,
     ): Promise<InboundFormReceiver> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
         await this.assertReceiverValid(form, create)
 
         const created = await this.receiverModel.create({ ...create, inboundFormId }, { returning: true })
@@ -295,7 +295,7 @@ export class InboundFormService {
         request: Partial<InboundFormReceiverUpsert>,
         ability: AppAbility,
     ): Promise<InboundFormReceiver> {
-        const form = await this.loadFormChecked(inboundFormId, ability, 'update')
+        const form = await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
         const update = pickDefined(request, RECEIVER_UPDATABLE_KEYS)
 
@@ -306,7 +306,7 @@ export class InboundFormService {
     }
 
     async deleteReceiver(inboundFormId: number, inboundFormReceiverId: number, ability: AppAbility): Promise<void> {
-        await this.loadFormChecked(inboundFormId, ability, 'update')
+        await this.loadFormChecked(inboundFormId, ability, 'forms.manage')
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
 
         await receiver.destroy()
@@ -316,7 +316,7 @@ export class InboundFormService {
         inboundFormId: number,
         inboundFormReceiverId: number,
         ability: AppAbility,
-        permission: 'read' | 'update' = 'read',
+        permission: 'read' | 'forms.manage' = 'read',
     ): Promise<InboundFormReceiver> {
         await this.loadFormChecked(inboundFormId, ability, permission)
         const receiver = await this.loadReceiver(inboundFormId, inboundFormReceiverId)
@@ -360,13 +360,13 @@ export class InboundFormService {
     private async loadFormChecked(
         inboundFormId: number,
         ability: AppAbility,
-        permission: 'read' | 'update',
+        permission: 'read' | 'forms.manage',
     ): Promise<InboundFormModel> {
         const form = await this.loadForm(inboundFormId)
         if (permission === 'read') {
             assertProjectReadable(ability, form.projectId)
         } else {
-            assertProjectUpdatable(ability, form.projectId)
+            assertProjectPermission(ability, 'forms.manage', form.projectId)
         }
 
         return form

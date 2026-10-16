@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import type { DomainDnsRecordDto } from 'api'
 import DnsRecord from '../dns/DnsRecord.vue'
 import DnsRecordsCard from '../dns/DnsRecordsCard.vue'
@@ -49,10 +50,12 @@ describe('DnsRecord', () => {
         expect(wrapper.text()).toContain('No record found at this host yet.')
     })
 
-    it('shows what DNS returns when the value differs', () => {
+    it('shows what DNS returns when the value differs', async () => {
         const wrapper = mountView(DnsRecord, { props: { record: different } })
 
         expect(wrapper.text()).toContain('Found a different value')
+        await wrapper.get('button.disclosure-box__summary').trigger('click')
+        await nextTick()
         expect(wrapper.text()).toContain('v=spf1 include:_spf.google.com ~all')
         expect(wrapper.text()).toContain('existing SPF record')
     })

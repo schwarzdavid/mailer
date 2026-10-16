@@ -6,10 +6,12 @@ import { RoleModel } from '../models/role.model.js'
 import { RolePermissionModel } from '../models/role-permission.model.js'
 import { UserPermissionModel } from '../models/user-permission.model.js'
 import { ProjectMemberModel } from '../models/project-member.model.js'
+import { ProjectMemberPermissionModel } from '../models/project-member-permission.model.js'
 import { User } from '../../user/interfaces/user.interface.js'
 import {
     AUTH_PERMISSIONS_CACHE_PREFIX,
     GLOBAL_PERMISSION_ABILITIES,
+    isGlobalPermission,
     Permission,
     PROJECT_PERMISSIONS,
     ProjectPermission,
@@ -20,7 +22,16 @@ import { AppAbility } from '../interfaces/app-ability.js'
 export interface PermissionInputs {
     roleType: RoleType
     permissions: Permission[]
-    memberships: { projectId: number; permission: ProjectPermission }[]
+    memberships: { projectId: number; permissions: ProjectPermission[] }[]
+}
+
+function effectiveProjectPermissions(row: ProjectMemberModel): ProjectPermission[] {
+    const granted = new Set<string>([
+        ...(row.role?.permissions ?? []).map((entry) => entry.permission),
+        ...(row.permissions ?? []).map((entry) => entry.permission),
+    ])
+
+    return PROJECT_PERMISSIONS.filter((permission) => granted.has(permission))
 }
 
 @Injectable()
@@ -50,7 +61,7 @@ export class AbilityFactory {
 
         for (const projectPermission of PROJECT_PERMISSIONS) {
             const projectIds = inputs.memberships
-                .filter((membership) => membership.permission === projectPermission)
+                .filter((membership) => membership.permissions.includes(projectPermission))
                 .map((membership) => membership.projectId)
 
             if (projectIds.length > 0) {
@@ -77,7 +88,7 @@ export class AbilityFactory {
         const inputs = await this.getPermissionInputs(user)
 
         return inputs.memberships
-            .filter((membership) => membership.permission === permission)
+            .filter((membership) => membership.permissions.includes(permission))
             .map((membership) => membership.projectId)
     }
 
@@ -92,12 +103,15 @@ export class AbilityFactory {
             this.roleModel.findByPk(user.roleId, { rejectOnEmpty: true }),
             this.rolePermissionModel.findAll({ where: { roleId: user.roleId } }),
             this.userPermissionModel.findAll({ where: { userId: user.userId } }),
-            this.projectMemberModel.findAll({ where: { userId: user.userId } }),
+            this.projectMemberModel.findAll({
+                where: { userId: user.userId },
+                include: [{ model: RoleModel, include: [RolePermissionModel] }, ProjectMemberPermissionModel],
+            }),
         ])
 
         const permissions = [
             ...new Set([
-                ...rolePermissions.map((row) => row.permission),
+                ...rolePermissions.map((row) => row.permission).filter(isGlobalPermission),
                 ...userPermissions.map((row) => row.permission),
             ]),
         ]
@@ -105,7 +119,10 @@ export class AbilityFactory {
         const inputs: PermissionInputs = {
             roleType: role.type,
             permissions,
-            memberships: memberships.map((row) => ({ projectId: row.projectId, permission: row.permission })),
+            memberships: memberships.map((row) => ({
+                projectId: row.projectId,
+                permissions: effectiveProjectPermissions(row),
+            })),
         }
 
         void this.cacheManager.set(cacheKey, inputs).catch(() => undefined)

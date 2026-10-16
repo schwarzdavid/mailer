@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { Op, type WhereOptions } from 'sequelize'
+import { Op, type Transaction, type WhereOptions } from 'sequelize'
 import { ProjectMemberModel } from '../models/project-member.model.js'
+import { ProjectMemberPermissionModel } from '../models/project-member-permission.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { UserModel } from '../../user/models/user.model.js'
 import { RoleModel } from '../models/role.model.js'
@@ -11,21 +12,31 @@ import { UserPermissionModel } from '../models/user-permission.model.js'
 import type { FullUser } from '../../user/interfaces/user.interface.js'
 import type { ProjectImplicitAccess } from '../../project/interfaces/project.interface.js'
 import { PermissionCacheService } from './permission-cache.service.js'
-import { assertProjectUpdatable } from '../helpers/project-access.js'
+import { RoleService } from './role.service.js'
+import { assertProjectPermission, canOnProject } from '../helpers/project-access.js'
+import { assertPermissionChangesHeld, assertRoleGrantable } from '../helpers/permission-grants.js'
 import { AppAbility } from '../interfaces/app-ability.js'
-import { ProjectMemberInfo, ProjectMembership } from '../interfaces/project-member.interface.js'
-import { Permission, ProjectPermission } from '../permission.constants.js'
+import { ProjectMemberGrant, ProjectMemberInfo, ProjectMembership } from '../interfaces/project-member.interface.js'
+import { RoleWithPermissions } from '../interfaces/role.interface.js'
+import { isProjectPermission, Permission, PROJECT_PERMISSIONS, ProjectPermission } from '../permission.constants.js'
 
 const ALL_PROJECTS_PERMISSION: Permission = 'projects.all'
+
+function projectPermissionsOf(role: RoleWithPermissions): ProjectPermission[] {
+    return role.permissions.filter(isProjectPermission)
+}
 
 @Injectable()
 export class ProjectMemberService {
     constructor(
         @InjectModel(ProjectMemberModel) private readonly memberModel: typeof ProjectMemberModel,
+        @InjectModel(ProjectMemberPermissionModel)
+        private readonly memberPermissionModel: typeof ProjectMemberPermissionModel,
         @InjectModel(ProjectModel) private readonly projectModel: typeof ProjectModel,
         @InjectModel(UserModel) private readonly userModel: typeof UserModel,
         @InjectModel(RolePermissionModel) private readonly rolePermissionModel: typeof RolePermissionModel,
         @InjectModel(UserPermissionModel) private readonly userPermissionModel: typeof UserPermissionModel,
+        private readonly roleService: RoleService,
         private readonly permissionCacheService: PermissionCacheService,
         private readonly sequelize: Sequelize,
     ) {}
@@ -33,23 +44,26 @@ export class ProjectMemberService {
     async getMembers(projectId: number, ability: AppAbility): Promise<ProjectMemberInfo[]> {
         await this.assertCanManageMembers(projectId, ability)
 
-        const rows = await this.memberModel.findAll({ where: { projectId }, include: [UserModel] })
+        const rows = await this.memberModel.findAll({
+            where: { projectId },
+            include: [UserModel, RoleModel, ProjectMemberPermissionModel],
+            order: [['projectMemberId', 'ASC']],
+        })
 
-        const byUser = new Map<number, ProjectMemberInfo>()
-        for (const row of rows) {
-            const user = row.user!
-            const entry = byUser.get(row.userId) ?? {
-                userId: row.userId,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                email: user.email,
-                permissions: [],
-            }
-            entry.permissions.push(row.permission)
-            byUser.set(row.userId, entry)
-        }
+        return rows.map((row) => ({
+            userId: row.userId,
+            firstName: row.user!.firstName,
+            lastName: row.user!.lastName,
+            email: row.user!.email,
+            role: { roleId: row.role!.roleId, name: row.role!.name },
+            permissions: row.permissions.map((entry) => entry.permission),
+        }))
+    }
 
-        return [...byUser.values()]
+    async getProjectRoles(projectId: number, ability: AppAbility): Promise<RoleWithPermissions[]> {
+        await this.assertCanManageMembers(projectId, ability)
+
+        return this.roleService.getProjectRoles()
     }
 
     async getImplicitAccess(projectId: number, ability: AppAbility): Promise<ProjectImplicitAccess> {
@@ -63,12 +77,7 @@ export class ProjectMemberService {
         return { superAdminCount, allProjectsUserCount }
     }
 
-    async setMemberPermissions(
-        projectId: number,
-        userId: number,
-        permissions: ProjectPermission[],
-        ability: AppAbility,
-    ): Promise<void> {
+    async setMember(projectId: number, userId: number, grant: ProjectMemberGrant, ability: AppAbility): Promise<void> {
         await this.assertCanManageMembers(projectId, ability)
 
         const user = await this.userModel.findByPk(userId)
@@ -76,14 +85,28 @@ export class ProjectMemberService {
             throw new NotFoundException('Unknown user')
         }
 
-        const uniquePermissions = [...new Set(permissions)]
+        const role = await this.roleService.findRole(grant.roleId)
+        if (!role || role.scope !== 'project') {
+            throw new BadRequestException('Unknown project role')
+        }
+
+        const isHeld = (permission: ProjectPermission) => canOnProject(ability, permission, projectId)
+        const rolePermissions = projectPermissionsOf(role)
+        const existing = await this.memberModel.findOne({
+            where: { projectId, userId },
+            include: [ProjectMemberPermissionModel],
+        })
+        if (existing?.roleId !== role.roleId) {
+            assertRoleGrantable(rolePermissions, isHeld)
+        }
+
+        const extras = [...new Set(grant.permissions)].filter((permission) => !rolePermissions.includes(permission))
+        const currentExtras = existing?.permissions.map((entry) => entry.permission) ?? []
+        assertPermissionChangesHeld(currentExtras, extras, isHeld)
 
         await this.sequelize.transaction(async (transaction) => {
             await this.memberModel.destroy({ where: { projectId, userId }, transaction })
-            await this.memberModel.bulkCreate(
-                uniquePermissions.map((permission) => ({ projectId, userId, permission })),
-                { transaction },
-            )
+            await this.createMembership(projectId, userId, role.roleId, extras, transaction)
         })
 
         await this.permissionCacheService.invalidateUser(userId)
@@ -96,40 +119,66 @@ export class ProjectMemberService {
         await this.permissionCacheService.invalidateUser(userId)
     }
 
+    async grantFullAccess(projectId: number, userId: number, transaction: Transaction): Promise<void> {
+        const roles = await this.roleService.getProjectRoles()
+        if (roles.length === 0) {
+            throw new BadRequestException('No project role is configured')
+        }
+
+        const covering = roles.find((role) =>
+            PROJECT_PERMISSIONS.every((permission) => projectPermissionsOf(role).includes(permission)),
+        )
+        const role =
+            covering ??
+            roles.reduce((best, candidate) =>
+                projectPermissionsOf(candidate).length > projectPermissionsOf(best).length ? candidate : best,
+            )
+        const extras = PROJECT_PERMISSIONS.filter((permission) => !projectPermissionsOf(role).includes(permission))
+
+        await this.createMembership(projectId, userId, role.roleId, extras, transaction)
+    }
+
     async getMembershipsForUser(userId: number): Promise<ProjectMembership[]> {
         const rows = await this.memberModel.findAll({
             where: { userId },
-            include: [{ model: ProjectModel, required: true }],
+            include: [{ model: ProjectModel, required: true }, RoleModel, ProjectMemberPermissionModel],
+            order: [['projectMemberId', 'ASC']],
         })
 
-        const byProject = new Map<number, ProjectMembership>()
-        for (const row of rows) {
-            const entry = byProject.get(row.projectId) ?? {
-                projectId: row.projectId,
-                projectName: row.project!.name,
-                permissions: [],
-            }
-            entry.permissions.push(row.permission)
-            byProject.set(row.projectId, entry)
-        }
-
-        return [...byProject.values()]
+        return rows.map((row) => ({
+            projectId: row.projectId,
+            projectName: row.project!.name,
+            role: { roleId: row.role!.roleId, name: row.role!.name },
+            permissions: row.permissions.map((entry) => entry.permission),
+        }))
     }
 
     async countMembershipsPerUser(): Promise<Map<number, number>> {
         const rows = await this.memberModel.findAll({
-            attributes: ['projectId', 'userId'],
+            attributes: ['userId'],
             include: [{ model: ProjectModel, attributes: [], required: true }],
         })
 
-        const projectsByUser = new Map<number, Set<number>>()
+        const counts = new Map<number, number>()
         for (const row of rows) {
-            const projects = projectsByUser.get(row.userId) ?? new Set<number>()
-            projects.add(row.projectId)
-            projectsByUser.set(row.userId, projects)
+            counts.set(row.userId, (counts.get(row.userId) ?? 0) + 1)
         }
 
-        return new Map([...projectsByUser].map(([userId, projects]) => [userId, projects.size]))
+        return counts
+    }
+
+    private async createMembership(
+        projectId: number,
+        userId: number,
+        roleId: number,
+        extras: ProjectPermission[],
+        transaction: Transaction,
+    ): Promise<void> {
+        const member = await this.memberModel.create({ projectId, userId, roleId }, { returning: true, transaction })
+        await this.memberPermissionModel.bulkCreate(
+            extras.map((permission) => ({ projectMemberId: member.projectMemberId, permission })),
+            { transaction },
+        )
     }
 
     private async countNonSuperAdminsWithAllProjects(): Promise<number> {
@@ -176,6 +225,6 @@ export class ProjectMemberService {
             return
         }
 
-        assertProjectUpdatable(ability, projectId)
+        assertProjectPermission(ability, 'members.manage', projectId)
     }
 }

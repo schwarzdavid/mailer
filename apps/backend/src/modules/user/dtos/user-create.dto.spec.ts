@@ -11,15 +11,31 @@ async function violations(type: new () => object, plain: object): Promise<string
 }
 
 describe('UserCreateDto', () => {
-    const valid = { firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', password: 'correct-horse' }
+    const valid = {
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        email: 'ada@example.com',
+        password: 'correct-horse',
+        roleId: 3,
+    }
 
-    it('accepts a user with and without an explicit role', async () => {
+    it('accepts a user with and without extra permissions', async () => {
         await expect(violations(UserCreateDto, valid)).resolves.toEqual([])
-        await expect(violations(UserCreateDto, { ...valid, roleId: 2 })).resolves.toEqual([])
+        await expect(violations(UserCreateDto, { ...valid, permissions: ['domains.read'] })).resolves.toEqual([])
     })
 
-    it('requires names, email and password', async () => {
-        await expect(violations(UserCreateDto, {})).resolves.toEqual(['firstName', 'lastName', 'email', 'password'])
+    it('requires names, email, password and role', async () => {
+        await expect(violations(UserCreateDto, {})).resolves.toEqual([
+            'firstName',
+            'lastName',
+            'email',
+            'password',
+            'roleId',
+        ])
+    })
+
+    it('rejects permissions outside the global catalog', async () => {
+        await expect(violations(UserCreateDto, { ...valid, permissions: ['read'] })).resolves.toEqual(['permissions'])
     })
 
     it('enforces a minimum password length of 8', async () => {

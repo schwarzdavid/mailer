@@ -4,7 +4,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
-import { login, seedUser, type Credentials } from './support/session.js'
+import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import { configureSendingDomain } from './support/sending-domain.js'
 import { ProjectModel } from '../src/modules/project/models/project.model.js'
 import { ProjectPurgeService } from '../src/modules/project/services/project-purge.service.js'
@@ -349,12 +349,12 @@ describe('Project (e2e)', () => {
         await http()
             .put(`/api/project/${otherProjectId}/members/${memberUserId}`)
             .set('Authorization', auth())
-            .send({ permissions: ['owner'] })
+            .send({ roleId: 999_999 })
             .expect(400)
         await http()
             .put(`/api/project/${otherProjectId}/members/${memberUserId}`)
             .set('Authorization', auth())
-            .send({ permissions: ['read', 'update'] })
+            .send({ roleId: await projectRoleId(app, 'Maintainer') })
             .expect(200)
         expect((await listProjects()).get(otherProjectId)?.memberCount).toBe(1)
 
@@ -366,7 +366,8 @@ describe('Project (e2e)', () => {
             expect.objectContaining({
                 userId: memberUserId,
                 email: memberCredentials.email,
-                permissions: expect.arrayContaining(['read', 'update']) as string[],
+                role: expect.objectContaining({ name: 'Maintainer' }) as object,
+                permissions: [],
             }),
         ])
         await http().get(`/api/project/${otherProjectId}`).set('Authorization', `Bearer ${memberToken}`).expect(200)

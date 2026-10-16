@@ -16,7 +16,9 @@ describe('AuthController', () => {
     const role: Role = {
         roleId: 1,
         name: 'Admin',
+        scope: 'global',
         type: 'admin',
+        description: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     }
@@ -89,5 +91,24 @@ describe('AuthController', () => {
                 inverted: true,
             },
         ])
+    })
+
+    it('lists the permissions the caller holds unconditionally', () => {
+        const superAdmin = createMongoAbility<AppAbility>([{ action: 'manage', subject: 'all' }])
+        const member = createMongoAbility<AppAbility>([
+            { action: 'read', subject: 'Domain' },
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        expect(controller.getHeldPermissions(superAdmin).permissions).toContain('roles.delete')
+        expect(controller.getHeldPermissions(superAdmin).projectPermissions).toEqual([
+            'read',
+            'update',
+            'delete',
+            'forms.manage',
+            'api_keys.manage',
+            'members.manage',
+        ])
+        expect(controller.getHeldPermissions(member)).toEqual({ permissions: ['domains.read'], projectPermissions: [] })
     })
 })

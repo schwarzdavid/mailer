@@ -27,8 +27,16 @@ export class UserController {
     @RequireAbility({ action: 'create', subject: 'User' })
     @ResponseDto(UserDto)
     @Post()
-    async createUser(@Body() body: UserCreateDto, @Principal() principal: UserWithRole): Promise<UserDto> {
-        return await this.userService.createManagedUser(body, principal)
+    async createUser(
+        @Body() body: UserCreateDto,
+        @Principal() principal: UserWithRole,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<UserDto> {
+        return await this.userService.createManagedUser(
+            { ...body, permissions: body.permissions ?? [] },
+            principal,
+            ability,
+        )
     }
 
     @RequireAbility({ action: 'read', subject: 'User' })

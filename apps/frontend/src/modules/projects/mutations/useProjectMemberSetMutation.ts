@@ -9,12 +9,14 @@ export function useProjectMemberSetMutation() {
         mutationFn: ({
             projectId,
             userId,
+            roleId,
             permissions,
         }: {
             projectId: number
             userId: number
+            roleId: number
             permissions: ProjectPermission[]
-        }) => waitAtleast(ProjectApi.setProjectMember({ path: { projectId, userId }, body: { permissions } })),
+        }) => waitAtleast(ProjectApi.setProjectMember({ path: { projectId, userId }, body: { roleId, permissions } })),
         onSuccess(_, { projectId }) {
             void client.invalidateQueries({ queryKey: ['projects', projectId, 'members'] })
             void client.invalidateQueries({ queryKey: ['users'] })

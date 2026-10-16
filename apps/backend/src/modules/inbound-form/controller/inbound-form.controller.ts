@@ -201,7 +201,7 @@ export class InboundFormController {
         @Body() body: InboundFormTemplateDraftDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
-        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'update')
+        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'forms.manage')
         const draft = await this.templateService.saveDraft(inboundFormReceiverId, body)
 
         return InboundFormTemplateDto.fromTemplate(draft)
@@ -214,7 +214,7 @@ export class InboundFormController {
         @Param('inboundFormReceiverId', ParseIntPipe) inboundFormReceiverId: number,
         @CurrentAbility() ability: AppAbility,
     ): Promise<InboundFormTemplateDto> {
-        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'update')
+        await this.inboundFormService.getReceiver(inboundFormId, inboundFormReceiverId, ability, 'forms.manage')
         const published = await this.templateService.publishDraft(inboundFormReceiverId)
 
         return InboundFormTemplateDto.fromTemplate(published)

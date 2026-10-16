@@ -12,6 +12,7 @@ import { ApiBody, ApiTags } from '@nestjs/swagger'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { AbilityRuleDto } from '../dtos/ability-rule.dto.js'
+import { AuthPermissionsDto } from '../dtos/auth-permissions.dto.js'
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
 import {
     LOGIN_THROTTLE_BLOCK_MS,
@@ -59,5 +60,12 @@ export class AuthController {
     @Get('ability')
     getAbility(@CurrentAbility() ability: AppAbility): AbilityRuleDto[] {
         return ability.rules.map((rule) => AbilityRuleDto.fromRule(rule))
+    }
+
+    @JwtAuth()
+    @ResponseDto(AuthPermissionsDto)
+    @Get('permissions')
+    getHeldPermissions(@CurrentAbility() ability: AppAbility): AuthPermissionsDto {
+        return AuthPermissionsDto.fromAbility(ability)
     }
 }

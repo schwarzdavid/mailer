@@ -9,7 +9,25 @@ import { RolePermissionModel } from '../models/role-permission.model.js'
 import { UserPermissionModel } from '../models/user-permission.model.js'
 import { ProjectMemberModel } from '../models/project-member.model.js'
 import { User } from '../../user/interfaces/user.interface.js'
-import { Permission, ProjectPermission, RoleType } from '../permission.constants.js'
+import { CatalogPermission, Permission, ProjectPermission, RoleType } from '../permission.constants.js'
+
+interface MemberRow {
+    projectId: number
+    role: { permissions: { permission: CatalogPermission }[] }
+    permissions: { permission: ProjectPermission }[]
+}
+
+function membershipRow(
+    projectId: number,
+    rolePermissions: ProjectPermission[],
+    extras: ProjectPermission[] = [],
+): MemberRow {
+    return {
+        projectId,
+        role: { permissions: rolePermissions.map((permission) => ({ permission })) },
+        permissions: extras.map((permission) => ({ permission })),
+    }
+}
 
 const user: User = {
     userId: 5,
@@ -28,9 +46,9 @@ describe('AbilityFactory', () => {
     let roleFindByPk: Mock<(roleId: number, options: object) => Promise<{ type: RoleType }>>
     let rolePermissionFindAll: Mock<(options: object) => Promise<{ permission: Permission }[]>>
     let userPermissionFindAll: Mock<(options: object) => Promise<{ permission: Permission }[]>>
-    let memberFindAll: Mock<(options: object) => Promise<{ projectId: number; permission: ProjectPermission }[]>>
+    let memberFindAll: Mock<(options: object) => Promise<MemberRow[]>>
 
-    function stubInputs(roleType: RoleType, permissions: Permission[], memberships: PermissionInputs['memberships']) {
+    function stubInputs(roleType: RoleType, permissions: Permission[], memberships: MemberRow[]) {
         roleFindByPk.mockResolvedValue({ type: roleType })
         rolePermissionFindAll.mockResolvedValue(permissions.map((permission) => ({ permission })))
         userPermissionFindAll.mockResolvedValue([])
@@ -88,23 +106,34 @@ describe('AbilityFactory', () => {
         expect(ability.can('read', 'Settings')).toBe(true)
     })
 
-    it('scopes project permissions to membership rows', async () => {
-        stubInputs(
-            'user',
-            [],
-            [
-                { projectId: 1, permission: 'read' },
-                { projectId: 1, permission: 'update' },
-                { projectId: 2, permission: 'read' },
-            ],
-        )
+    it('scopes project permissions to the role and extras of each membership', async () => {
+        stubInputs('user', [], [membershipRow(1, ['read'], ['forms.manage']), membershipRow(2, ['read', 'update'])])
 
         const ability = await factory.createForUser(user)
 
         expect(ability.can('read', subject('Project', { projectId: 1 }))).toBe(true)
-        expect(ability.can('update', subject('Project', { projectId: 1 }))).toBe(true)
-        expect(ability.can('update', subject('Project', { projectId: 2 }))).toBe(false)
+        expect(ability.can('forms.manage', subject('Project', { projectId: 1 }))).toBe(true)
+        expect(ability.can('update', subject('Project', { projectId: 1 }))).toBe(false)
+        expect(ability.can('update', subject('Project', { projectId: 2 }))).toBe(true)
+        expect(ability.can('forms.manage', subject('Project', { projectId: 2 }))).toBe(false)
         expect(ability.can('read', subject('Project', { projectId: 3 }))).toBe(false)
+    })
+
+    it('grants every project permission everywhere through projects.all', async () => {
+        stubInputs('user', ['projects.all'], [])
+
+        const ability = await factory.createForUser(user)
+
+        for (const permission of [
+            'read',
+            'update',
+            'delete',
+            'forms.manage',
+            'api_keys.manage',
+            'members.manage',
+        ] as const) {
+            expect(ability.can(permission, subject('Project', { projectId: 42 }))).toBe(true)
+        }
     })
 
     it('forbids admins from touching super admin users', async () => {
@@ -126,7 +155,7 @@ describe('AbilityFactory', () => {
 
         expect(ability.can('read', 'Bounce')).toBe(true)
         expect(roleFindByPk).not.toHaveBeenCalled()
-        expect(cacheGet).toHaveBeenCalledWith('auth:permissions:5')
+        expect(cacheGet).toHaveBeenCalledWith('auth:permissions:v2:5')
     })
 
     it('caches freshly loaded inputs', async () => {
@@ -134,7 +163,7 @@ describe('AbilityFactory', () => {
 
         await factory.createForUser(user)
 
-        expect(cacheSet).toHaveBeenCalledWith('auth:permissions:5', {
+        expect(cacheSet).toHaveBeenCalledWith('auth:permissions:v2:5', {
             roleType: 'user',
             permissions: ['bounces.read'],
             memberships: [],
@@ -157,8 +186,8 @@ describe('AbilityFactory', () => {
             roleType: 'user',
             permissions: [],
             memberships: [
-                { projectId: 1, permission: 'read' },
-                { projectId: 2, permission: 'update' },
+                { projectId: 1, permissions: ['read'] },
+                { projectId: 2, permissions: ['update'] },
             ],
         })
 

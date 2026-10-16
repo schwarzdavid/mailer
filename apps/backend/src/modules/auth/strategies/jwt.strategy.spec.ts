@@ -29,7 +29,15 @@ describe('JwtStrategy', () => {
         lastName: 'Clark',
         email: 'lin@example.com',
         roleId: 1,
-        role: { roleId: 1, name: 'Super Admin', type: 'super_admin', createdAt: new Date(), updatedAt: new Date() },
+        role: {
+            roleId: 1,
+            name: 'Super Admin',
+            scope: 'global',
+            type: 'super_admin',
+            description: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
     }
@@ -65,7 +73,9 @@ describe('JwtStrategy', () => {
             role: {
                 roleId: 1,
                 name: 'Super Admin',
+                scope: 'global',
                 type: 'super_admin',
+                description: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             },

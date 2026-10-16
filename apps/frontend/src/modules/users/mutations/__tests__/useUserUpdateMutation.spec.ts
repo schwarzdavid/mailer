@@ -49,6 +49,7 @@ describe('useUserUpdateMutation', () => {
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] })
         expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['auth.user'] })
         expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['auth.ability'] })
+        expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['auth.permissions'] })
         unmount()
     })
 
@@ -63,6 +64,7 @@ describe('useUserUpdateMutation', () => {
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] })
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth.user'] })
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth.ability'] })
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth.permissions'] })
         unmount()
     })
 })

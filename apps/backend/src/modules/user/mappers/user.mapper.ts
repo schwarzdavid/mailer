@@ -1,8 +1,8 @@
 import type { Role } from '../../permission/interfaces/role.interface.js'
 import type { FullUser, User, UserWithRole } from '../interfaces/user.interface.js'
 
-export function toRole({ roleId, name, type, createdAt, updatedAt }: Role): Role {
-    return { roleId, name, type, createdAt, updatedAt }
+export function toRole({ roleId, name, scope, type, description, createdAt, updatedAt }: Role): Role {
+    return { roleId, name, scope, type, description, createdAt, updatedAt }
 }
 
 export function toUser({ userId, firstName, lastName, email, roleId, createdAt, updatedAt }: User): User {

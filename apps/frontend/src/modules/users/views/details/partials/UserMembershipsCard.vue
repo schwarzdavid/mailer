@@ -19,10 +19,11 @@
             :to="{ name: RouteNames.PROJECT_DETAILS, params: { projectId: membership.projectId } }"
         >
             <template #meta>
+                <TagLabel :label="membership.role.name" />
                 <TagLabel
                     v-for="permission in sortedPermissions(membership.permissions)"
                     :key="permission"
-                    :label="t(`permissions.project.${permission}`)"
+                    :label="t(permissionLabelKey('project', permission))"
                 />
             </template>
         </ListRow>
@@ -37,6 +38,7 @@
     import ListRow from '@/components/ListRow.vue'
     import SectionCard from '@/components/SectionCard.vue'
     import TagLabel from '@/components/TagLabel.vue'
+    import { permissionLabelKey } from '@/modules/roles/permissionCatalog.ts'
     import { sortedPermissions } from '@/modules/projects/helpers/projectPermissions.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 

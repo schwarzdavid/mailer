@@ -3,7 +3,15 @@ import { toUserWithRole, userWithRoleFromRow, type UserRow } from './user.mapper
 import type { Role } from '../../permission/interfaces/role.interface.js'
 import type { FullUser, UserWithRole } from '../interfaces/user.interface.js'
 
-const role: Role = { roleId: 2, name: 'Admin', type: 'admin', createdAt: new Date(), updatedAt: new Date() }
+const role: Role = {
+    roleId: 2,
+    name: 'Admin',
+    scope: 'global',
+    type: 'admin',
+    description: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+}
 
 const user: UserWithRole = {
     userId: 7,

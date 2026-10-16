@@ -107,6 +107,14 @@ const manageAll = createMongoAbility<AppAbility>([{ action: 'manage', subject: '
 const readOnlyAbility = createMongoAbility<AppAbility>([
     { action: 'read', subject: 'Project', conditions: { projectId: { $in: [5] } } },
 ])
+const formEditorAbility = createMongoAbility<AppAbility>([
+    { action: 'read', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+    { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+])
+const projectUpdaterAbility = createMongoAbility<AppAbility>([
+    { action: 'read', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+    { action: 'update', subject: 'Project', conditions: { projectId: { $in: [5] } } },
+])
 
 type FormRow = InboundFormFull & {
     get: (options: { plain: true }) => InboundFormFull
@@ -226,6 +234,14 @@ describe('InboundFormService', () => {
             await service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll)
 
             expect(getDomainById).not.toHaveBeenCalled()
+        })
+
+        it('lets form editors create forms and keeps project updaters out', async () => {
+            const request = { name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }
+            formCreate.mockResolvedValue(formRow({ domainId: null }))
+
+            await expect(service.createForm(request, formEditorAbility)).resolves.toBeDefined()
+            await expect(service.createForm(request, projectUpdaterAbility)).rejects.toThrow(ForbiddenException)
         })
 
         it('rejects an unknown domain with a BadRequestException', async () => {
@@ -405,6 +421,13 @@ describe('InboundFormService', () => {
             await service.deleteForm(1, manageAll)
 
             expect(row.destroy).toHaveBeenCalled()
+        })
+
+        it('requires forms.manage to delete a form', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(service.deleteForm(1, formEditorAbility)).resolves.toBeUndefined()
+            await expect(service.deleteForm(1, projectUpdaterAbility)).rejects.toThrow(ForbiddenException)
         })
 
         it('rejects mutations with read-only project access', async () => {
@@ -933,7 +956,9 @@ describe('InboundFormService', () => {
             receiverFindOne.mockResolvedValue({ get: () => receiver } as unknown as InboundFormReceiverModel)
 
             await expect(service.getReceiver(1, 31, readOnlyAbility)).resolves.toEqual(receiver)
-            await expect(service.getReceiver(1, 31, readOnlyAbility, 'update')).rejects.toThrow(ForbiddenException)
+            await expect(service.getReceiver(1, 31, readOnlyAbility, 'forms.manage')).rejects.toThrow(
+                ForbiddenException,
+            )
         })
     })
 

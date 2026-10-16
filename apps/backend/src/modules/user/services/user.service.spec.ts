@@ -13,19 +13,37 @@ import { UserPermissionModel } from '../../permission/models/user-permission.mod
 import { RoleService } from '../../permission/services/role.service.js'
 import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { PermissionCacheService } from '../../permission/services/permission-cache.service.js'
-import { Role } from '../../permission/interfaces/role.interface.js'
+import { Role, RoleWithPermissions } from '../../permission/interfaces/role.interface.js'
+import { Permission } from '../../permission/permission.constants.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { FullUser, UserWithRole } from '../interfaces/user.interface.js'
 
-const superAdminRole: Role = {
+const superAdminRole: RoleWithPermissions = {
     roleId: 1,
     name: 'Super Admin',
+    scope: 'global',
     type: 'super_admin',
+    description: null,
+    permissions: [],
     createdAt: new Date(),
     updatedAt: new Date(),
 }
-const adminRole: Role = { ...superAdminRole, roleId: 2, name: 'Admin', type: 'admin' }
-const userRole: Role = { ...superAdminRole, roleId: 3, name: 'User', type: 'user' }
+const adminRole: RoleWithPermissions = {
+    ...superAdminRole,
+    roleId: 2,
+    name: 'Admin',
+    type: 'admin',
+    permissions: ['users.read', 'users.create', 'users.update', 'users.delete', 'settings.update'],
+}
+const userRole: RoleWithPermissions = { ...superAdminRole, roleId: 3, name: 'User', type: 'user' }
+const viewerRole: RoleWithPermissions = {
+    ...superAdminRole,
+    roleId: 5,
+    name: 'Viewer',
+    scope: 'project',
+    type: 'custom',
+    permissions: ['read'],
+}
 
 const superAdminPrincipal: UserWithRole = {
     userId: 1,
@@ -53,6 +71,7 @@ const adminAbility = createMongoAbility<AppAbility>([
     { action: 'create', subject: 'User' },
     { action: 'update', subject: 'User' },
     { action: 'delete', subject: 'User' },
+    { action: 'update', subject: 'Settings' },
     { action: 'update', subject: 'User', conditions: { 'role.type': 'super_admin' }, inverted: true },
     { action: 'delete', subject: 'User', conditions: { 'role.type': 'super_admin' }, inverted: true },
 ])
@@ -93,7 +112,7 @@ describe('UserService', () => {
     let permissionFindAll: Mock<(options: object) => Promise<{ permission: string }[]>>
     let permissionDestroy: Mock<(options: object) => Promise<number>>
     let permissionBulkCreate: Mock<(rows: object[], options?: object) => Promise<object[]>>
-    let getRoleById: Mock<RoleService['getRoleById']>
+    let findRole: Mock<RoleService['findRole']>
     let getRoleByType: Mock<RoleService['getRoleByType']>
     let getMembershipsForUser: Mock<ProjectMemberService['getMembershipsForUser']>
     let countMembershipsPerUser: Mock<ProjectMemberService['countMembershipsPerUser']>
@@ -110,7 +129,7 @@ describe('UserService', () => {
         permissionFindAll = vi.fn<typeof permissionFindAll>().mockResolvedValue([])
         permissionDestroy = vi.fn<typeof permissionDestroy>().mockResolvedValue(0)
         permissionBulkCreate = vi.fn<typeof permissionBulkCreate>().mockResolvedValue([])
-        getRoleById = vi.fn<typeof getRoleById>().mockResolvedValue(userRole)
+        findRole = vi.fn<typeof findRole>().mockResolvedValue(userRole)
         getRoleByType = vi.fn<typeof getRoleByType>().mockResolvedValue(userRole)
         getMembershipsForUser = vi.fn<typeof getMembershipsForUser>().mockResolvedValue([])
         countMembershipsPerUser = vi.fn<typeof countMembershipsPerUser>().mockResolvedValue(new Map())
@@ -131,7 +150,7 @@ describe('UserService', () => {
                         bulkCreate: permissionBulkCreate,
                     },
                 },
-                { provide: RoleService, useValue: { getRoleById, getRoleByType } },
+                { provide: RoleService, useValue: { findRole, getRoleByType } },
                 { provide: ProjectMemberService, useValue: { getMembershipsForUser, countMembershipsPerUser } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
                 { provide: Sequelize, useValue: { transaction } },
@@ -185,48 +204,75 @@ describe('UserService', () => {
             lastName: 'Hopper',
             email: 'grace@example.com',
             password: 'plain-password',
+            roleId: 3,
+            permissions: [] as Permission[],
         }
 
-        it('defaults to the user role', async () => {
-            await service.createManagedUser(input, adminPrincipal)
+        it('creates the user with the requested role and extras in one transaction', async () => {
+            await service.createManagedUser({ ...input, permissions: ['users.read'] }, adminPrincipal, adminAbility)
 
-            expect(getRoleByType).toHaveBeenCalledWith('user')
-            expect(create).toHaveBeenCalledWith(expect.objectContaining({ roleId: 3 }), expect.anything())
+            expect(findRole).toHaveBeenCalledWith(3)
+            expect(create).toHaveBeenCalledWith(expect.objectContaining({ roleId: 3 }), {
+                returning: true,
+                transaction: transactionStub,
+            })
+            expect(permissionBulkCreate).toHaveBeenCalledWith([{ userId: 7, permission: 'users.read' }], {
+                transaction: transactionStub,
+            })
         })
 
-        it('uses the requested role', async () => {
-            getRoleById.mockResolvedValue(adminRole)
+        it('rejects unknown and project-scoped roles', async () => {
+            findRole.mockResolvedValueOnce(null).mockResolvedValueOnce(viewerRole)
 
-            await service.createManagedUser({ ...input, roleId: 2 }, adminPrincipal)
-
-            expect(getRoleById).toHaveBeenCalledWith(2)
-            expect(create).toHaveBeenCalledWith(expect.objectContaining({ roleId: 2 }), expect.anything())
-        })
-
-        it('blocks non-super-admins from assigning the super admin role', async () => {
-            getRoleById.mockResolvedValue(superAdminRole)
-
-            await expect(service.createManagedUser({ ...input, roleId: 1 }, adminPrincipal)).rejects.toThrow(
-                ForbiddenException,
+            await expect(service.createManagedUser(input, adminPrincipal, adminAbility)).rejects.toThrow(
+                new BadRequestException('Unknown role'),
+            )
+            await expect(service.createManagedUser(input, adminPrincipal, adminAbility)).rejects.toThrow(
+                new BadRequestException('Unknown role'),
             )
             expect(create).not.toHaveBeenCalled()
         })
 
+        it('blocks non-super-admins from assigning the super admin role', async () => {
+            findRole.mockResolvedValue(superAdminRole)
+
+            await expect(
+                service.createManagedUser({ ...input, roleId: 1 }, adminPrincipal, adminAbility),
+            ).rejects.toThrow(new ForbiddenException('Only super admins can assign the super admin role'))
+            expect(create).not.toHaveBeenCalled()
+        })
+
         it('lets super admins assign the super admin role', async () => {
-            getRoleById.mockResolvedValue(superAdminRole)
+            findRole.mockResolvedValue(superAdminRole)
             findByPk.mockResolvedValue(userRow({ roleId: 1, role: superAdminRole }))
 
             await expect(
-                service.createManagedUser({ ...input, roleId: 1 }, superAdminPrincipal),
-            ).resolves.toMatchObject({
-                role: expect.objectContaining({ type: 'super_admin' }) as Role,
-            })
+                service.createManagedUser({ ...input, roleId: 1 }, superAdminPrincipal, superAdminAbility),
+            ).resolves.toMatchObject({ role: expect.objectContaining({ type: 'super_admin' }) as Role })
+        })
+
+        it('blocks roles with permissions the caller does not hold', async () => {
+            findRole.mockResolvedValue({ ...adminRole, permissions: ['roles.delete'] })
+
+            await expect(
+                service.createManagedUser({ ...input, roleId: 2 }, adminPrincipal, adminAbility),
+            ).rejects.toThrow(
+                new ForbiddenException('You cannot assign a role with permissions you do not hold: roles.delete'),
+            )
+        })
+
+        it('blocks extras the caller does not hold and creates nothing', async () => {
+            await expect(
+                service.createManagedUser({ ...input, permissions: ['domains.delete'] }, adminPrincipal, adminAbility),
+            ).rejects.toThrow(ForbiddenException)
+            expect(transaction).not.toHaveBeenCalled()
+            expect(create).not.toHaveBeenCalled()
         })
 
         it('maps duplicate emails to a bad request', async () => {
             create.mockRejectedValue(new UniqueConstraintError({}))
 
-            await expect(service.createManagedUser(input, adminPrincipal)).rejects.toThrow(
+            await expect(service.createManagedUser(input, adminPrincipal, adminAbility)).rejects.toThrow(
                 new BadRequestException('Email is already in use'),
             )
         })
@@ -260,14 +306,18 @@ describe('UserService', () => {
     describe('getUserById', () => {
         it('returns the detail with permissions and memberships', async () => {
             permissionFindAll.mockResolvedValue([{ permission: 'domains.read' }])
-            getMembershipsForUser.mockResolvedValue([{ projectId: 1, projectName: 'Acme', permissions: ['read'] }])
+            getMembershipsForUser.mockResolvedValue([
+                { projectId: 1, projectName: 'Acme', role: { roleId: 5, name: 'Viewer' }, permissions: ['read'] },
+            ])
 
             const detail = await service.getUserById(7)
 
             expect(detail).toMatchObject({
                 userId: 7,
                 permissions: ['domains.read'],
-                memberships: [{ projectId: 1, projectName: 'Acme', permissions: ['read'] }],
+                memberships: [
+                    { projectId: 1, projectName: 'Acme', role: { roleId: 5, name: 'Viewer' }, permissions: ['read'] },
+                ],
             })
         })
 
@@ -319,16 +369,32 @@ describe('UserService', () => {
         })
 
         it('forbids non-super-admins from promoting to super admin', async () => {
-            getRoleById.mockResolvedValue(superAdminRole)
+            findRole.mockResolvedValue(superAdminRole)
 
             await expect(service.updateUser(7, { roleId: 1 }, adminPrincipal, adminAbility)).rejects.toThrow(
                 new ForbiddenException('Only super admins can assign the super admin role'),
             )
         })
 
+        it('blocks a role change to a role with permissions the caller does not hold', async () => {
+            findRole.mockResolvedValue({ ...adminRole, permissions: ['roles.delete'] })
+
+            await expect(service.updateUser(7, { roleId: 2 }, adminPrincipal, adminAbility)).rejects.toThrow(
+                ForbiddenException,
+            )
+        })
+
+        it('rejects a project role on a user', async () => {
+            findRole.mockResolvedValue(viewerRole)
+
+            await expect(service.updateUser(7, { roleId: 5 }, adminPrincipal, adminAbility)).rejects.toThrow(
+                new BadRequestException('Unknown role'),
+            )
+        })
+
         it('blocks demoting the last super admin', async () => {
             findByPk.mockResolvedValue(userRow({ userId: 1, roleId: 1, role: superAdminRole }))
-            getRoleById.mockResolvedValue(adminRole)
+            findRole.mockResolvedValue(adminRole)
             getRoleByType.mockResolvedValue(superAdminRole)
             count.mockResolvedValue(1)
 
@@ -340,7 +406,7 @@ describe('UserService', () => {
         it('allows demoting a super admin while another remains', async () => {
             const row = userRow({ userId: 5, roleId: 1, role: superAdminRole })
             findByPk.mockResolvedValue(row)
-            getRoleById.mockResolvedValue(adminRole)
+            findRole.mockResolvedValue(adminRole)
             getRoleByType.mockResolvedValue(superAdminRole)
             count.mockResolvedValue(2)
 
@@ -395,14 +461,14 @@ describe('UserService', () => {
 
             await service.updateUser(7, { roleId: 3, lastName: 'Murray' }, adminPrincipal, adminAbility)
 
-            expect(getRoleById).not.toHaveBeenCalled()
+            expect(findRole).not.toHaveBeenCalled()
             expect(row.update).toHaveBeenCalledWith({ lastName: 'Murray' })
         })
 
         it('rejects an unknown role without persisting anything', async () => {
             const row = userRow()
             findByPk.mockResolvedValue(row)
-            getRoleById.mockRejectedValue(new BadRequestException('Unknown role'))
+            findRole.mockResolvedValue(null)
 
             await expect(service.updateUser(7, { roleId: 42 }, adminPrincipal, adminAbility)).rejects.toThrow(
                 new BadRequestException('Unknown role'),
@@ -548,10 +614,10 @@ describe('UserService', () => {
 
         it('forbids granting a permission the caller does not hold', async () => {
             await expect(
-                service.replaceUserPermissions(7, ['domains.read', 'domains.delete', 'settings.update'], adminAbility),
+                service.replaceUserPermissions(7, ['domains.read', 'domains.delete', 'projects.all'], adminAbility),
             ).rejects.toThrow(
                 new ForbiddenException(
-                    'You cannot grant or revoke permissions you do not hold: domains.delete, settings.update',
+                    'You cannot grant or revoke permissions you do not hold: domains.delete, projects.all',
                 ),
             )
             expect(permissionDestroy).not.toHaveBeenCalled()

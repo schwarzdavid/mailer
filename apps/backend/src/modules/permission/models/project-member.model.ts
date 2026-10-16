@@ -6,15 +6,17 @@ import {
     CreatedAt,
     DataType,
     ForeignKey,
+    HasMany,
     Model,
     PrimaryKey,
     Table,
     UpdatedAt,
 } from 'sequelize-typescript'
 import type { ProjectMember, ProjectMemberCreate } from '../interfaces/project-member.interface.js'
-import type { ProjectPermission } from '../permission.constants.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { UserModel } from '../../user/models/user.model.js'
+import { RoleModel } from './role.model.js'
+import { ProjectMemberPermissionModel } from './project-member-permission.model.js'
 import type { Relation } from '../../../types/relation.js'
 
 @Table({
@@ -24,7 +26,7 @@ import type { Relation } from '../../../types/relation.js'
         {
             name: 'project_members_unique',
             unique: true,
-            fields: ['projectId', 'userId', 'permission'],
+            fields: ['projectId', 'userId'],
         },
         {
             name: 'project_members_user',
@@ -49,9 +51,10 @@ export class ProjectMemberModel extends Model<ProjectMember, ProjectMemberCreate
     @Column(DataType.INTEGER)
     declare userId: number
 
+    @ForeignKey(() => RoleModel)
     @AllowNull(false)
-    @Column(DataType.STRING(16))
-    declare permission: ProjectPermission
+    @Column(DataType.INTEGER)
+    declare roleId: number
 
     @BelongsTo(() => ProjectModel, {
         onDelete: 'CASCADE',
@@ -64,6 +67,18 @@ export class ProjectMemberModel extends Model<ProjectMember, ProjectMemberCreate
         onUpdate: 'CASCADE',
     })
     declare user?: Relation<UserModel>
+
+    @BelongsTo(() => RoleModel, {
+        onDelete: 'RESTRICT',
+        onUpdate: 'CASCADE',
+    })
+    declare role?: Relation<RoleModel>
+
+    @HasMany(() => ProjectMemberPermissionModel, {
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+    })
+    declare permissions: ProjectMemberPermissionModel[]
 
     @CreatedAt
     declare createdAt: Date

@@ -13,6 +13,7 @@ import type {
     ProjectDetailDto,
     ProjectListDto,
     ProjectMemberDto,
+    ProjectRoleDto,
     UserListDto,
 } from 'api'
 
@@ -119,9 +120,34 @@ export function member(overrides: Partial<ProjectMemberDto> = {}): ProjectMember
         firstName: 'Lisa',
         lastName: 'Schneider',
         email: 'lisa@acme.com',
-        permissions: ['read', 'update'],
+        role: { roleId: 7, name: 'Maintainer' },
+        permissions: [],
         ...overrides,
     }
+}
+
+export function projectRoles(): ProjectRoleDto[] {
+    return [
+        { roleId: 5, name: 'Viewer', description: 'Sees the project, its forms and sent mail.', permissions: ['read'] },
+        {
+            roleId: 6,
+            name: 'Editor',
+            description: 'Builds forms and templates.',
+            permissions: ['read', 'forms.manage'],
+        },
+        {
+            roleId: 7,
+            name: 'Maintainer',
+            description: 'Runs the project day to day: forms, API keys, members and domains.',
+            permissions: ['read', 'update', 'forms.manage', 'api_keys.manage', 'members.manage'],
+        },
+        {
+            roleId: 8,
+            name: 'Owner',
+            description: 'Everything, including deleting the project.',
+            permissions: ['read', 'update', 'delete', 'forms.manage', 'api_keys.manage', 'members.manage'],
+        },
+    ]
 }
 
 export function userListItem(overrides: Partial<UserListDto> = {}): UserListDto {

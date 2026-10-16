@@ -3,6 +3,7 @@ import { AuthApi, RoleApi, UserApi } from 'api'
 import UserDetailView from '../UserDetailView.vue'
 import { findButton, mountInApp } from '@/__tests__/support.ts'
 import { roles, signedIn, userDetail } from '../../__tests__/userFixtures.ts'
+import { heldAll } from '@/modules/roles/__tests__/roleFixtures.ts'
 
 vi.mock('vue-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('vue-router')>()
@@ -24,6 +25,7 @@ function mockApis(user = userDetail(), as = signedIn()) {
     vi.spyOn(UserApi, 'getUser').mockResolvedValue(user)
     vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(as)
     vi.spyOn(RoleApi, 'getRoles').mockResolvedValue(roles)
+    vi.spyOn(AuthApi, 'getHeldPermissions').mockResolvedValue(heldAll())
 }
 
 describe('UserDetailView', () => {
@@ -36,6 +38,7 @@ describe('UserDetailView', () => {
         expect(wrapper.get('.page-header').text()).toContain('Member of 1 project')
         const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
         expect(titles).toEqual(['Profile', 'Permissions', 'Project memberships', 'Delete user'])
+        expect(wrapper.findAll('.tag-label').map((tag) => tag.text())).toContain('Maintainer')
     })
 
     it('explains Super admins instead of a permissions grid', async () => {

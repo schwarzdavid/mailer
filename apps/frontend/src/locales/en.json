@@ -14,6 +14,7 @@
         "domains": "Domains",
         "bounces": "Bounces",
         "users": "Users",
+        "roles": "Roles",
         "settings": "Settings",
         "administration": "Administration",
         "backToDashboard": "Back to dashboard",
@@ -35,7 +36,8 @@
             "Domain": "View domains",
             "Bounce": "View bounces",
             "Settings": "View settings",
-            "User": "View users"
+            "User": "View users",
+            "Role": "View roles"
         }
     },
     "validation": {
@@ -259,7 +261,7 @@
                 "readOnly": "Read only",
                 "readOnlyAlert": {
                     "title": "You can view this project",
-                    "text": "Your membership allows Read. Ask an admin for Update to change forms, receivers or templates."
+                    "text": "Your project role only allows viewing. Ask a project maintainer or an admin for more access."
                 },
                 "general": {
                     "title": "General",
@@ -328,7 +330,7 @@
                 "manageInUsers": "Manage in Users",
                 "empty": {
                     "title": "No members yet",
-                    "text": "Only admins and users with “Access all projects” can open this project."
+                    "text": "Only admins, users with “Access all projects” and members you add here can open this project."
                 },
                 "implicit": {
                     "note": "Also open to {who}, without membership.",
@@ -343,12 +345,11 @@
                     "access": "Access in {project}",
                     "userHint": "{email} · role {role}",
                     "userRequired": "Choose a user.",
-                    "permissionRequired": "Choose at least one permission.",
-                    "explain": {
-                        "read": "See the project, its forms and receivers",
-                        "update": "Edit forms, fields, receivers and templates",
-                        "delete": "Delete forms and the project"
-                    }
+                    "role": "Project role",
+                    "roleRequired": "Choose a role.",
+                    "advanced": "Advanced: additional permissions",
+                    "advancedHint": "Granted on top of the role, in this project only. You can only grant permissions you hold here yourself.",
+                    "fromRole": "From role: {role}"
                 }
             },
             "apiKeys": {
@@ -396,7 +397,11 @@
                 "loading": "Loading sent mail",
                 "search": "Search recipient or subject",
                 "count": "No messages | 1 message | {count} messages",
-                "sources": { "all": "All sources", "api": "API", "inbound_form": "Forms" },
+                "sources": {
+                    "all": "All sources",
+                    "api": "API",
+                    "inbound_form": "Forms"
+                },
                 "statuses": {
                     "all": "All statuses",
                     "sent": "Sent",
@@ -404,7 +409,10 @@
                     "blocked": "Blocked",
                     "pending": "Sending"
                 },
-                "sourceTag": { "api": "API", "inbound_form": "Form" },
+                "sourceTag": {
+                    "api": "API",
+                    "inbound_form": "Form"
+                },
                 "columns": {
                     "recipient": "Recipient",
                     "subject": "Subject",
@@ -546,11 +554,6 @@
             }
         },
         "users": {
-            "roles": {
-                "super_admin": "Every permission, including changing other Super admins",
-                "admin": "Every permission, but can't change Super admins",
-                "user": "No permissions of its own; add them per user or through project memberships"
-            },
             "list": {
                 "title": "Users",
                 "description": "Who can sign in, their role, and extra permissions.",
@@ -574,6 +577,8 @@
                 "submit": "Create user",
                 "passwordHint": "At least 8 characters. Share it with {name} securely.",
                 "theUser": "the user",
+                "advanced": "Advanced: additional permissions",
+                "advancedHint": "Granted on top of the role, everywhere. You can only grant permissions you hold yourself.",
                 "success": "User created",
                 "error": "Couldn't create the user. Check your connection and try again."
             },
@@ -611,7 +616,7 @@
                     "error": "Couldn't save the permissions",
                     "explainer": {
                         "title": "How access works",
-                        "text": "Permissions add up: the role and these permissions apply everywhere; a project membership adds Read, Update or Delete for that one project. Super admins and users with “Access all projects” reach every project without membership."
+                        "text": "Permissions add up: the role and these permissions apply everywhere; a project membership adds a project role and extras for that one project. Super admins and users with “Access all projects” reach every project without membership."
                     }
                 },
                 "memberships": {
@@ -622,6 +627,82 @@
                         "text": "Add this user on a project's Members card."
                     }
                 }
+            }
+        },
+        "roles": {
+            "system": "System",
+            "scope": {
+                "global": "Global",
+                "project": "Project"
+            },
+            "list": {
+                "title": "Roles",
+                "description": "Permission sets you assign to users and project members.",
+                "create": "New role",
+                "thing": "roles",
+                "loading": "Loading roles",
+                "allPermissions": "All permissions",
+                "permissionCount": "No permissions | 1 permission | {count} permissions",
+                "userCount": "No users | 1 user | {count} users",
+                "memberCount": "No members | 1 member | {count} members",
+                "global": {
+                    "title": "Global roles",
+                    "description": "Apply everywhere. Every user has exactly one."
+                },
+                "project": {
+                    "title": "Project roles",
+                    "description": "Apply inside one project. Every member has exactly one per project."
+                }
+            },
+            "add": {
+                "title": "New role",
+                "submit": "Create role",
+                "scope": "Scope",
+                "scopeHint": {
+                    "global": "Global roles are assigned to users.",
+                    "project": "Project roles are assigned to project members."
+                },
+                "description": "Description (optional)",
+                "startFrom": "Start from (optional)",
+                "startFromHint": "Copies that role's permissions. You can change them afterwards.",
+                "success": "Role created",
+                "error": "Couldn't create the role. Check your connection and try again."
+            },
+            "details": {
+                "thing": "role",
+                "loading": "Loading role",
+                "backToList": "Back to roles",
+                "assignedUsers": "Assigned to no users | Assigned to 1 user | Assigned to {count} users",
+                "assignedMembers": "Assigned to no project members | Assigned to 1 project member | Assigned to {count} project members",
+                "manageUsers": "Manage in Users",
+                "system": {
+                    "title": "System role with every permission",
+                    "text": "Super admins can do everything. This role can't be changed or deleted."
+                },
+                "profile": {
+                    "title": "Profile",
+                    "description": "Description",
+                    "saved": "Role saved",
+                    "error": "Couldn't save the role"
+                },
+                "permissions": {
+                    "title": "Permissions",
+                    "description": "Everyone holding this role gets these. You can only add or remove permissions you hold yourself.",
+                    "readRequired": "Every project role includes viewing.",
+                    "saved": "Permissions saved",
+                    "error": "Couldn't save the permissions"
+                }
+            },
+            "delete": {
+                "title": "Delete role",
+                "description": "Removes {name}. This can't be undone.",
+                "blocked": "{name} is still assigned. Move everyone to another role first.",
+                "action": "Delete role…",
+                "confirmTitle": "Delete role {name}?",
+                "confirmBody": "The role is removed permanently. This can't be undone.",
+                "confirm": "Delete role",
+                "done": "{name} deleted",
+                "error": "Couldn't delete the role"
             }
         },
         "bounces": {
@@ -1025,7 +1106,10 @@
             "bounces": "Bounces",
             "settings": "Settings",
             "users": "Users",
-            "roles": "Roles"
+            "roles": "Roles",
+            "project": "Project",
+            "content": "Forms & API keys",
+            "members": "Members"
         },
         "labels": {
             "domains_read": "View domains",
@@ -1043,18 +1127,19 @@
             "users_create": "Create users",
             "users_update": "Update users",
             "users_delete": "Delete users",
-            "roles_read": "View roles"
+            "roles_read": "View roles",
+            "roles_create": "Create roles",
+            "roles_update": "Update roles",
+            "roles_delete": "Delete roles"
         },
         "project": {
-            "read": "Read",
-            "update": "Update",
-            "delete": "Delete"
-        }
-    },
-    "roles": {
-        "super_admin": "Super admin",
-        "admin": "Admin",
-        "user": "User",
-        "custom": "Custom"
+            "read": "View",
+            "update": "Update project",
+            "delete": "Delete project",
+            "forms_manage": "Manage forms",
+            "api_keys_manage": "Manage API keys",
+            "members_manage": "Manage members"
+        },
+        "notHeld": "You don't hold this permission"
     }
 }

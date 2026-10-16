@@ -6,7 +6,7 @@
         :submit-label="t('module.users.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty"
+        :dirty="meta.dirty || extraPermissions.length > 0"
         @submit="onSubmit"
     >
         <div class="form-grid form-grid--2">
@@ -43,6 +43,18 @@
                 aria-required="true"
             />
             <RoleSelect v-model="roleId" class="span-2" :error-messages="errors.roleId" />
+            <DisclosureBox class="span-2" :summary="t('module.users.add.advanced')">
+                <p class="advanced-hint">{{ t('module.users.add.advancedHint') }}</p>
+                <PermissionGrid
+                    v-model="extraPermissions"
+                    scope="global"
+                    :groups="GLOBAL_PERMISSION_GROUPS"
+                    :locked="rolePermissions"
+                    :locked-hint="t('module.users.details.permissions.fromRole', { role: selectedRole?.name ?? '' })"
+                    :grantable="held?.permissions"
+                    :readonly="held === undefined"
+                />
+            </DisclosureBox>
         </div>
     </FormDialog>
 </template>
@@ -55,12 +67,17 @@
     import { useI18n } from 'vue-i18n'
     import { useQuery } from '@tanstack/vue-query'
     import { useRouter } from 'vue-router'
+    import type { Permission } from 'api'
+    import DisclosureBox from '@/components/DisclosureBox.vue'
     import FormDialog from '@/components/FormDialog.vue'
     import PasswordField from '@/components/PasswordField.vue'
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
+    import { useAuthPermissionsQuery } from '@/modules/auth/queries/useAuthPermissionsQuery.ts'
+    import PermissionGrid from '@/modules/roles/components/PermissionGrid.vue'
+    import { GLOBAL_PERMISSION_GROUPS, isGlobalPermission } from '@/modules/roles/permissionCatalog.ts'
+    import { useRolesQuery } from '@/modules/roles/queries/useRolesQuery.ts'
     import RoleSelect from '@/modules/users/components/RoleSelect.vue'
-    import { useRolesQuery } from '@/modules/users/queries/useRolesQuery.ts'
     import { useUserCreateMutation } from '@/modules/users/mutations/useUserCreateMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
@@ -71,8 +88,10 @@
     const notify = useNotify()
     const router = useRouter()
     const errorMessage = ref<string | null>(null)
+    const extraPermissions = ref<Permission[]>([])
     const { mutateAsync, isPending } = useUserCreateMutation()
     const { data: roles } = useQuery(useRolesQuery())
+    const { data: held } = useQuery(useAuthPermissionsQuery())
     const defaultRoleId = computed(() => roles.value?.find((role) => role.type === 'user')?.roleId)
 
     const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
@@ -93,11 +112,19 @@
     const [password] = defineField('password')
     const [roleId] = defineField('roleId')
 
+    const selectedRole = computed(() => roles.value?.find((role) => role.roleId === roleId.value))
+    const rolePermissions = computed(() => (selectedRole.value?.permissions ?? []).filter(isGlobalPermission))
+
+    watch(rolePermissions, (permissions) => {
+        extraPermissions.value = extraPermissions.value.filter((permission) => !permissions.includes(permission))
+    })
+
     watch(
         [model, defaultRoleId],
         ([open], previous) => {
             if (open && (!previous?.[0] || !meta.value.dirty)) {
                 errorMessage.value = null
+                extraPermissions.value = []
                 resetForm({ values: { roleId: defaultRoleId.value } })
             }
         },
@@ -107,7 +134,7 @@
     const onSubmit = handleSubmit(async (values) => {
         errorMessage.value = null
         try {
-            const { userId } = await mutateAsync(values)
+            const { userId } = await mutateAsync({ ...values, permissions: extraPermissions.value })
             model.value = false
             await router.push({ name: RouteNames.USER_DETAILS, params: { userId } })
             notify.success(t('module.users.add.success'))
@@ -116,3 +143,12 @@
         }
     })
 </script>
+
+<style scoped>
+    .advanced-hint {
+        margin: 0 0 12px;
+        color: rgb(var(--v-theme-ink-muted));
+        font-size: 0.8125rem;
+        line-height: 1.25rem;
+    }
+</style>

@@ -6,7 +6,7 @@ import { ProjectModel } from '../../project/models/project.model.js'
 import { ApiKey } from '../interfaces/api-key.interface.js'
 import { toApiKey } from '../mappers/api-key.mapper.js'
 import { generateApiKey, matchesApiKeyHash, parseApiKeyPrefix } from '../helpers/api-key-format.js'
-import { assertProjectReadable, assertProjectUpdatable } from '../../permission/helpers/project-access.js'
+import { assertProjectPermission, assertProjectReadable } from '../../permission/helpers/project-access.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 import { API_KEY_LAST_USED_CACHE_PREFIX, API_KEY_LAST_USED_INTERVAL_MS } from '../api-key.constants.js'
@@ -26,7 +26,7 @@ export class ApiKeyService {
     ) {}
 
     async createKey(projectId: number, name: string, principal: User, ability: AppAbility): Promise<CreatedApiKey> {
-        assertProjectUpdatable(ability, projectId)
+        assertProjectPermission(ability, 'api_keys.manage', projectId)
 
         const { key, prefix, secretHash } = generateApiKey()
         const row = await this.apiKeyModel.create({
@@ -49,7 +49,7 @@ export class ApiKeyService {
     }
 
     async revokeKey(projectId: number, apiKeyId: number, ability: AppAbility): Promise<void> {
-        assertProjectUpdatable(ability, projectId)
+        assertProjectPermission(ability, 'api_keys.manage', projectId)
 
         const row = await this.apiKeyModel.findOne({ where: { apiKeyId, projectId } })
         if (!row) {

@@ -35,7 +35,7 @@
         <FieldsCard :form="form" :can-update="canUpdate" />
         <SecurityCard :form="form" :can-update="canUpdate" />
         <ReceiversCard :form="form" :sender-domain="senderDomain?.fqdn ?? null" :can-update="canUpdate" />
-        <FormDangerZone v-if="canDelete" :form="form" />
+        <FormDangerZone v-if="canUpdate" :form="form" />
     </div>
 </template>
 
@@ -85,8 +85,7 @@
     })
 
     const projectSubject = computed(() => subject('Project', { projectId: projectId.value }))
-    const canUpdate = computed(() => userAbility.can('update', projectSubject.value))
-    const canDelete = computed(() => userAbility.can('delete', projectSubject.value))
+    const canUpdate = computed(() => userAbility.can('forms.manage', projectSubject.value))
 
     const senderDomain = computed(() =>
         project.value?.domains.find((domain) => domain.domainId === form.value?.domainId),

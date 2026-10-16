@@ -13,7 +13,7 @@ What works so far:
 - **Platform sending domain.** You configure the service's own infrastructure domain once, in the settings or during first-start onboarding. It is used as the SPF include and as the bounce (return-path) domain.
 - **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and SMTP 5xx rejections are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
 - **Projects.** Projects group inbound forms and the domains assigned to them.
-- **Users & permissions.** Users have roles (Super Admin, Admin, User), optional direct permission grants and per-project memberships. Access checks use CASL on both the backend and the frontend.
+- **Users, roles & permissions.** Global roles (Super Admin, Admin, User and custom ones) carry global permissions; project roles (Viewer, Editor, Maintainer, Owner and custom ones) carry project permissions (`read`, `update`, `delete`, `forms.manage`, `api_keys.manage`, `members.manage`). Users get a global role plus optional extra permissions, project members get a project role plus optional extras, and nobody can grant more than they hold. Roles are managed under Administration → Roles. Access checks use CASL on both the backend and the frontend.
 
 ### Tech stack
 
@@ -132,7 +132,6 @@ The key may also be passed as `?key=…`, but query strings tend to end up in lo
 
 - [ ] **Dashboard** The dashboard is still an empty placeholder.
 - [ ] **UI** The current UI is only as meant as a proof of concept and needs to be improved/rewritten.
-- [ ] **Role editor** The schema supports custom roles, but only the three seeded roles exist so far. There are no endpoints or UI to create, edit or delete roles.
 - [ ] **Encrypt security secrets** reCAPTCHA secrets on inbound forms are stored in plain text. They should be encrypted like DKIM keys.
 - [ ] **Bounce improvements:**
     - [ ] VERP / per-delivery return paths, so bounces can be linked back to the inbound form delivery that caused them

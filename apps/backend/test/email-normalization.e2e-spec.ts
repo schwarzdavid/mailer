@@ -4,13 +4,14 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
-import { login, seedUser, type Credentials } from './support/session.js'
+import { globalRoleId, login, seedUser, type Credentials } from './support/session.js'
 import { UserModel } from '../src/modules/user/models/user.model.js'
 
 describe('Email normalization (e2e)', () => {
     let app: INestApplication<App>
     let token: string
     let userId: number
+    let userRoleId: number
 
     const adminCredentials: Credentials = {
         email: 'Normalize.Admin@Example.com',
@@ -25,6 +26,7 @@ describe('Email normalization (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, adminCredentials)
         token = await login(app, { ...adminCredentials, email: 'normalize.admin@example.com' })
+        userRoleId = await globalRoleId(app, 'user')
     })
 
     afterAll(async () => {
@@ -35,7 +37,13 @@ describe('Email normalization (e2e)', () => {
         const response = await http()
             .post('/api/user')
             .set('Authorization', asAdmin())
-            .send({ firstName: 'Mixed', lastName: 'Case', email: 'Mixed.Case@Example.COM', password })
+            .send({
+                firstName: 'Mixed',
+                lastName: 'Case',
+                email: 'Mixed.Case@Example.COM',
+                password,
+                roleId: userRoleId,
+            })
             .expect(201)
 
         const body = response.body as { userId: number; email: string }
@@ -49,10 +57,13 @@ describe('Email normalization (e2e)', () => {
     })
 
     it('rejects an email that differs from an existing one only by case', async () => {
-        const response = await http()
-            .post('/api/user')
-            .set('Authorization', asAdmin())
-            .send({ firstName: 'Dup', lastName: 'Licate', email: 'mixed.CASE@example.com', password })
+        const response = await http().post('/api/user').set('Authorization', asAdmin()).send({
+            firstName: 'Dup',
+            lastName: 'Licate',
+            email: 'mixed.CASE@example.com',
+            password,
+            roleId: userRoleId,
+        })
 
         expect(response.status).toBe(400)
     })

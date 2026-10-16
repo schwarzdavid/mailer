@@ -4,6 +4,7 @@ import { RoleModel } from './models/role.model.js'
 import { RolePermissionModel } from './models/role-permission.model.js'
 import { UserPermissionModel } from './models/user-permission.model.js'
 import { ProjectMemberModel } from './models/project-member.model.js'
+import { ProjectMemberPermissionModel } from './models/project-member-permission.model.js'
 import { ProjectModel } from '../project/models/project.model.js'
 import { UserModel } from '../user/models/user.model.js'
 import { RoleService } from './services/role.service.js'
@@ -20,6 +21,7 @@ import { RoleController } from './controller/role.controller.js'
             RolePermissionModel,
             UserPermissionModel,
             ProjectMemberModel,
+            ProjectMemberPermissionModel,
             ProjectModel,
             UserModel,
         ]),

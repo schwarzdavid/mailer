@@ -12,4 +12,8 @@ export class PermissionCacheService {
             this.cacheManager.del(AUTH_PERMISSIONS_CACHE_PREFIX + userId),
         ])
     }
+
+    async invalidateUsers(userIds: number[]): Promise<void> {
+        await Promise.all(userIds.map((userId) => this.invalidateUser(userId)))
+    }
 }

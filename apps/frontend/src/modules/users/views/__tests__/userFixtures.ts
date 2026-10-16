@@ -3,9 +3,33 @@ import type { RoleDto, UserDetailDto, UserDto } from 'api'
 const created = new Date('2026-01-01T00:00:00.000Z')
 
 export const roles: RoleDto[] = [
-    { roleId: 1, type: 'super_admin', name: 'Super Admin', permissions: [] },
-    { roleId: 2, type: 'admin', name: 'Admin', permissions: ['domains.read', 'projects.all'] },
-    { roleId: 3, type: 'user', name: 'User', permissions: [] },
+    {
+        roleId: 1,
+        type: 'super_admin',
+        scope: 'global',
+        name: 'Super Admin',
+        description: 'Every permission, including changing other Super admins',
+        permissions: [],
+        assignmentCount: 1,
+    },
+    {
+        roleId: 2,
+        type: 'admin',
+        scope: 'global',
+        name: 'Admin',
+        description: "Every permission, but can't change Super admins",
+        permissions: ['domains.read', 'projects.all'],
+        assignmentCount: 1,
+    },
+    {
+        roleId: 3,
+        type: 'user',
+        scope: 'global',
+        name: 'User',
+        description: 'No permissions of its own; add them per user or through project memberships',
+        permissions: [],
+        assignmentCount: 2,
+    },
 ]
 
 export function signedIn(type: UserDto['role']['type'] = 'super_admin', userId = 1): UserDto {
@@ -31,7 +55,14 @@ export function userDetail(overrides: Partial<UserDetailDto> = {}): UserDetailDt
         createdAt: created,
         updatedAt: created,
         permissions: ['bounces.read'],
-        memberships: [{ projectId: 1, projectName: 'Acme Website', permissions: ['update', 'read'] }],
+        memberships: [
+            {
+                projectId: 1,
+                projectName: 'Acme Website',
+                role: { roleId: 7, name: 'Maintainer' },
+                permissions: ['delete'],
+            },
+        ],
         ...overrides,
     }
 }

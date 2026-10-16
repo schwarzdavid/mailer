@@ -3,6 +3,7 @@ import { createMongoAbility } from '@casl/ability'
 import { describe, expect, it } from 'vitest'
 import {
     assertProjectDeletable,
+    assertProjectPermission,
     assertProjectReadable,
     assertProjectUpdatable,
     canOnProject,
@@ -35,5 +36,16 @@ describe('project access helpers', () => {
     it('rejects deletes without the delete level', () => {
         expect(() => assertProjectDeletable(memberAbility, 1)).toThrow(ForbiddenException)
         expect(() => assertProjectDeletable(memberAbility, 3)).toThrow(NotFoundException)
+    })
+
+    it('checks any catalog permission after the read gate', () => {
+        const editor = createMongoAbility<AppAbility>([
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        expect(() => assertProjectPermission(editor, 'forms.manage', 1)).not.toThrow()
+        expect(() => assertProjectPermission(editor, 'api_keys.manage', 1)).toThrow(ForbiddenException)
+        expect(() => assertProjectPermission(editor, 'forms.manage', 2)).toThrow(NotFoundException)
     })
 })

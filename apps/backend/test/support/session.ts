@@ -32,3 +32,15 @@ export async function login(app: INestApplication<App>, credentials: Credentials
     const response = await request(app.getHttpServer()).post('/api/auth/login').send(credentials).expect(200)
     return (response.body as { token: string }).token
 }
+
+export async function globalRoleId(app: INestApplication, type: RoleType): Promise<number> {
+    return (await app.get(RoleService).getRoleByType(type)).roleId
+}
+
+export async function projectRoleId(app: INestApplication, name: string): Promise<number> {
+    const role = (await app.get(RoleService).getProjectRoles()).find((candidate) => candidate.name === name)
+    if (!role) {
+        throw new Error(`No project role named "${name}"`)
+    }
+    return role.roleId
+}

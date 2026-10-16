@@ -61,6 +61,17 @@ describe('useLoginMutation', () => {
         unmount()
     })
 
+    it('clears the stale held permissions on success', async () => {
+        vi.spyOn(AuthApi, 'login').mockResolvedValue(authentication)
+        const { result, queryClient, unmount } = withVueQuery(() => useLoginMutation())
+        queryClient.setQueryData(['auth.permissions'], { permissions: ['domains.read'], projectPermissions: [] })
+
+        await result.mutateAsync(credentials)
+
+        expect(queryClient.getQueryData(['auth.permissions'])).toBeUndefined()
+        unmount()
+    })
+
     it('rejects and caches no user when the request fails', async () => {
         vi.spyOn(AuthApi, 'login').mockRejectedValue(new Error('Invalid credentials'))
         const { result, queryClient, unmount } = withVueQuery(() => useLoginMutation())

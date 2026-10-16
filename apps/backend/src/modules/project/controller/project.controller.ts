@@ -9,7 +9,12 @@ import { ProjectService } from '../services/project.service.js'
 import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { ProjectCreateDto, ProjectUpdateDto } from '../dtos/project-create.dto.js'
 import { ProjectDomainAssignDto } from '../dtos/project-domain-assign.dto.js'
-import { ProjectImplicitAccessDto, ProjectMemberDto, ProjectMemberPutDto } from '../dtos/project-member.dto.js'
+import {
+    ProjectImplicitAccessDto,
+    ProjectMemberDto,
+    ProjectMemberPutDto,
+    ProjectRoleDto,
+} from '../dtos/project-member.dto.js'
 import { DeletedProjectDto, ProjectDetailDto, ProjectDto, ProjectListDto } from '../dtos/project.dto.js'
 import type { UserWithRole } from '../../user/interfaces/user.interface.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
@@ -128,6 +133,17 @@ export class ProjectController {
         return ProjectImplicitAccessDto.fromImplicitAccess(access)
     }
 
+    @SerializeOptions({ type: ProjectRoleDto })
+    @Get(':projectId/roles')
+    async getProjectRoles(
+        @Param('projectId', ParseIntPipe) projectId: number,
+        @CurrentAbility() ability: AppAbility,
+    ): Promise<ProjectRoleDto[]> {
+        const roles = await this.projectMemberService.getProjectRoles(projectId, ability)
+
+        return roles.map((role) => ProjectRoleDto.fromRole(role))
+    }
+
     @Put(':projectId/members/:userId')
     async setProjectMember(
         @Param('projectId', ParseIntPipe) projectId: number,
@@ -135,7 +151,12 @@ export class ProjectController {
         @Body() body: ProjectMemberPutDto,
         @CurrentAbility() ability: AppAbility,
     ): Promise<void> {
-        await this.projectMemberService.setMemberPermissions(projectId, userId, body.permissions, ability)
+        await this.projectMemberService.setMember(
+            projectId,
+            userId,
+            { roleId: body.roleId, permissions: body.permissions ?? [] },
+            ability,
+        )
     }
 
     @Delete(':projectId/members/:userId')

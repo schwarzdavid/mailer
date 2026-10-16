@@ -14,6 +14,7 @@ export function useUserUpdateMutation() {
             if (currentUser?.userId === userId) {
                 void client.invalidateQueries({ queryKey: ['auth.user'] })
                 void client.invalidateQueries({ queryKey: ['auth.ability'] })
+                void client.invalidateQueries({ queryKey: ['auth.permissions'] })
             }
         },
     })

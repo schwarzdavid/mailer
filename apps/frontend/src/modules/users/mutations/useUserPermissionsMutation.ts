@@ -13,6 +13,7 @@ export function useUserPermissionsMutation() {
             const currentUser = client.getQueryData<UserDto>(['auth.user'])
             if (currentUser?.userId === userId) {
                 void client.invalidateQueries({ queryKey: ['auth.ability'] })
+                void client.invalidateQueries({ queryKey: ['auth.permissions'] })
             }
         },
     })

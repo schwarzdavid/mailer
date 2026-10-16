@@ -3,7 +3,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
-import { login, seedUser, type Credentials } from './support/session.js'
+import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import type { RoleType } from '../src/modules/permission/permission.constants.js'
 
 interface UserBody {
@@ -22,12 +22,18 @@ interface UserListBody extends UserBody {
 
 interface UserDetailBody extends UserBody {
     permissions: string[]
-    memberships: { projectId: number; projectName: string; permissions: string[] }[]
+    memberships: {
+        projectId: number
+        projectName: string
+        role: { roleId: number; name: string }
+        permissions: string[]
+    }[]
 }
 
 interface RoleBody {
     roleId: number
     name: string
+    scope: string
     type: RoleType
     permissions: string[]
 }
@@ -105,7 +111,12 @@ describe('User + Role (e2e)', () => {
             const response = await http().get('/api/role').set('Authorization', bearer(adminToken)).expect(200)
             const roles = response.body as RoleBody[]
 
-            expect(roles.map((role) => role.type).sort()).toEqual(['admin', 'super_admin', 'user'])
+            expect(
+                roles
+                    .filter((role) => role.scope === 'global')
+                    .map((role) => role.type)
+                    .sort(),
+            ).toEqual(['admin', 'super_admin', 'user'])
             const admin = roles.find((role) => role.type === 'admin')!
             expect(admin.permissions).toEqual(expect.arrayContaining(['users.read', 'roles.read', 'bounces.read']))
             adminRoleId = admin.roleId
@@ -118,7 +129,7 @@ describe('User + Role (e2e)', () => {
             const response = await http()
                 .post('/api/user')
                 .set('Authorization', bearer(adminToken))
-                .send({ firstName: 'Managed', lastName: 'Person', ...managedCredentials })
+                .send({ firstName: 'Managed', lastName: 'Person', ...managedCredentials, roleId: userRoleId })
                 .expect(201)
             const body = response.body as UserBody
 
@@ -139,7 +150,7 @@ describe('User + Role (e2e)', () => {
             const response = await http()
                 .post('/api/user')
                 .set('Authorization', bearer(superToken))
-                .send({ firstName: 'Dup', lastName: 'Licate', ...managedCredentials })
+                .send({ firstName: 'Dup', lastName: 'Licate', ...managedCredentials, roleId: userRoleId })
 
             expect(response.status).toBe(400)
         })
@@ -167,10 +178,64 @@ describe('User + Role (e2e)', () => {
                 'a non-integer role',
                 { firstName: 'A', lastName: 'B', email: 'user-e2e.role@example.com', password, roleId: 'admin' },
             ],
+            ['a missing role', { firstName: 'A', lastName: 'B', email: 'user-e2e.norole2@example.com', password }],
         ])('rejects %s with 400', async (_case, body) => {
             const response = await http().post('/api/user').set('Authorization', bearer(superToken)).send(body)
 
             expect(response.status).toBe(400)
+        })
+
+        it('stores extra permissions atomically and rejects ones the caller does not hold', async () => {
+            const response = await http()
+                .post('/api/user')
+                .set('Authorization', bearer(superToken))
+                .send({
+                    firstName: 'Extra',
+                    lastName: 'Person',
+                    email: 'user-e2e.extra@example.com',
+                    password,
+                    roleId: userRoleId,
+                    permissions: ['domains.read'],
+                })
+                .expect(201)
+            const detail = await http()
+                .get(`/api/user/${(response.body as UserBody).userId}`)
+                .set('Authorization', bearer(superToken))
+                .expect(200)
+            expect((detail.body as UserDetailBody).permissions).toEqual(['domains.read'])
+
+            const me = await http().get('/api/auth/user').set('Authorization', bearer(memberToken)).expect(200)
+            await http()
+                .put(`/api/user/${(me.body as UserBody).userId}/permissions`)
+                .set('Authorization', bearer(superToken))
+                .send({ permissions: ['users.read', 'users.create'] })
+                .expect(200)
+            const creatorToken = await login(app, memberCredentials)
+
+            await http()
+                .post('/api/user')
+                .set('Authorization', bearer(creatorToken))
+                .send({
+                    firstName: 'Nope',
+                    lastName: 'Person',
+                    email: 'user-e2e.nope@example.com',
+                    password,
+                    roleId: userRoleId,
+                    permissions: ['domains.read'],
+                })
+                .expect(403)
+            await http()
+                .post('/api/user')
+                .set('Authorization', bearer(creatorToken))
+                .send({
+                    firstName: 'Plain',
+                    lastName: 'Person',
+                    email: 'user-e2e.plain@example.com',
+                    password,
+                    roleId: userRoleId,
+                    permissions: [],
+                })
+                .expect(201)
         })
     })
 
@@ -203,15 +268,17 @@ describe('User + Role (e2e)', () => {
 
             const firstProjectId = await createProject('User E2E Membership One')
             const secondProjectId = await createProject('User E2E Membership Two')
+            const ownerRoleId = await projectRoleId(app, 'Owner')
+            const viewerRoleId = await projectRoleId(app, 'Viewer')
             await http()
                 .put(`/api/project/${firstProjectId}/members/${managedUserId}`)
                 .set('Authorization', bearer(superToken))
-                .send({ permissions: ['read', 'update', 'delete'] })
+                .send({ roleId: ownerRoleId })
                 .expect(200)
             await http()
                 .put(`/api/project/${secondProjectId}/members/${managedUserId}`)
                 .set('Authorization', bearer(superToken))
-                .send({ permissions: ['read'] })
+                .send({ roleId: viewerRoleId })
                 .expect(200)
             expect(await membershipCount(managedUserId)).toBe(2)
 

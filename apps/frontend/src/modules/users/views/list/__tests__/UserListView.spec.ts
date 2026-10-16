@@ -49,7 +49,7 @@ describe('UserListView', () => {
         const rows = wrapper.findAll('tbody tr').map((row) => row.text())
         expect(rows[0]).toContain('Ada Lovelace')
         expect(rows[0]).toContain('You')
-        expect(rows[0]).toContain('Super admin')
+        expect(rows[0]).toContain('Super Admin')
         expect(rows[0]).toContain('All')
         expect(rows[1]).toContain('Lisa Schneider')
         expect(rows[1]).toContain('Admin')

@@ -15,30 +15,15 @@
                 :title="t('module.users.details.permissions.explainer.title')"
                 :text="t('module.users.details.permissions.explainer.text')"
             />
-            <div class="user-permissions__grid">
-                <fieldset
-                    v-for="(groupPermissions, group) in PERMISSION_GROUPS"
-                    :key="group"
-                    class="user-permissions__group"
-                >
-                    <legend>{{ t(`permissions.groups.${group}`) }}</legend>
-                    <VCheckbox
-                        v-for="permission in groupPermissions"
-                        :key="permission"
-                        :value="permission"
-                        :label="t(`permissions.labels.${permission.replace('.', '_')}`)"
-                        :disabled="!canUpdate || fromRole(permission)"
-                        :model-value="effective"
-                        :messages="
-                            fromRole(permission)
-                                ? t('module.users.details.permissions.fromRole', { role: roleLabel(user.role) })
-                                : undefined
-                        "
-                        hide-details="auto"
-                        @update:model-value="onChange"
-                    />
-                </fieldset>
-            </div>
+            <PermissionGrid
+                v-model="selected"
+                scope="global"
+                :groups="GLOBAL_PERMISSION_GROUPS"
+                :locked="rolePermissions"
+                :locked-hint="t('module.users.details.permissions.fromRole', { role: user.role.name })"
+                :grantable="held?.permissions"
+                :readonly="!canUpdate || held === undefined"
+            />
         </form>
         <template v-if="canUpdate" #footer>
             <SaveFooter :form="formId" :dirty="dirty" :pending="isPending" @discard="discard" />
@@ -58,16 +43,16 @@
     import { useDirtyGuard } from '@/composables/useDirtyGuard.ts'
     import { useNotify } from '@/composables/useNotify.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
-    import { useRoleLabels } from '@/modules/users/composables/useRoleLabel.ts'
-    import { PERMISSION_GROUPS } from '@/modules/users/permissionGroups.ts'
+    import { useAuthPermissionsQuery } from '@/modules/auth/queries/useAuthPermissionsQuery.ts'
+    import PermissionGrid from '@/modules/roles/components/PermissionGrid.vue'
+    import { GLOBAL_PERMISSION_GROUPS, isGlobalPermission } from '@/modules/roles/permissionCatalog.ts'
+    import { useRolesQuery } from '@/modules/roles/queries/useRolesQuery.ts'
     import { useUserPermissionsMutation } from '@/modules/users/mutations/useUserPermissionsMutation.ts'
-    import { useRolesQuery } from '@/modules/users/queries/useRolesQuery.ts'
 
     const props = defineProps<{ user: UserDetailDto; canUpdate: boolean }>()
 
     const { t } = useI18n()
     const notify = useNotify()
-    const roleLabel = useRoleLabels()
     const userAbility = useAbility()
     const formId = useId()
     const errorMessage = ref<string | null>(null)
@@ -76,10 +61,14 @@
     const { queryKey, queryFn } = useRolesQuery()
     const { data: roles } = useQuery({ queryKey, queryFn, enabled: computed(() => userAbility.can('read', 'Role')) })
 
-    const rolePermissions = computed(
-        () => roles.value?.find((role) => role.roleId === props.user.role.roleId)?.permissions ?? [],
+    const { queryKey: heldKey, queryFn: heldFn } = useAuthPermissionsQuery()
+    const { data: held } = useQuery({ queryKey: heldKey, queryFn: heldFn, enabled: computed(() => props.canUpdate) })
+
+    const rolePermissions = computed(() =>
+        (roles.value?.find((role) => role.roleId === props.user.role.roleId)?.permissions ?? []).filter(
+            isGlobalPermission,
+        ),
     )
-    const effective = computed(() => [...new Set([...selected.value, ...rolePermissions.value])])
     const direct = (permissions: Permission[]) =>
         permissions
             .filter((permission) => !fromRole(permission))
@@ -100,10 +89,6 @@
 
     function fromRole(permission: Permission) {
         return rolePermissions.value.includes(permission)
-    }
-
-    function onChange(value: Permission[] | null) {
-        selected.value = (value ?? []).filter((permission) => !fromRole(permission))
     }
 
     function discard() {
@@ -129,24 +114,5 @@
     .user-permissions {
         display: grid;
         gap: 20px;
-    }
-
-    .user-permissions__grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-        gap: 20px 24px;
-    }
-
-    .user-permissions__group {
-        margin: 0;
-        padding: 0;
-        border: 0;
-    }
-
-    .user-permissions__group legend {
-        margin-bottom: 4px;
-        font-size: 0.875rem;
-        font-weight: 600;
-        line-height: 1.25rem;
     }
 </style>

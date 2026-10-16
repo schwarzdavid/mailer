@@ -21,6 +21,18 @@ describe('PermissionCacheService', () => {
         await service.invalidateUser(7)
 
         expect(del).toHaveBeenCalledWith('auth:user:7')
-        expect(del).toHaveBeenCalledWith('auth:permissions:7')
+        expect(del).toHaveBeenCalledWith('auth:permissions:v2:7')
+    })
+
+    it('invalidates several users at once and skips the round trip for none', async () => {
+        await service.invalidateUsers([3, 4])
+        expect(del).toHaveBeenCalledWith('auth:user:3')
+        expect(del).toHaveBeenCalledWith('auth:permissions:v2:3')
+        expect(del).toHaveBeenCalledWith('auth:user:4')
+        expect(del).toHaveBeenCalledWith('auth:permissions:v2:4')
+
+        del.mockClear()
+        await service.invalidateUsers([])
+        expect(del).not.toHaveBeenCalled()
     })
 })

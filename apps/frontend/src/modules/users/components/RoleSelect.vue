@@ -22,37 +22,38 @@
     import { computed } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
+    import type { RoleDto } from 'api'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
-    import { useRoleLabels } from '@/modules/users/composables/useRoleLabel.ts'
-    import { useRolesQuery } from '@/modules/users/queries/useRolesQuery.ts'
+    import { useAuthPermissionsQuery } from '@/modules/auth/queries/useAuthPermissionsQuery.ts'
+    import { useRolesQuery } from '@/modules/roles/queries/useRolesQuery.ts'
 
-    const props = withDefaults(defineProps<{ locked?: boolean; lockedHint?: string; keepSuperAdmin?: boolean }>(), {
+    const props = withDefaults(defineProps<{ locked?: boolean; lockedHint?: string; includeRoleId?: number }>(), {
         locked: false,
         lockedHint: undefined,
-        keepSuperAdmin: false,
+        includeRoleId: undefined,
     })
     const model = defineModel<number | undefined>()
 
     const { t } = useI18n()
     const requiredLabel = useRequiredLabel()
-    const roleLabel = useRoleLabels()
     const { data: roles, isLoading } = useQuery(useRolesQuery())
     const { data: currentUser } = useQuery(useAuthQuery())
+    const { data: held } = useQuery(useAuthPermissionsQuery())
+
+    const heldPermissions = computed(() => new Set<string>(held.value?.permissions ?? []))
+
+    function isGrantable(role: RoleDto) {
+        if (role.type === 'super_admin' && currentUser.value?.role.type !== 'super_admin') {
+            return false
+        }
+        return role.permissions.every((permission) => heldPermissions.value.has(permission))
+    }
 
     const options = computed(() =>
         (roles.value ?? [])
-            .filter(
-                (role) =>
-                    role.type !== 'super_admin' ||
-                    currentUser.value?.role.type === 'super_admin' ||
-                    props.keepSuperAdmin,
-            )
-            .map((role) => ({
-                roleId: role.roleId,
-                name: roleLabel(role),
-                description: role.type === 'custom' ? undefined : t(`module.users.roles.${role.type}`),
-            })),
+            .filter((role) => role.scope === 'global' && (isGrantable(role) || role.roleId === props.includeRoleId))
+            .map((role) => ({ roleId: role.roleId, name: role.name, description: role.description ?? undefined })),
     )
 
     const hint = computed(() => {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProjectApi, UserApi } from 'api'
 import ProjectMemberDialog from '../partials/ProjectMemberDialog.vue'
 import { mountDialog, overlayButton, overlayText } from '@/__tests__/support.ts'
-import { member, projectDetail, userListItem } from '@/__tests__/fixtures.ts'
+import { member, projectDetail, projectRoles, userListItem } from '@/__tests__/fixtures.ts'
 
 vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
@@ -10,36 +10,137 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
 
 vi.stubGlobal('visualViewport', null)
 
+const maintainerRules = [
+    { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+    { action: 'update', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+    { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+    { action: 'api_keys.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+    { action: 'members.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+    { action: 'read', subject: 'User' },
+]
+
 afterEach(() => {
     vi.restoreAllMocks()
     document.body.innerHTML = ''
 })
 
+function mockRoles() {
+    vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue(projectRoles())
+}
+
+async function roleOptions() {
+    document.body
+        .querySelector<HTMLElement>('.v-overlay-container [data-testid="roleId"] .v-field')!
+        .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await vi.waitFor(() => expect(document.body.querySelectorAll('.v-list-item-title').length).toBeGreaterThan(0))
+    return [...document.body.querySelectorAll('.v-list-item-title')].map((title) => title.textContent?.trim())
+}
+
 describe('ProjectMemberDialog', () => {
-    it('edits the permissions of an existing member', async () => {
+    it('pre-selects the smallest grantable role when adding and sends it', async () => {
+        mockRoles()
+        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([userListItem()])
         const setSpy = vi.spyOn(ProjectApi, 'setProjectMember').mockResolvedValue(undefined)
-        const existing = member()
-        const { open } = mountDialog(ProjectMemberDialog, {
-            project: projectDetail(),
-            member: existing,
-            existing: [existing],
-        })
+        const { open } = mountDialog(ProjectMemberDialog, { project: projectDetail(), existing: [] })
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Sees the project, its forms and sent mail.'))
+        document.body
+            .querySelector<HTMLElement>('.v-overlay-container .v-autocomplete .v-field')!
+            .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        await vi.waitFor(() => expect(overlayText()).toContain('Tom Becker'))
+        ;[...document.body.querySelectorAll<HTMLElement>('.v-list-item')]
+            .find((item) => item.textContent?.includes('Tom Becker'))!
+            .click()
+        overlayButton('Add member').click()
+
+        await vi.waitFor(() =>
+            expect(setSpy).toHaveBeenCalledWith({
+                path: { projectId: 1, userId: 3 },
+                body: { roleId: 5, permissions: [] },
+            }),
+        )
+        await vi.waitFor(() => expect(open.value).toBe(false))
+    })
+
+    it('offers only roles the caller fully holds on this project, plus the current one', async () => {
+        mockRoles()
+        const existing = member({ role: { roleId: 8, name: 'Owner' } })
+        mountDialog(
+            ProjectMemberDialog,
+            { project: projectDetail(), member: existing, existing: [existing] },
+            maintainerRules,
+        )
 
         await vi.waitFor(() => expect(overlayText()).toContain("Edit Lisa Schneider's access"))
-        expect(overlayText()).toContain('Lisa Schneider · lisa@acme.com')
+        expect(await roleOptions()).toEqual(['Viewer', 'Editor', 'Maintainer', 'Owner'])
+    })
+
+    it('leaves out roles the caller does not fully hold on this project', async () => {
+        mockRoles()
+        const existing = member({ role: { roleId: 5, name: 'Viewer' } })
+        mountDialog(
+            ProjectMemberDialog,
+            { project: projectDetail(), member: existing, existing: [existing] },
+            maintainerRules,
+        )
+
+        await vi.waitFor(() => expect(overlayText()).toContain("Edit Lisa Schneider's access"))
+        expect(await roleOptions()).toEqual(['Viewer', 'Editor', 'Maintainer'])
+    })
+
+    it('keeps extras collapsed, locks role permissions and sends the extras', async () => {
+        mockRoles()
+        const setSpy = vi.spyOn(ProjectApi, 'setProjectMember').mockResolvedValue(undefined)
+        const existing = member({ role: { roleId: 5, name: 'Viewer' } })
+        mountDialog(ProjectMemberDialog, { project: projectDetail(), member: existing, existing: [existing] })
+
+        await vi.waitFor(() => expect(overlayText()).toContain("Edit Lisa Schneider's access"))
+        expect(document.body.querySelector('.v-overlay-container input[value="delete"]')).toBeNull()
+        overlayButton('Advanced: additional permissions').click()
+        await vi.waitFor(() =>
+            expect(document.body.querySelector('.v-overlay-container input[value="delete"]')).not.toBeNull(),
+        )
+        const read = document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="read"]')!
+        expect(read.checked).toBe(true)
+        expect(read.disabled).toBe(true)
+        expect(overlayText()).toContain('From role: Viewer')
+
         document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="delete"]')!.click()
         overlayButton('Save').click()
 
         await vi.waitFor(() =>
             expect(setSpy).toHaveBeenCalledWith({
                 path: { projectId: 1, userId: 2 },
-                body: { permissions: ['read', 'update', 'delete'] },
+                body: { roleId: 5, permissions: ['delete'] },
             }),
         )
-        await vi.waitFor(() => expect(open.value).toBe(false))
+    })
+
+    it('disables extras the caller does not hold on the project', async () => {
+        mockRoles()
+        const existing = member({ role: { roleId: 5, name: 'Viewer' } })
+        mountDialog(
+            ProjectMemberDialog,
+            { project: projectDetail(), member: existing, existing: [existing] },
+            maintainerRules,
+        )
+
+        await vi.waitFor(() => expect(overlayText()).toContain("Edit Lisa Schneider's access"))
+        overlayButton('Advanced: additional permissions').click()
+        await vi.waitFor(() =>
+            expect(document.body.querySelector('.v-overlay-container input[value="delete"]')).not.toBeNull(),
+        )
+
+        expect(
+            document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="delete"]')!.disabled,
+        ).toBe(true)
+        expect(
+            document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="forms.manage"]')!.disabled,
+        ).toBe(false)
     })
 
     it('requires a user when adding', async () => {
+        mockRoles()
         vi.spyOn(UserApi, 'getUsers').mockResolvedValue([userListItem()])
         const setSpy = vi.spyOn(ProjectApi, 'setProjectMember')
         mountDialog(ProjectMemberDialog, { project: projectDetail(), existing: [] })
@@ -51,20 +152,8 @@ describe('ProjectMemberDialog', () => {
         expect(setSpy).not.toHaveBeenCalled()
     })
 
-    it('requires at least one permission', async () => {
-        const setSpy = vi.spyOn(ProjectApi, 'setProjectMember')
-        const existing = member({ permissions: ['read'] })
-        mountDialog(ProjectMemberDialog, { project: projectDetail(), member: existing, existing: [existing] })
-
-        await vi.waitFor(() => expect(overlayText()).toContain('Access in Acme Website'))
-        document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="read"]')!.click()
-        overlayButton('Save').click()
-
-        await vi.waitFor(() => expect(overlayText()).toContain('Choose at least one permission.'))
-        expect(setSpy).not.toHaveBeenCalled()
-    })
-
     it('shows the error inside the dialog when saving fails', async () => {
+        mockRoles()
         vi.spyOn(ProjectApi, 'setProjectMember').mockRejectedValue({ message: 'Cannot change your own access' })
         const existing = member()
         const { open } = mountDialog(ProjectMemberDialog, {
