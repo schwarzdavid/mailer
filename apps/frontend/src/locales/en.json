@@ -112,6 +112,11 @@
         "reveal": "Show {label}",
         "hide": "Hide {label}"
     },
+    "pager": {
+        "range": "{from}–{to} of {total}",
+        "previous": "Previous page",
+        "next": "Next page"
+    },
     "state": {
         "loading": "Loading",
         "thing": "this page",
@@ -391,9 +396,6 @@
                 "loading": "Loading sent mail",
                 "search": "Search recipient or subject",
                 "count": "No messages | 1 message | {count} messages",
-                "range": "{from}–{to} of {total}",
-                "previous": "Previous page",
-                "next": "Next page",
                 "sources": { "all": "All sources", "api": "API", "inbound_form": "Forms" },
                 "statuses": {
                     "all": "All statuses",
@@ -634,9 +636,6 @@
                 "loading": "Loading bounces",
                 "search": "Search recipient or reason",
                 "count": "No bounces | 1 bounce | {count} bounces",
-                "range": "{from}–{to} of {total}",
-                "previous": "Previous page",
-                "next": "Next page",
                 "types": {
                     "all": "All"
                 },

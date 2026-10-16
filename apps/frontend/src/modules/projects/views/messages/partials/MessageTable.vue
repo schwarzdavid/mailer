@@ -53,6 +53,7 @@
             :kind="notFound ? 'notFound' : 'load'"
             :thing="notFound ? t('module.projects.details.thing') : t('module.projects.messages.thing')"
             :error="error"
+            :retrying="isFetching"
             @retry="refetch()"
         />
         <TableSkeleton v-else-if="isPending" :columns="5" :label="t('module.projects.messages.loading')" />
@@ -62,7 +63,7 @@
                 :headers="headers"
                 :items="data?.items ?? []"
                 :items-length="data?.total ?? 0"
-                :items-per-page="ITEMS_PER_PAGE"
+                :items-per-page="itemsPerPage"
                 :loading="isFetching"
                 :mobile="xs"
                 item-value="mailMessageId"
@@ -114,50 +115,32 @@
                     />
                 </template>
             </VDataTableServer>
-            <div v-if="data && data.total > 0" class="table-footer">
-                <span class="tabular-nums">{{ t('module.projects.messages.range', range) }}</span>
-                <IconButton
-                    :icon="mdiChevronLeft"
-                    :label="t('module.projects.messages.previous')"
-                    small
-                    :disabled="page <= 1"
-                    @click="page--"
-                />
-                <IconButton
-                    :icon="mdiChevronRight"
-                    :label="t('module.projects.messages.next')"
-                    small
-                    :disabled="range.to >= data.total"
-                    @click="page++"
-                />
-            </div>
+            <TablePagerFooter v-model:page="page" :range="range" />
         </template>
     </VCard>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref, watch } from 'vue'
+    import { computed, ref } from 'vue'
     import { useQuery } from '@tanstack/vue-query'
     import { useI18n } from 'vue-i18n'
     import { useDisplay } from 'vuetify'
-    import { refDebounced } from '@vueuse/core'
-    import { mdiChevronLeft, mdiChevronRight, mdiEmailOutline, mdiMagnify } from '@mdi/js'
+    import { mdiEmailOutline, mdiMagnify } from '@mdi/js'
     import type { MailMessageDto } from 'api'
     import EmptyState from '@/components/EmptyState.vue'
     import ErrorState from '@/components/ErrorState.vue'
-    import IconButton from '@/components/IconButton.vue'
     import RelativeTime from '@/components/RelativeTime.vue'
     import StatusBadge from '@/components/StatusBadge.vue'
+    import TablePagerFooter from '@/components/TablePagerFooter.vue'
     import TagLabel from '@/components/TagLabel.vue'
     import TableSkeleton from '@/components/skeletons/TableSkeleton.vue'
     import type { StatusTone } from '@/components/statusTone.ts'
+    import { usePagedServerTable } from '@/composables/usePagedServerTable.ts'
     import { apiErrorStatus } from '@/helper/apiErrorStatus.ts'
     import {
         useProjectMessagesQuery,
         type ProjectMessageQuery,
     } from '@/modules/projects/queries/useProjectMessagesQuery.ts'
-
-    const ITEMS_PER_PAGE = 25
 
     const STATUS_TONES: Record<MailMessageDto['status'], StatusTone> = {
         sent: 'success',
@@ -168,17 +151,22 @@
 
     const props = defineProps<{ projectId: number }>()
 
-    const { t, n } = useI18n()
+    const { t } = useI18n()
     const { xs } = useDisplay()
-    const search = ref<string | null>('')
-    const debouncedSearch = refDebounced(search, 300)
     const source = ref<'all' | MailMessageDto['source']>('all')
     const status = ref<'all' | Exclude<MailMessageDto['status'], 'pending'>>('all')
-    const page = ref(1)
+    const { search, debouncedSearch, page, itemsPerPage, range, clearFilters } = usePagedServerTable({
+        total: () => data.value?.total,
+        resetPageOn: [source, status],
+        resetFilters: () => {
+            source.value = 'all'
+            status.value = 'all'
+        },
+    })
 
     const query = computed<ProjectMessageQuery>(() => ({
         page: page.value,
-        itemsPerPage: ITEMS_PER_PAGE,
+        itemsPerPage,
         search: debouncedSearch.value?.trim() || undefined,
         source: source.value === 'all' ? undefined : source.value,
         status: status.value === 'all' ? undefined : status.value,
@@ -211,23 +199,6 @@
         { key: 'status', title: t('module.projects.messages.columns.status'), sortable: false },
         { key: 'createdAt', title: t('module.projects.messages.columns.sent'), sortable: false, nowrap: true },
     ])
-
-    const range = computed(() => {
-        const total = data.value?.total ?? 0
-        const from = total === 0 ? 0 : (page.value - 1) * ITEMS_PER_PAGE + 1
-        const to = Math.min(page.value * ITEMS_PER_PAGE, total)
-        return { from: n(from), to, total: n(total) }
-    })
-
-    watch([debouncedSearch, source, status], () => {
-        page.value = 1
-    })
-
-    function clearFilters() {
-        search.value = ''
-        source.value = 'all'
-        status.value = 'all'
-    }
 </script>
 
 <style scoped>

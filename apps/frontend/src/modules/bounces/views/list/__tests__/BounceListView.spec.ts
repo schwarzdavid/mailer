@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { focusManager } from '@tanstack/vue-query'
 import { BounceApi, type BounceDto, type EmailBlockDto } from 'api'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import BounceListView from '../BounceListView.vue'
@@ -49,6 +50,7 @@ const blocked: EmailBlockDto[] = [
 ]
 
 afterEach(() => {
+    focusManager.setFocused(undefined)
     vi.restoreAllMocks()
     notifications.dismiss()
     document.body.innerHTML = ''
@@ -103,6 +105,31 @@ describe('BounceListView', () => {
 
         await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load bounces"))
         expect(wrapper.text()).not.toContain('No bounces')
+    })
+
+    it('shows progress on retry after a background refresh fails', async () => {
+        route.name = RouteNames.BOUNCE_LIST
+        let phase: 'loaded' | 'offline' | 'retrying' = 'loaded'
+        vi.spyOn(BounceApi, 'getBounces').mockImplementation(() => {
+            if (phase === 'loaded') {
+                return Promise.resolve({ items: bounces, total: 2 })
+            }
+            return phase === 'offline' ? Promise.reject(new Error('offline')) : new Promise(() => {})
+        })
+        vi.spyOn(BounceApi, 'getBlockedAddresses').mockResolvedValue([])
+        const wrapper = mountInApp(BounceListView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('j.smith@gmial.com'))
+
+        phase = 'offline'
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load bounces"))
+        expect(wrapper.get('.state-panel .v-btn').classes()).not.toContain('v-btn--loading')
+
+        phase = 'retrying'
+        await findButton(wrapper, 'Try again')!.trigger('click')
+
+        await vi.waitFor(() => expect(wrapper.get('.state-panel .v-btn').classes()).toContain('v-btn--loading'))
     })
 
     it('unblocks an address after the undo window', async () => {

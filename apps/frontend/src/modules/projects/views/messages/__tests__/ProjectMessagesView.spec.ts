@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { focusManager } from '@tanstack/vue-query'
 import { MailMessageApi, ProjectApi } from 'api'
 import ProjectMessagesView from '../ProjectMessagesView.vue'
-import { mountInApp } from '@/__tests__/support.ts'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
 import { mailMessage, projectDetail } from '@/__tests__/fixtures.ts'
 
 const route = vi.hoisted(() => ({ params: { projectId: '1' }, name: 'projects::messages', query: {} }))
@@ -14,6 +15,7 @@ vi.mock('vue-router', async (importOriginal) => ({
 vi.stubGlobal('visualViewport', null)
 
 afterEach(() => {
+    focusManager.setFocused(undefined)
     vi.restoreAllMocks()
     document.body.innerHTML = ''
 })
@@ -112,6 +114,30 @@ describe('ProjectMessagesView', () => {
                 query: expect.objectContaining({ source: 'inbound_form', status: undefined, page: 1 }) as object,
             }),
         )
+    })
+
+    it('shows progress on retry after a background refresh fails', async () => {
+        mockProject()
+        let phase: 'loaded' | 'offline' | 'retrying' = 'loaded'
+        vi.spyOn(MailMessageApi, 'getProjectMessages').mockImplementation(() => {
+            if (phase === 'loaded') {
+                return Promise.resolve({ items: [mailMessage()], total: 1 })
+            }
+            return phase === 'offline' ? Promise.reject(new Error('offline')) : new Promise(() => {})
+        })
+        const wrapper = mountInApp(ProjectMessagesView)
+        await vi.waitFor(() => expect(wrapper.text()).toContain('reader@example.org'))
+
+        phase = 'offline'
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load sent mail"))
+        expect(wrapper.get('.state-panel .v-btn').classes()).not.toContain('v-btn--loading')
+
+        phase = 'retrying'
+        await findButton(wrapper, 'Try again')!.trigger('click')
+
+        await vi.waitFor(() => expect(wrapper.get('.state-panel .v-btn').classes()).toContain('v-btn--loading'))
     })
 
     it('explains an empty log', async () => {
