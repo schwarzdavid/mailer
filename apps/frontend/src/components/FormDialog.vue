@@ -44,6 +44,7 @@
                     <slot name="footer-start" />
                     <VBtn variant="text" :text="t('cta.cancel')" :disabled="pending" @click="requestClose" />
                     <VBtn
+                        v-if="submittable"
                         variant="flat"
                         :color="destructive ? 'error' : 'primary'"
                         type="submit"
@@ -78,8 +79,17 @@
             errorTitle?: string
             dirty?: boolean
             destructive?: boolean
+            submittable?: boolean
         }>(),
-        { width: 'md', pending: false, error: null, errorTitle: undefined, dirty: false, destructive: false },
+        {
+            width: 'md',
+            pending: false,
+            error: null,
+            errorTitle: undefined,
+            dirty: false,
+            destructive: false,
+            submittable: true,
+        },
     )
 
     const emit = defineEmits<{ 'update:modelValue': [value: boolean]; submit: [] }>()
@@ -109,7 +119,7 @@
     )
 
     function onSubmit() {
-        if (!props.pending) {
+        if (props.submittable && !props.pending) {
             emit('submit')
         }
     }

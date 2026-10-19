@@ -33,6 +33,7 @@ describe('DisclosureBox', () => {
         await toggle.trigger('click')
         await nextTick()
         expect(toggle.attributes('aria-expanded')).toBe('false')
+        expect(wrapper.find('input[name="inner"]').exists()).toBe(false)
     })
 
     it('can start open', () => {

@@ -117,6 +117,48 @@ describe('AddUserDialog', () => {
         )
     })
 
+    it('drops extras the new role already covers when the role changes', async () => {
+        push.mockResolvedValue(undefined)
+        const create = vi.spyOn(UserApi, 'createUser').mockResolvedValue(signedIn('user', 9))
+        await openDialog()
+        await fillForm()
+        overlayButton('Advanced: additional permissions').click()
+        await vi.waitFor(() =>
+            expect(
+                document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="domains.read"]')
+                    ?.disabled,
+            ).toBe(false),
+        )
+        document.body.querySelector<HTMLInputElement>('.v-overlay-container input[value="domains.read"]')!.click()
+
+        expect(await roleOptions()).toContain('Admin')
+        ;[...document.body.querySelectorAll<HTMLElement>('.v-list-item')]
+            .find((item) => item.querySelector('.v-list-item-title')?.textContent?.trim() === 'Admin')!
+            .click()
+
+        await vi.waitFor(() => {
+            const box = document.body.querySelector<HTMLInputElement>(
+                '.v-overlay-container input[value="domains.read"]',
+            )!
+            expect(box.checked).toBe(true)
+            expect(box.disabled).toBe(true)
+        })
+        submitOverlayForm()
+
+        await vi.waitFor(() =>
+            expect(create).toHaveBeenCalledWith({
+                body: {
+                    firstName: 'Nina',
+                    lastName: 'Roth',
+                    email: 'nina@acme.com',
+                    password: 'correct-horse',
+                    roleId: 2,
+                    permissions: [],
+                },
+            }),
+        )
+    })
+
     it('creates the user and opens the detail page', async () => {
         push.mockResolvedValue(undefined)
         const create = vi.spyOn(UserApi, 'createUser').mockResolvedValue(signedIn('user', 9))

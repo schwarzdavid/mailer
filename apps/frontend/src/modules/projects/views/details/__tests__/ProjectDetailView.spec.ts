@@ -71,6 +71,35 @@ describe('ProjectDetailView', () => {
         expect(wrapper.text()).not.toContain('Members')
     })
 
+    it('lets an API key manager create keys but nothing else', async () => {
+        mockProjectApis()
+        const wrapper = mountView(ProjectDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'api_keys.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(findButton(wrapper, 'New API key')).toBeDefined())
+        expect(findButton(wrapper, 'New form')).toBeUndefined()
+        expect(findButton(wrapper, 'Save')).toBeUndefined()
+        expect(wrapper.text()).not.toContain('Delete project')
+        expect(wrapper.text()).not.toContain('Members')
+    })
+
+    it('lets a member manager see the members card without form or key controls', async () => {
+        mockProjectApis()
+        const wrapper = mountView(ProjectDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'members.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() =>
+            expect(wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))).toContain('Members'),
+        )
+        expect(findButton(wrapper, 'New form')).toBeUndefined()
+        expect(findButton(wrapper, 'New API key')).toBeUndefined()
+        expect(wrapper.text()).not.toContain('Read only')
+    })
+
     it('shows the API keys card to every project reader', async () => {
         mockProjectApis()
         const wrapper = mountView(ProjectDetailView, {}, [

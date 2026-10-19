@@ -61,6 +61,20 @@ describe('RolePermissionsCard', () => {
         expect(checkbox(wrapper, 'delete').disabled).toBe(true)
     })
 
+    it('keeps read when saving a project role', async () => {
+        vi.spyOn(AuthApi, 'getHeldPermissions').mockResolvedValue(heldAll())
+        const update = vi.spyOn(RoleApi, 'updateRole').mockResolvedValue(projectRoleSummaries()[0])
+        const wrapper = mountInApp(RolePermissionsCard, { role: projectRoleSummaries()[0], canUpdate: true })
+
+        await vi.waitFor(() => expect(checkbox(wrapper, 'delete').disabled).toBe(false))
+        await wrapper.get('input[value="delete"]').setValue(true)
+        await wrapper.get('form').trigger('submit')
+
+        await vi.waitFor(() =>
+            expect(update).toHaveBeenCalledWith({ path: { roleId: 5 }, body: { permissions: ['read', 'delete'] } }),
+        )
+    })
+
     it('is read-only without the update permission', () => {
         vi.spyOn(AuthApi, 'getHeldPermissions').mockResolvedValue(heldAll())
         const wrapper = mountInApp(RolePermissionsCard, { role: globalRoles[1], canUpdate: false })

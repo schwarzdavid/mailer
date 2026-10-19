@@ -349,7 +349,11 @@
                     "roleRequired": "Choose a role.",
                     "advanced": "Advanced: additional permissions",
                     "advancedHint": "Granted on top of the role, in this project only. You can only grant permissions you hold here yourself.",
-                    "fromRole": "From role: {role}"
+                    "fromRole": "From role: {role}",
+                    "noGrantableRole": {
+                        "title": "You can't assign a role here",
+                        "text": "You hold none of this project's roles in full. Ask a project maintainer or an admin to add members."
+                    }
                 }
             },
             "apiKeys": {

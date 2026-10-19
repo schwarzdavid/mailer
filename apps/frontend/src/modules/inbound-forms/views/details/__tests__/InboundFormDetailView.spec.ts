@@ -149,6 +149,18 @@ describe('InboundFormDetailView', () => {
         expect(remove).toHaveBeenCalledWith({ path: { inboundFormId: 9 } })
     })
 
+    it('offers editing and deletion to form managers of the project', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(findButton(wrapper, 'Add field')).toBeDefined())
+        const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
+        expect(titles).toContain('Delete form')
+    })
+
     it('shows values as text and no actions without update rights', async () => {
         mockApis()
         const wrapper = mountInApp(InboundFormDetailView, {}, [

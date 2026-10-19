@@ -2,9 +2,8 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Sequelize } from 'sequelize-typescript'
-import type { Transaction } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
-import { Op } from 'sequelize'
+import { Op, Transaction } from 'sequelize'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ProjectMemberService } from './project-member.service.js'
 import { RoleService } from './role.service.js'
@@ -62,7 +61,7 @@ type MemberRow = ProjectMember & {
     user?: { userId: number; firstName: string; lastName: string; email: string }
     project?: { projectId: number; name: string }
     role?: { roleId: number; name: string }
-    permissions: { permission: ProjectPermission }[]
+    permissions?: { permission: ProjectPermission }[]
 }
 
 function memberRow(partial: Partial<MemberRow>): MemberRow {
@@ -72,7 +71,6 @@ function memberRow(partial: Partial<MemberRow>): MemberRow {
         userId: 2,
         roleId: 5,
         role: { roleId: 5, name: 'Viewer' },
-        permissions: [],
         createdAt: new Date(),
         updatedAt: new Date(),
         ...partial,
@@ -86,7 +84,8 @@ describe('ProjectMemberService', () => {
     let memberDestroy: Mock<(options: object) => Promise<number>>
     let memberCreate: Mock<(values: object, options: object) => Promise<{ projectMemberId: number }>>
     let memberPermissionBulkCreate: Mock<(rows: object[], options?: object) => Promise<object[]>>
-    let projectFindByPk: Mock<(projectId: number) => Promise<object | null>>
+    let memberPermissionFindAll: Mock<(options: object) => Promise<{ permission: ProjectPermission }[]>>
+    let projectFindByPk: Mock<(projectId: number, options?: object) => Promise<object | null>>
     let userFindByPk: Mock<(userId: number) => Promise<object | null>>
     let userCount: Mock<(options: object) => Promise<number>>
     let rolePermissionFindAll: Mock<(options: object) => Promise<Pick<RolePermission, 'roleId'>[]>>
@@ -96,7 +95,7 @@ describe('ProjectMemberService', () => {
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
     let transaction: Mock<Sequelize['transaction']>
 
-    const transactionStub = {} as Transaction
+    const transactionStub = { LOCK: Transaction.LOCK } as Transaction
 
     beforeEach(async () => {
         memberFindAll = vi.fn<typeof memberFindAll>().mockResolvedValue([])
@@ -104,6 +103,7 @@ describe('ProjectMemberService', () => {
         memberDestroy = vi.fn<typeof memberDestroy>().mockResolvedValue(0)
         memberCreate = vi.fn<typeof memberCreate>().mockResolvedValue({ projectMemberId: 11 })
         memberPermissionBulkCreate = vi.fn<typeof memberPermissionBulkCreate>().mockResolvedValue([])
+        memberPermissionFindAll = vi.fn<typeof memberPermissionFindAll>().mockResolvedValue([])
         projectFindByPk = vi.fn<typeof projectFindByPk>().mockResolvedValue({ projectId: 1 })
         userFindByPk = vi.fn<typeof userFindByPk>().mockResolvedValue({ userId: 2 })
         userCount = vi.fn<typeof userCount>().mockResolvedValue(0)
@@ -130,7 +130,7 @@ describe('ProjectMemberService', () => {
                 },
                 {
                     provide: getModelToken(ProjectMemberPermissionModel),
-                    useValue: { bulkCreate: memberPermissionBulkCreate },
+                    useValue: { bulkCreate: memberPermissionBulkCreate, findAll: memberPermissionFindAll },
                 },
                 { provide: getModelToken(ProjectModel), useValue: { findByPk: projectFindByPk } },
                 { provide: getModelToken(UserModel), useValue: { findByPk: userFindByPk, count: userCount } },
@@ -203,6 +203,15 @@ describe('ProjectMemberService', () => {
 
             await service.setMember(1, 2, { roleId: 7, permissions: ['delete', 'read', 'delete'] }, manageAllAbility)
 
+            expect(projectFindByPk).toHaveBeenCalledTimes(2)
+            expect(projectFindByPk).toHaveBeenLastCalledWith(1, {
+                transaction: transactionStub,
+                lock: transactionStub.LOCK.UPDATE,
+            })
+            expect(memberFindOne).toHaveBeenCalledWith({
+                where: { projectId: 1, userId: 2 },
+                transaction: transactionStub,
+            })
             expect(memberDestroy).toHaveBeenCalledWith({
                 where: { projectId: 1, userId: 2 },
                 transaction: transactionStub,
@@ -243,7 +252,8 @@ describe('ProjectMemberService', () => {
             await expect(service.setMember(1, 2, { roleId: 8, permissions: [] }, memberManagerAbility)).rejects.toThrow(
                 new ForbiddenException('You cannot assign a role with permissions you do not hold: delete'),
             )
-            expect(transaction).not.toHaveBeenCalled()
+            expect(memberDestroy).not.toHaveBeenCalled()
+            expect(memberCreate).not.toHaveBeenCalled()
         })
 
         it('keeps an unchanged role the caller does not fully hold', async () => {
@@ -253,6 +263,10 @@ describe('ProjectMemberService', () => {
             await expect(
                 service.setMember(1, 2, { roleId: 8, permissions: [] }, memberManagerAbility),
             ).resolves.toBeUndefined()
+            expect(memberPermissionFindAll).toHaveBeenCalledWith({
+                where: { projectMemberId: 1 },
+                transaction: transactionStub,
+            })
             expect(memberCreate).toHaveBeenCalledWith(
                 { projectId: 1, userId: 2, roleId: 8 },
                 { returning: true, transaction: transactionStub },
@@ -266,11 +280,26 @@ describe('ProjectMemberService', () => {
         })
 
         it('rejects revoking extras the caller does not hold on the project', async () => {
-            memberFindOne.mockResolvedValue(memberRow({ permissions: [{ permission: 'delete' }] }))
+            memberFindOne.mockResolvedValue(memberRow({}))
+            memberPermissionFindAll.mockResolvedValue([{ permission: 'delete' }])
 
             await expect(service.setMember(1, 2, { roleId: 5, permissions: [] }, memberManagerAbility)).rejects.toThrow(
                 ForbiddenException,
             )
+        })
+
+        it('writes nothing when the extras check fails after the role check passes', async () => {
+            findRole.mockResolvedValue(maintainer)
+            memberFindOne.mockResolvedValue(memberRow({}))
+            memberPermissionFindAll.mockResolvedValue([{ permission: 'delete' }])
+
+            await expect(service.setMember(1, 2, { roleId: 7, permissions: [] }, memberManagerAbility)).rejects.toThrow(
+                new ForbiddenException('You cannot grant or revoke permissions you do not hold: delete'),
+            )
+            expect(transaction).toHaveBeenCalledOnce()
+            expect(memberDestroy).not.toHaveBeenCalled()
+            expect(memberCreate).not.toHaveBeenCalled()
+            expect(invalidateUser).not.toHaveBeenCalled()
         })
 
         it('lets a users.update holder without project access change nothing they do not hold', async () => {
@@ -368,6 +397,7 @@ describe('ProjectMemberService', () => {
                     roleId: 7,
                     role: { roleId: 7, name: 'Maintainer' },
                     project: { projectId: 4, name: 'Beta' },
+                    permissions: [],
                 }),
             ])
 

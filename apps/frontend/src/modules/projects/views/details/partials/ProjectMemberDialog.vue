@@ -11,59 +11,68 @@
         :pending="isPending"
         :error="errorMessage"
         :dirty="dirty"
+        :submittable="!noGrantableRole"
         @submit="onSubmit"
     >
-        <ReadonlyValue v-if="member" :label="t('field.user')" :value="`${memberName} · ${member.email}`" />
-        <VAutocomplete
-            v-else
-            v-model="selectedUserId"
-            name="userId"
-            :label="requiredLabel(t('field.user'))"
-            :items="userOptions"
-            item-title="name"
-            item-value="userId"
-            :loading="isLoading"
-            :error-messages="userError"
-            :hint="selectedHint"
-            persistent-hint
-            aria-required="true"
-        >
-            <template #item="{ props: itemProps, item }">
-                <VListItem v-bind="itemProps" :subtitle="item.hint" />
-            </template>
-        </VAutocomplete>
-        <fieldset class="member-access">
-            <legend>{{ t('module.projects.members.dialog.access', { project: project.name }) }}</legend>
-            <VSelect
-                v-model="selectedRoleId"
-                name="roleId"
-                data-testid="roleId"
-                :label="requiredLabel(t('module.projects.members.dialog.role'))"
-                :items="roleOptions"
+        <InlineAlert
+            v-if="noGrantableRole"
+            tone="info"
+            :title="t('module.projects.members.dialog.noGrantableRole.title')"
+            :text="t('module.projects.members.dialog.noGrantableRole.text')"
+        />
+        <template v-else>
+            <ReadonlyValue v-if="member" :label="t('field.user')" :value="`${memberName} · ${member.email}`" />
+            <VAutocomplete
+                v-else
+                v-model="selectedUserId"
+                name="userId"
+                :label="requiredLabel(t('field.user'))"
+                :items="userOptions"
                 item-title="name"
-                item-value="roleId"
-                :loading="rolesLoading"
-                :hint="selectedRole?.description ?? undefined"
+                item-value="userId"
+                :loading="isLoading"
+                :error-messages="userError"
+                :hint="selectedHint"
                 persistent-hint
-                :error-messages="roleError"
                 aria-required="true"
             >
                 <template #item="{ props: itemProps, item }">
-                    <VListItem v-bind="itemProps" :subtitle="item.description ?? undefined" />
+                    <VListItem v-bind="itemProps" :subtitle="item.hint" />
                 </template>
-            </VSelect>
-            <DisclosureBox :summary="t('module.projects.members.dialog.advanced')">
-                <p class="member-access__hint">{{ t('module.projects.members.dialog.advancedHint') }}</p>
-                <PermissionGrid
-                    v-model="extraPermissions"
-                    scope="project"
-                    :groups="PROJECT_PERMISSION_GROUPS"
-                    :locked="rolePermissions"
-                    :locked-hint="t('module.projects.members.dialog.fromRole', { role: selectedRole?.name ?? '' })"
-                    :grantable="grantablePermissions"
-                />
-            </DisclosureBox>
-        </fieldset>
+            </VAutocomplete>
+            <fieldset class="member-access">
+                <legend>{{ t('module.projects.members.dialog.access', { project: project.name }) }}</legend>
+                <VSelect
+                    v-model="selectedRoleId"
+                    name="roleId"
+                    data-testid="roleId"
+                    :label="requiredLabel(t('module.projects.members.dialog.role'))"
+                    :items="roleOptions"
+                    item-title="name"
+                    item-value="roleId"
+                    :loading="rolesLoading"
+                    :hint="selectedRole?.description ?? undefined"
+                    persistent-hint
+                    :error-messages="roleError"
+                    aria-required="true"
+                >
+                    <template #item="{ props: itemProps, item }">
+                        <VListItem v-bind="itemProps" :subtitle="item.description ?? undefined" />
+                    </template>
+                </VSelect>
+                <DisclosureBox :summary="t('module.projects.members.dialog.advanced')">
+                    <p class="member-access__hint">{{ t('module.projects.members.dialog.advancedHint') }}</p>
+                    <PermissionGrid
+                        v-model="extraPermissions"
+                        scope="project"
+                        :groups="PROJECT_PERMISSION_GROUPS"
+                        :locked="rolePermissions"
+                        :locked-hint="t('module.projects.members.dialog.fromRole', { role: selectedRole?.name ?? '' })"
+                        :grantable="grantablePermissions"
+                    />
+                </DisclosureBox>
+            </fieldset>
+        </template>
     </FormDialog>
 </template>
 
@@ -76,6 +85,7 @@
     import type { ProjectDetailDto, ProjectMemberDto, ProjectPermission, ProjectRoleDto } from 'api'
     import DisclosureBox from '@/components/DisclosureBox.vue'
     import FormDialog from '@/components/FormDialog.vue'
+    import InlineAlert from '@/components/InlineAlert.vue'
     import ReadonlyValue from '@/components/ReadonlyValue.vue'
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
@@ -137,6 +147,10 @@
         (roles.value ?? []).filter(
             (role) => role.permissions.every(heldOnProject) || role.roleId === props.member?.role.roleId,
         ),
+    )
+
+    const noGrantableRole = computed(
+        () => !props.member && roles.value !== undefined && grantableRoles.value.length === 0,
     )
 
     const roleOptions = computed(() =>

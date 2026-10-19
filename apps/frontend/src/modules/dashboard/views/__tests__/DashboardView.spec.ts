@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuthApi, BounceApi, DomainApi, InboundFormApi, ProjectApi, SettingsApi, type BounceDto } from 'api'
 import DashboardView from '../DashboardView.vue'
-import { mountInApp } from '@/__tests__/support.ts'
+import { findButton, mountInApp } from '@/__tests__/support.ts'
 import { dnsRecord, domain, formListItem, projectListItem, receiver } from '@/__tests__/fixtures.ts'
 
 vi.stubGlobal('visualViewport', null)
@@ -142,6 +142,28 @@ describe('DashboardView', () => {
         expect(wrapper.text()).not.toContain('Recent bounces')
         expect(wrapper.text()).not.toContain('Sender domains')
         expect(wrapper.text()).not.toContain('Get started')
+    })
+
+    it('offers a new form in an empty project to its form managers', async () => {
+        mockApis({ forms: [] })
+        const wrapper = mountInApp(DashboardView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'forms.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No forms yet.'))
+        expect(findButton(wrapper, 'New form')).toBeDefined()
+    })
+
+    it('offers no new form to project members without forms.manage', async () => {
+        mockApis({ forms: [] })
+        const wrapper = mountInApp(DashboardView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'update', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('No forms yet.'))
+        expect(findButton(wrapper, 'New form')).toBeUndefined()
     })
 
     it('keeps the dashboard usable when one card fails', async () => {

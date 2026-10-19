@@ -92,19 +92,24 @@ export class ProjectMemberService {
 
         const isHeld = (permission: ProjectPermission) => canOnProject(ability, permission, projectId)
         const rolePermissions = projectPermissionsOf(role)
-        const existing = await this.memberModel.findOne({
-            where: { projectId, userId },
-            include: [ProjectMemberPermissionModel],
-        })
-        if (existing?.roleId !== role.roleId) {
-            assertRoleGrantable(rolePermissions, isHeld)
-        }
-
         const extras = [...new Set(grant.permissions)].filter((permission) => !rolePermissions.includes(permission))
-        const currentExtras = existing?.permissions.map((entry) => entry.permission) ?? []
-        assertPermissionChangesHeld(currentExtras, extras, isHeld)
 
         await this.sequelize.transaction(async (transaction) => {
+            await this.projectModel.findByPk(projectId, { transaction, lock: transaction.LOCK.UPDATE })
+            const existing = await this.memberModel.findOne({ where: { projectId, userId }, transaction })
+            const currentExtras = existing
+                ? (
+                      await this.memberPermissionModel.findAll({
+                          where: { projectMemberId: existing.projectMemberId },
+                          transaction,
+                      })
+                  ).map((entry) => entry.permission)
+                : []
+            if (existing?.roleId !== role.roleId) {
+                assertRoleGrantable(rolePermissions, isHeld)
+            }
+            assertPermissionChangesHeld(currentExtras, extras, isHeld)
+
             await this.memberModel.destroy({ where: { projectId, userId }, transaction })
             await this.createMembership(projectId, userId, role.roleId, extras, transaction)
         })

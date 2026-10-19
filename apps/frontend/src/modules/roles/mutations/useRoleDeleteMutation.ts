@@ -7,9 +7,8 @@ export function useRoleDeleteMutation() {
 
     return useMutation({
         mutationFn: (roleId: number) => waitAtleast(RoleApi.deleteRole({ path: { roleId } })),
-        onSuccess(_, roleId) {
-            client.removeQueries({ queryKey: ['roles', roleId] })
-            void client.invalidateQueries({ queryKey: ['roles'] })
+        onSuccess() {
+            void client.invalidateQueries({ queryKey: ['roles'], exact: true })
             void client.invalidateQueries({ queryKey: ['users'] })
         },
     })

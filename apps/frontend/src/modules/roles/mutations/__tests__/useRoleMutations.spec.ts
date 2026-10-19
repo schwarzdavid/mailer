@@ -87,7 +87,7 @@ describe('useRoleUpdateMutation', () => {
 })
 
 describe('useRoleDeleteMutation', () => {
-    it('deletes the role, drops its cache entry and refreshes roles and users', async () => {
+    it('deletes the role and refreshes the role list and users without touching the detail entry', async () => {
         const deleteSpy = vi.spyOn(RoleApi, 'deleteRole').mockResolvedValue(undefined)
         const { result, queryClient, unmount } = withVueQuery(() => useRoleDeleteMutation())
         const removeSpy = vi.spyOn(queryClient, 'removeQueries')
@@ -96,8 +96,9 @@ describe('useRoleDeleteMutation', () => {
         await result.mutateAsync(2)
 
         expect(deleteSpy).toHaveBeenCalledWith({ path: { roleId: 2 } })
-        expect(removeSpy).toHaveBeenCalledWith({ queryKey: ['roles', 2] })
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['roles'] })
+        expect(removeSpy).not.toHaveBeenCalled()
+        expect(invalidateSpy).toHaveBeenCalledTimes(2)
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['roles'], exact: true })
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['users'] })
         unmount()
     })

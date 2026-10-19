@@ -62,6 +62,40 @@ describe('ProjectMemberDialog', () => {
         await vi.waitFor(() => expect(open.value).toBe(false))
     })
 
+    it('pre-selects the smallest grantable role even when it is not listed first', async () => {
+        vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue([...projectRoles()].reverse())
+        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([userListItem()])
+        mountDialog(ProjectMemberDialog, { project: projectDetail(), existing: [] })
+
+        await vi.waitFor(() =>
+            expect(
+                document.body
+                    .querySelector('.v-overlay-container [data-testid="roleId"] .v-select__selection')
+                    ?.textContent?.trim(),
+            ).toBe('Viewer'),
+        )
+    })
+
+    it('explains instead of offering an empty role list when no role is grantable', async () => {
+        vi.spyOn(ProjectApi, 'getProjectRoles').mockResolvedValue(
+            projectRoles().filter((role) => role.permissions.length > 1),
+        )
+        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([userListItem()])
+        mountDialog(ProjectMemberDialog, { project: projectDetail(), existing: [] }, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+            { action: 'members.manage', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+
+        await vi.waitFor(() => expect(overlayText()).toContain("You can't assign a role here"))
+        expect(overlayText()).toContain("You hold none of this project's roles in full.")
+        expect(document.body.querySelector('.v-overlay-container [data-testid="roleId"]')).toBeNull()
+        expect(document.body.querySelector('.v-overlay-container button[type="submit"]')).toBeNull()
+        expect(() => overlayButton('Add member')).toThrow('No overlay button labelled "Add member"')
+        expect(document.body.querySelector('.v-overlay-container [name="userId"]')).toBeNull()
+        expect(document.body.querySelector('.v-overlay-container input[type="checkbox"]')).toBeNull()
+        expect(overlayText()).not.toContain('Advanced: additional permissions')
+    })
+
     it('offers only roles the caller fully holds on this project, plus the current one', async () => {
         mockRoles()
         const existing = member({ role: { roleId: 8, name: 'Owner' } })

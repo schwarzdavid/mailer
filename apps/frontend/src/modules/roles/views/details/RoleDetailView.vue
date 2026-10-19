@@ -58,7 +58,7 @@
 
 <script setup lang="ts">
     import { computed } from 'vue'
-    import { useQuery } from '@tanstack/vue-query'
+    import { useQuery, useQueryClient } from '@tanstack/vue-query'
     import { useRoute, useRouter } from 'vue-router'
     import { useI18n } from 'vue-i18n'
     import { useAbility } from '@casl/vue'
@@ -83,6 +83,7 @@
     const userAbility = useAbility()
     const confirm = useConfirm()
     const notify = useNotify()
+    const queryClient = useQueryClient()
     const { mutateAsync: deleteRole } = useRoleDeleteMutation()
     const {
         data: role,
@@ -128,6 +129,7 @@
             return
         }
         await router.push({ name: RouteNames.ROLE_LIST })
+        queryClient.removeQueries({ queryKey: ['roles', roleId], exact: true })
         notify.success(t('module.roles.delete.done', { name }))
     }
 </script>

@@ -8,7 +8,7 @@ import { mountView } from '@/__tests__/support.ts'
 
 vi.stubGlobal('visualViewport', null)
 
-function mountDialog(props: { dirty?: boolean; pending?: boolean; error?: string | null } = {}) {
+function mountDialog(props: { dirty?: boolean; pending?: boolean; error?: string | null; submittable?: boolean } = {}) {
     const open = ref(true)
     const submitted = ref(0)
     const Host = defineComponent({
@@ -61,6 +61,17 @@ describe('FormDialog', () => {
         const { submitted } = mountDialog({ pending: true })
         await vi.waitFor(() => expect(document.body.querySelector('form')).not.toBeNull())
 
+        document.body.querySelector('form')!.dispatchEvent(new Event('submit'))
+
+        expect(submitted.value).toBe(0)
+    })
+
+    it('renders no submit button and ignores submit when not submittable', async () => {
+        const { submitted } = mountDialog({ submittable: false })
+        await vi.waitFor(() => expect(document.body.querySelector('form')).not.toBeNull())
+
+        expect(document.body.querySelector('.v-overlay-container button[type="submit"]')).toBeNull()
+        expect(buttonByText('Cancel')).toBeDefined()
         document.body.querySelector('form')!.dispatchEvent(new Event('submit'))
 
         expect(submitted.value).toBe(0)
