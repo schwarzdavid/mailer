@@ -807,9 +807,8 @@
                     "acceptHint": "The endpoint answers 404 while this is off.",
                     "on": "On",
                     "off": "Off: the endpoint answers 404",
-                    "example": "Example HTML form",
-                    "exampleLabel": "example HTML form",
-                    "send": "Send",
+                    "example": "Example request",
+                    "exampleLabel": "example request",
                     "activated": "Form activated",
                     "deactivated": "Form deactivated",
                     "toggleFailed": "Couldn't change whether the form accepts submissions"
@@ -877,15 +876,49 @@
                     "secretKeepHint": "Leave empty to keep the current secret.",
                     "minScore": "Minimum score (v3)",
                     "minScoreShort": "min. score {score}",
+                    "expectedAction": "Expected action",
+                    "expectedActionShort": "action {action}",
+                    "minDelaySeconds": "Minimum delay (seconds)",
+                    "minDelayShort": "min. delay {seconds}s",
+                    "maxAgeSeconds": "Token lifetime (seconds)",
+                    "maxAgeShort": "lifetime {seconds}s",
                     "editLabel": "Edit {type}",
                     "removeLabel": "Remove {type}",
                     "saved": "Security check saved",
                     "removed": "{type} removed",
                     "removeError": "Couldn't remove {type}",
+                    "info": {
+                        "label": "How to integrate {type}",
+                        "title": "{type} integration",
+                        "snippetLabel": "integration code",
+                        "honeypot": {
+                            "intro": "A field that humans never see and leave empty, while bots fill it in. Submissions with a value in it are stored as spam and still answered with success, so bots learn nothing.",
+                            "note": "Hide the field with CSS rather than type=\"hidden\", which bots skip. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                        },
+                        "google-recaptcha": {
+                            "intro": "Your website requests a reCAPTCHA token from Google and sends it along. The server verifies it with Google before accepting the submission.",
+                            "note": "Replace SITE_KEY with your reCAPTCHA site key. The website's domain must be in this form's allowed domains and in the reCAPTCHA admin console. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                        },
+                        "timed-token": {
+                            "intro": "A single-use token that is bound to the visitor's IP and only becomes valid after the minimum delay, so instant bot submissions are rejected. It requires allowed domains.",
+                            "note": "Fetch the token once per submission. If the server answers 403, retry once with a fresh token. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                        }
+                    },
+                    "hostnames": {
+                        "title": "Allowed domains",
+                        "editLabel": "Edit allowed domains",
+                        "emptyWarning": "No domains are allowed yet, so any website can submit this form.",
+                        "label": "Allowed domains",
+                        "hint": "Only requests from these domains are accepted. Press Enter or comma after each one. Matching is exact: kunde.at does not include www.kunde.at. Enter international domains in punycode (xn--...).",
+                        "saved": "Allowed domains saved",
+                        "dialog": {
+                            "title": "Edit allowed domains"
+                        }
+                    },
                     "typeOptions": {
                         "google-recaptcha": "Google reCAPTCHA",
                         "honeypot": "Honeypot",
-                        "csrf": "CSRF token"
+                        "timed-token": "Timed token"
                     },
                     "locationOptions": {
                         "body": "Body",
@@ -899,7 +932,11 @@
                     "dialog": {
                         "editTitle": "Edit security check",
                         "typeLocked": "The type can't change. Remove the check and add a new one instead.",
-                        "minScoreHint": "0.0 (likely a bot) to 1.0 (likely human). Leave empty for reCAPTCHA v2."
+                        "minScoreHint": "0.0 (likely a bot) to 1.0 (likely human). Leave empty for reCAPTCHA v2.",
+                        "expectedActionHint": "Optional. Rejects tokens issued for a different reCAPTCHA v3 action.",
+                        "minDelayHint": "Submissions faster than this are rejected. 1 to 60.",
+                        "maxAgeHint": "How long a token stays valid. 60 to 86400.",
+                        "timedTokenNeedsHostnames": "Add allowed domains first to use the timed token."
                     }
                 },
                 "receivers": {

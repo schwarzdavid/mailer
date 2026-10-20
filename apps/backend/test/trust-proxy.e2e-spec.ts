@@ -18,9 +18,9 @@ describe('TRUST_PROXY (e2e)', () => {
         await app.close()
     })
 
-    function submitForm(forwardedFor: string) {
+    function submitForm(forwardedFor: string, slug = 'trust-proxy-unknown-form') {
         return request(app.getHttpServer())
-            .post('/api/public/form/trust-proxy-unknown-form')
+            .post(`/api/public/form/${slug}`)
             .set('X-Forwarded-For', forwardedFor)
             .send({ data: {} })
     }
@@ -28,7 +28,7 @@ describe('TRUST_PROXY (e2e)', () => {
     it('gives each forwarded client its own throttle bucket', async () => {
         const statuses: number[] = []
         for (let attempt = 0; attempt <= PUBLIC_FORM_LIMIT; attempt++) {
-            const response = await submitForm('203.0.113.10')
+            const response = await submitForm('203.0.113.10', `trust-proxy-unknown-form-${attempt}`)
             statuses.push(response.status)
         }
 

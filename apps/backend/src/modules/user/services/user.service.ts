@@ -25,6 +25,7 @@ import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { isGlobalPermission, Permission } from '../../permission/permission.constants.js'
 import { holdsPermission } from '../../permission/helpers/holds-permission.js'
 import { assertPermissionChangesHeld, assertRoleGrantable } from '../../permission/helpers/permission-grants.js'
+import { hasAllProjectsGrant } from '../../permission/helpers/all-projects-access.js'
 import { userWithRoleFromRow } from '../mappers/user.mapper.js'
 import { normalizeEmail } from '../helpers/normalize-email.js'
 
@@ -92,15 +93,20 @@ export class UserService {
     }
 
     async getUsers(): Promise<UserListEntry[]> {
-        const [rows, membershipCounts] = await Promise.all([
+        const [rows, membershipCounts, allProjectsGrants] = await Promise.all([
             this.userModel.findAll({ include: [RoleModel] }),
             this.projectMemberService.countMembershipsPerUser(),
+            this.projectMemberService.getAllProjectsGrants(),
         ])
 
         return rows.map((row) => {
             const user = userWithRoleFromRow(row)
 
-            return { ...user, membershipCount: membershipCounts.get(user.userId) ?? 0 }
+            return {
+                ...user,
+                membershipCount: membershipCounts.get(user.userId) ?? 0,
+                allProjects: hasAllProjectsGrant(user, allProjectsGrants),
+            }
         })
     }
 

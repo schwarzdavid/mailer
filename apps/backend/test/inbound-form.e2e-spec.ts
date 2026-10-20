@@ -2,10 +2,11 @@
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
-import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
 import { configureSendingDomain } from './support/sending-domain.js'
+import { resetThrottleCounters } from './support/throttle-counters.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
 import { fetchMessages as fetchMailhogMessages, header, parseMessage, type MailhogMessages } from './support/mailhog.js'
@@ -102,6 +103,10 @@ describe('InboundForm (e2e)', () => {
             .post(`/api/inbound-form/${inboundFormId}/receiver/${inboundFormReceiverId}/template/publish`)
             .set('Authorization', `Bearer ${token}`)
             .expect(201)
+    })
+
+    beforeEach(async () => {
+        await resetThrottleCounters()
     })
 
     afterAll(async () => {
@@ -247,5 +252,183 @@ describe('InboundForm (e2e)', () => {
         )
 
         expect(subject).toBe("Message from O'Brien & Co")
+    })
+
+    describe('allowed hostnames', () => {
+        const submit = () =>
+            http()
+                .post(`/api/public/form/${slug}`)
+                .send({ security: { website: null }, data: { firstName: 'Max', email: 'max@example.com' } })
+
+        const setHostnames = async (allowedHostnames: string[]) => {
+            await http()
+                .patch(`/api/inbound-form/${inboundFormId}`)
+                .set('Authorization', `Bearer ${token}`)
+                .send({ allowedHostnames })
+                .expect(200)
+        }
+
+        beforeAll(async () => {
+            await setHostnames(['kunde.at'])
+        })
+
+        afterAll(async () => {
+            await setHostnames([])
+        })
+
+        it('accepts a listed origin with port and uppercase', async () => {
+            const response = await submit().set('Origin', 'https://Kunde.at:8443')
+            expect(response.status).toBe(201)
+        })
+
+        it('rejects a foreign origin', async () => {
+            const response = await submit().set('Origin', 'https://evil.at')
+            expect(response.status).toBe(403)
+        })
+
+        it('rejects a request without origin and referer', async () => {
+            const response = await submit()
+            expect(response.status).toBe(403)
+        })
+
+        it('rejects an opaque origin', async () => {
+            const response = await submit().set('Origin', 'null')
+            expect(response.status).toBe(403)
+        })
+    })
+
+    describe('timed token', () => {
+        const timedSlug = 'e2e-timed-token'
+        const origin = 'https://kunde.at'
+        const validData = { firstName: 'Max', email: 'max@example.com' }
+
+        interface IssuedToken {
+            token: string
+            notBefore: string
+            expiresAt: string
+            waitMs: number
+        }
+
+        const requestToken = () => http().post(`/api/public/form/${timedSlug}/token`).set('Origin', origin)
+
+        const fetchToken = async (): Promise<IssuedToken> => {
+            const response = await requestToken().expect(201)
+            return response.body as IssuedToken
+        }
+
+        const waitOut = (issued: IssuedToken) => new Promise((resolve) => setTimeout(resolve, issued.waitMs + 50))
+
+        const fetchUsableToken = async (): Promise<string> => {
+            const issued = await fetchToken()
+            await waitOut(issued)
+            return issued.token
+        }
+
+        const submit = (formToken: string, data: Record<string, unknown>) =>
+            http().post(`/api/public/form/${timedSlug}`).set('Origin', origin).send({ security: { formToken }, data })
+
+        beforeAll(async () => {
+            await resetThrottleCounters()
+
+            const formResponse = await http()
+                .post('/api/inbound-form')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ name: 'E2E Timed Token', slug: timedSlug, domainId, projectId })
+                .expect(201)
+            const timedFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+
+            await http()
+                .patch(`/api/inbound-form/${timedFormId}`)
+                .set('Authorization', `Bearer ${token}`)
+                .send({ allowedHostnames: ['kunde.at'] })
+                .expect(200)
+
+            await http()
+                .put(`/api/inbound-form/${timedFormId}/fields`)
+                .set('Authorization', `Bearer ${token}`)
+                .send({
+                    fields: [
+                        { key: 'firstName', label: 'First name', type: 'text', validation: { required: true } },
+                        { key: 'email', label: 'Email', type: 'email', validation: { required: true } },
+                    ],
+                })
+                .expect(200)
+
+            await http()
+                .put(`/api/inbound-form/${timedFormId}/security`)
+                .set('Authorization', `Bearer ${token}`)
+                .send({
+                    security: [
+                        {
+                            type: 'timed-token',
+                            location: 'body',
+                            key: 'formToken',
+                            config: { minDelaySeconds: 1, maxAgeSeconds: 60 },
+                        },
+                    ],
+                })
+                .expect(200)
+        })
+
+        it('issues a token to a listed origin', async () => {
+            const issued = await fetchToken()
+
+            expect(issued.token).toMatch(/^[\w-]+\.[\w-]+$/)
+            expect(new Date(issued.notBefore).toISOString()).toBe(issued.notBefore)
+            expect(new Date(issued.expiresAt).toISOString()).toBe(issued.expiresAt)
+            expect(issued.waitMs).toBeGreaterThanOrEqual(1000)
+            expect(issued.waitMs).toBeLessThanOrEqual(2000)
+        })
+
+        it('refuses a token to a foreign origin', async () => {
+            const response = await http().post(`/api/public/form/${timedSlug}/token`).set('Origin', 'https://evil.at')
+            expect(response.status).toBe(403)
+        })
+
+        it('refuses a token for a form without the timed token scheme', async () => {
+            const response = await http().post(`/api/public/form/${slug}/token`).set('Origin', origin)
+            expect(response.status).toBe(404)
+        })
+
+        it('rejects a token submitted before its delay has passed', async () => {
+            let issued = await fetchToken()
+            if (issued.waitMs < 500) {
+                await waitOut(issued)
+                issued = await fetchToken()
+            }
+
+            const response = await submit(issued.token, validData)
+
+            expect(response.status).toBe(403)
+            expect((response.body as { message: string }).message).toContain('not yet valid')
+        })
+
+        it('accepts a token once after its delay and rejects its reuse', async () => {
+            const formToken = await fetchUsableToken()
+
+            await submit(formToken, validData).expect(201)
+            const reuse = await submit(formToken, validData)
+
+            expect(reuse.status).toBe(403)
+            expect((reuse.body as { message: string }).message).toContain('already used')
+        })
+
+        it('keeps a token usable after a failed field validation', async () => {
+            const formToken = await fetchUsableToken()
+
+            const invalid = await submit(formToken, { firstName: 'Max', email: 'broken' })
+            const retry = await submit(formToken, validData)
+
+            expect(invalid.status).toBe(400)
+            expect(retry.status).toBe(201)
+        })
+
+        it('serves the client script', async () => {
+            const response = await http().get('/api/public/form/client.js').buffer(true).expect(200)
+
+            expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
+            expect(response.headers['cache-control']).toBe('public, max-age=86400')
+            expect(response.text).toContain('InboundForm')
+        })
     })
 })

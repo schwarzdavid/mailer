@@ -4,12 +4,19 @@ import {
     InboundFormSecurityLocation,
     InboundFormSecurityType,
 } from '../interfaces/inbound-form-security.interface.js'
+import { isRecaptchaConfig, isTimedTokenConfig } from '../helpers/security-config.js'
+import { isOriginAllowed } from '../helpers/origin.js'
+import { normalizeHostname } from '../helpers/hostname.js'
 import { SecretEncryptionService } from '../../encryption/services/secret-encryption.service.js'
+import { InboundFormTokenService } from './inbound-form-token.service.js'
+import { VerifiedFormToken } from '../interfaces/inbound-form-token.interface.js'
 
 export interface SecurityRequestContext {
     security: Record<string, unknown>
     headers: Record<string, unknown>
     query: Record<string, unknown>
+    allowedHostnames: string[]
+    ip: string
 }
 
 export enum SecurityCheckResult {
@@ -17,9 +24,14 @@ export enum SecurityCheckResult {
     SPAM = 'spam',
 }
 
+export type SecurityCheckOutcome =
+    { result: SecurityCheckResult.SPAM } | { result: SecurityCheckResult.PASSED; token: VerifiedFormToken | null }
+
 interface RecaptchaVerification {
     success: boolean
     score?: number
+    hostname?: unknown
+    action?: string
 }
 
 @Injectable()
@@ -29,12 +41,19 @@ export class InboundFormSecurityService {
 
     private readonly logger = new Logger(InboundFormSecurityService.name)
 
-    constructor(private readonly secretEncryptionService: SecretEncryptionService) {}
+    constructor(
+        private readonly secretEncryptionService: SecretEncryptionService,
+        private readonly tokenService: InboundFormTokenService,
+    ) {}
 
     async checkSubmission(
         schemes: InboundFormSecurity[],
         context: SecurityRequestContext,
-    ): Promise<SecurityCheckResult> {
+    ): Promise<SecurityCheckOutcome> {
+        if (!isOriginAllowed(context.allowedHostnames, context.headers)) {
+            throw new ForbiddenException('Origin not allowed')
+        }
+
         for (const scheme of schemes) {
             if (scheme.type !== InboundFormSecurityType.HONEYPOT) {
                 continue
@@ -42,21 +61,31 @@ export class InboundFormSecurityService {
             const value = this.extractValue(scheme, context)
             if (value !== undefined && value !== null && value !== '') {
                 this.logger.warn(`Honeypot "${scheme.key}" triggered for form ${scheme.inboundFormId}`)
-                return SecurityCheckResult.SPAM
+                return { result: SecurityCheckResult.SPAM }
+            }
+        }
+
+        let token: VerifiedFormToken | null = null
+        for (const scheme of schemes) {
+            if (scheme.type === InboundFormSecurityType.TIMED_TOKEN) {
+                token = this.verifyTimedToken(scheme, this.extractValue(scheme, context), context.ip)
             }
         }
 
         for (const scheme of schemes) {
-            if (scheme.type === InboundFormSecurityType.HONEYPOT) {
-                continue
+            if (scheme.type === InboundFormSecurityType.RECAPTCHA) {
+                await this.verifyRecaptcha(scheme, this.extractValue(scheme, context), context.allowedHostnames)
             }
-            if (scheme.type !== InboundFormSecurityType.RECAPTCHA) {
-                throw new ForbiddenException(`Unsupported security scheme: ${scheme.type}`)
-            }
-            await this.verifyRecaptcha(scheme, this.extractValue(scheme, context))
         }
 
-        return SecurityCheckResult.PASSED
+        return { result: SecurityCheckResult.PASSED, token }
+    }
+
+    private verifyTimedToken(scheme: InboundFormSecurity, value: unknown, ip: string): VerifiedFormToken {
+        if (!isTimedTokenConfig(scheme.config)) {
+            throw new ForbiddenException('Form token is not configured')
+        }
+        return this.tokenService.verify(value, scheme.inboundFormId, ip, scheme.config)
     }
 
     private extractValue(scheme: InboundFormSecurity, context: SecurityRequestContext): unknown {
@@ -70,11 +99,15 @@ export class InboundFormSecurityService {
         }
     }
 
-    private async verifyRecaptcha(scheme: InboundFormSecurity, value: unknown): Promise<void> {
+    private async verifyRecaptcha(
+        scheme: InboundFormSecurity,
+        value: unknown,
+        allowedHostnames: string[],
+    ): Promise<void> {
         if (typeof value !== 'string' || value === '') {
             throw new ForbiddenException('Missing captcha token')
         }
-        if (!scheme.config?.encryptedSecret) {
+        if (!isRecaptchaConfig(scheme.config) || !scheme.config.encryptedSecret) {
             throw new ForbiddenException('Captcha is not configured')
         }
 
@@ -100,6 +133,18 @@ export class InboundFormSecurityService {
 
         if (!verification.success) {
             throw new ForbiddenException('Captcha verification failed')
+        }
+
+        if (allowedHostnames.length > 0) {
+            const hostname = typeof verification.hostname === 'string' ? normalizeHostname(verification.hostname) : null
+            if (hostname === null || !allowedHostnames.includes(hostname)) {
+                throw new ForbiddenException('Captcha hostname mismatch')
+            }
+        }
+
+        const expectedAction = scheme.config.expectedAction
+        if (expectedAction !== undefined && verification.action !== expectedAction) {
+            throw new ForbiddenException('Captcha action mismatch')
         }
 
         const minScore = scheme.config.minScore

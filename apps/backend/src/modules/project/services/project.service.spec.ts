@@ -68,6 +68,7 @@ const inboundForm: InboundForm = {
     name: 'Contact',
     slug: 'contact',
     isActive: true,
+    allowedHostnames: [],
     createdAt: new Date(),
     updatedAt: new Date(),
 }

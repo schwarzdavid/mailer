@@ -12,7 +12,13 @@ const security: InboundFormSecurityUpsertDto[] = [
         type: 'google-recaptcha',
         location: 'body',
         key: 'g-recaptcha-response',
-        config: { secret: 's3cret', minScore: 0.5 },
+        config: { secret: 's3cret', minScore: 0.5, expectedAction: 'contact' },
+    },
+    {
+        type: 'timed-token',
+        location: 'body',
+        key: 'formToken',
+        config: { minDelaySeconds: 3, maxAgeSeconds: 3600 },
     },
 ]
 
@@ -22,7 +28,14 @@ const saved: InboundFormSecurityDto[] = [
         type: 'google-recaptcha',
         location: 'body',
         key: 'g-recaptcha-response',
-        config: { hasSecret: true, minScore: 0.5 },
+        config: { hasSecret: true, minScore: 0.5, expectedAction: 'contact' },
+    },
+    {
+        inboundFormSecurityId: 12,
+        type: 'timed-token',
+        location: 'body',
+        key: 'formToken',
+        config: { minDelaySeconds: 3, maxAgeSeconds: 3600 },
     },
 ]
 

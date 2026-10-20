@@ -19,12 +19,13 @@
             :items="typeOptions"
             :disabled="scheme !== null"
             :append-inner-icon="scheme ? mdiLockOutline : undefined"
-            :hint="scheme ? t('module.inboundForms.details.security.dialog.typeLocked') : undefined"
-            :persistent-hint="scheme !== null"
+            :hint="typeHint"
+            :persistent-hint="typeHint !== undefined"
             :error-messages="errors.type"
         />
         <div class="form-grid form-grid--2">
             <VSelect
+                v-if="type !== 'honeypot'"
                 v-model="location"
                 name="location"
                 :label="requiredLabel(t('module.inboundForms.details.security.location'))"
@@ -34,7 +35,7 @@
             <VTextField
                 v-model="key"
                 name="key"
-                class="mono-field"
+                :class="['mono-field', { 'span-2': type === 'honeypot' }]"
                 :label="requiredLabel(t('module.inboundForms.details.security.key'))"
                 :error-messages="errors.key"
             />
@@ -68,7 +69,36 @@
                 :error-messages="errors.minScore"
                 @update:model-value="minScore = $event"
             />
+            <VTextField
+                v-model="expectedAction"
+                name="expectedAction"
+                class="mono-field"
+                :label="t('module.inboundForms.details.security.expectedAction')"
+                :hint="t('module.inboundForms.details.security.dialog.expectedActionHint')"
+                persistent-hint
+                :error-messages="errors.expectedAction"
+            />
         </template>
+        <div v-else-if="type === 'timed-token'" class="form-grid form-grid--2">
+            <VNumberInput
+                name="minDelaySeconds"
+                :label="requiredLabel(t('module.inboundForms.details.security.minDelaySeconds'))"
+                :model-value="minDelaySeconds ?? null"
+                :hint="t('module.inboundForms.details.security.dialog.minDelayHint')"
+                persistent-hint
+                :error-messages="errors.minDelaySeconds"
+                @update:model-value="minDelaySeconds = $event"
+            />
+            <VNumberInput
+                name="maxAgeSeconds"
+                :label="requiredLabel(t('module.inboundForms.details.security.maxAgeSeconds'))"
+                :model-value="maxAgeSeconds ?? null"
+                :hint="t('module.inboundForms.details.security.dialog.maxAgeHint')"
+                persistent-hint
+                :error-messages="errors.maxAgeSeconds"
+                @update:model-value="maxAgeSeconds = $event"
+            />
+        </div>
     </FormDialog>
 </template>
 
@@ -79,17 +109,22 @@
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
     import { mdiLockOutline } from '@mdi/js'
-    import type { InboundFormRecaptchaConfigUpsertDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
+    import type { InboundFormSecurityConfigUpsertDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
     import PasswordField from '@/components/PasswordField.vue'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
-    type EditableType = 'google-recaptcha' | 'honeypot'
+    type EditableType = InboundFormSecurityDto['type']
+
+    const TIMED_TOKEN_KEY = 'formToken'
+    const DEFAULT_MIN_DELAY_SECONDS = 3
+    const DEFAULT_MAX_AGE_SECONDS = 3600
 
     const props = withDefaults(
         defineProps<{
             scheme: InboundFormSecurityDto | null
             takenTypes: InboundFormSecurityDto['type'][]
+            hasHostnames: boolean
             saving: boolean
             error?: string | null
         }>(),
@@ -103,10 +138,24 @@
     const requiredLabel = useRequiredLabel()
 
     const typeOptions = computed(() =>
-        (['google-recaptcha', 'honeypot'] as const)
+        (['google-recaptcha', 'honeypot', 'timed-token'] as const)
             .filter((value) => props.scheme?.type === value || !props.takenTypes.includes(value))
-            .map((value) => ({ value, title: t(`module.inboundForms.details.security.typeOptions.${value}`) })),
+            .map((value) => ({
+                value,
+                title: t(`module.inboundForms.details.security.typeOptions.${value}`),
+                props: { disabled: value === 'timed-token' && props.scheme === null && !props.hasHostnames },
+            })),
     )
+
+    const typeHint = computed(() => {
+        if (props.scheme) {
+            return t('module.inboundForms.details.security.dialog.typeLocked')
+        }
+        if (!props.hasHostnames && typeOptions.value.some((option) => option.value === 'timed-token')) {
+            return t('module.inboundForms.details.security.dialog.timedTokenNeedsHostnames')
+        }
+        return undefined
+    })
 
     const locationOptions = computed(() =>
         (['body', 'header', 'query'] as const).map((value) => ({
@@ -123,14 +172,25 @@
         validationSchema: toTypedSchema(
             z
                 .object({
-                    type: z.enum(['google-recaptcha', 'honeypot']),
+                    type: z.enum(['google-recaptcha', 'honeypot', 'timed-token']),
                     location: z.enum(['body', 'header', 'query']),
                     key: z.string().trim().min(1).max(255),
                     secret: z.string().optional(),
                     minScore: z.number().min(0).max(1).nullable().optional(),
+                    expectedAction: z.string().trim().max(100).optional(),
+                    minDelaySeconds: z.number().int().min(1).max(60).nullable().optional(),
+                    maxAgeSeconds: z.number().int().min(60).max(86400).nullable().optional(),
                 })
                 .refine((values) => values.type !== 'google-recaptcha' || !!values.secret || hasStoredSecret.value, {
                     path: ['secret'],
+                    error: () => t('validation.required'),
+                })
+                .refine((values) => values.type !== 'timed-token' || typeof values.minDelaySeconds === 'number', {
+                    path: ['minDelaySeconds'],
+                    error: () => t('validation.required'),
+                })
+                .refine((values) => values.type !== 'timed-token' || typeof values.maxAgeSeconds === 'number', {
+                    path: ['maxAgeSeconds'],
                     error: () => t('validation.required'),
                 }),
         ),
@@ -141,16 +201,27 @@
     const [key] = defineField('key')
     const [secret] = defineField('secret')
     const [minScore] = defineField('minScore')
+    const [expectedAction] = defineField('expectedAction')
+    const [minDelaySeconds] = defineField('minDelaySeconds')
+    const [maxAgeSeconds] = defineField('maxAgeSeconds')
 
     function defaultType(): EditableType {
-        if (props.scheme?.type === 'google-recaptcha') {
-            return 'google-recaptcha'
-        }
         if (props.scheme) {
-            return 'honeypot'
+            return props.scheme.type
         }
-        return typeOptions.value[0]?.value ?? 'honeypot'
+        return typeOptions.value.find((option) => !option.props.disabled)?.value ?? 'honeypot'
     }
+
+    function defaultKey(schemeType: EditableType) {
+        return schemeType === 'timed-token' ? TIMED_TOKEN_KEY : ''
+    }
+
+    watch(type, (next, previous) => {
+        if (props.scheme || !previous || key.value !== defaultKey(previous)) {
+            return
+        }
+        key.value = next ? defaultKey(next) : ''
+    })
 
     watch(
         model,
@@ -158,13 +229,17 @@
             if (!open) {
                 return
             }
+            const initialType = defaultType()
             resetForm({
                 values: {
-                    type: defaultType(),
+                    type: initialType,
                     location: props.scheme?.location ?? 'body',
-                    key: props.scheme?.key ?? '',
+                    key: props.scheme?.key ?? defaultKey(initialType),
                     secret: undefined,
                     minScore: props.scheme?.config?.minScore ?? null,
+                    expectedAction: props.scheme?.config?.expectedAction ?? '',
+                    minDelaySeconds: props.scheme?.config?.minDelaySeconds ?? DEFAULT_MIN_DELAY_SECONDS,
+                    maxAgeSeconds: props.scheme?.config?.maxAgeSeconds ?? DEFAULT_MAX_AGE_SECONDS,
                 },
             })
         },
@@ -172,13 +247,23 @@
     )
 
     const onSubmit = handleSubmit((values) => {
-        let config: InboundFormRecaptchaConfigUpsertDto | null = null
+        let config: InboundFormSecurityConfigUpsertDto | null = null
         if (values.type === 'google-recaptcha') {
-            config = values.secret
-                ? { secret: values.secret, minScore: values.minScore ?? undefined }
-                : { minScore: values.minScore ?? undefined }
+            config = {
+                minScore: values.minScore ?? undefined,
+                expectedAction: values.expectedAction || undefined,
+            }
+            if (values.secret) {
+                config.secret = values.secret
+            }
+        } else if (values.type === 'timed-token') {
+            config = {
+                minDelaySeconds: values.minDelaySeconds ?? undefined,
+                maxAgeSeconds: values.maxAgeSeconds ?? undefined,
+            }
         }
 
-        emit('save', { type: values.type, location: values.location, key: values.key, config })
+        const schemeLocation = values.type === 'honeypot' ? 'body' : values.location
+        emit('save', { type: values.type, location: schemeLocation, key: values.key, config })
     })
 </script>

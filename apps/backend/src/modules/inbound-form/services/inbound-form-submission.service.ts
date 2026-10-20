@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { InboundFormModel } from '../models/inbound-form.model.js'
@@ -10,6 +10,7 @@ import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.
 import { ProjectModel } from '../../project/models/project.model.js'
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
 import { InboundFormTemplateService } from './inbound-form-template.service.js'
+import { InboundFormTokenService } from './inbound-form-token.service.js'
 import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
 import { MailService } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
@@ -21,6 +22,10 @@ import { InboundFormTemplate } from '../interfaces/inbound-form-template.interfa
 import { buildDataSchema } from '../helpers/field-schema.js'
 import { parsePlaceholder } from '../helpers/placeholder.js'
 import { INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { isOriginAllowed } from '../helpers/origin.js'
+import { isTimedTokenConfig } from '../helpers/security-config.js'
+import { InboundFormSecurityType } from '../interfaces/inbound-form-security.interface.js'
+import { IssuedFormToken } from '../interfaces/inbound-form-token.interface.js'
 
 export interface PublicSubmission {
     security?: Record<string, unknown>
@@ -53,13 +58,34 @@ export class InboundFormSubmissionService {
         private readonly templateRendererService: TemplateRendererService,
         private readonly mailService: MailService,
         private readonly sequelize: Sequelize,
+        private readonly tokenService: InboundFormTokenService,
     ) {}
+
+    async issueToken(slug: string, headers: Record<string, unknown>, ip: string): Promise<IssuedFormToken> {
+        const form = await this.formModel.findOne({
+            where: { slug, isActive: true },
+            include: [InboundFormSecurityModel, { model: ProjectModel, required: true }],
+        })
+        const scheme = form?.inboundFormSecurity
+            .map((row) => row.get({ plain: true }))
+            .find((security) => security.type === InboundFormSecurityType.TIMED_TOKEN)
+
+        if (!form || !scheme || !isTimedTokenConfig(scheme.config)) {
+            throw new NotFoundException('Unknown form')
+        }
+        if (form.allowedHostnames.length === 0 || !isOriginAllowed(form.allowedHostnames, headers)) {
+            throw new ForbiddenException('Origin not allowed')
+        }
+
+        return this.tokenService.issue(form.inboundFormId, ip, scheme.config)
+    }
 
     async submitForm(
         slug: string,
         submission: PublicSubmission,
         headers: Record<string, unknown>,
         query: Record<string, unknown>,
+        ip: string,
     ): Promise<void> {
         const form = await this.formModel.findOne({
             where: { slug, isActive: true },
@@ -76,12 +102,18 @@ export class InboundFormSubmissionService {
             throw new NotFoundException('Unknown form')
         }
 
-        const securityResult = await this.securityService.checkSubmission(
+        const securityOutcome = await this.securityService.checkSubmission(
             form.inboundFormSecurity.map((scheme) => scheme.get({ plain: true })),
-            { security: submission.security ?? {}, headers, query },
+            {
+                security: submission.security ?? {},
+                headers,
+                query,
+                allowedHostnames: form.allowedHostnames,
+                ip,
+            },
         )
 
-        if (securityResult === SecurityCheckResult.SPAM) {
+        if (securityOutcome.result === SecurityCheckResult.SPAM) {
             await this.submissionModel.create(
                 {
                     inboundFormId: form.inboundFormId,
@@ -113,6 +145,10 @@ export class InboundFormSubmissionService {
                 continue
             }
             sendPlan.push({ receiver, template })
+        }
+
+        if (securityOutcome.token) {
+            await this.tokenService.consume(securityOutcome.token)
         }
 
         const { submissionRow, pendingDeliveries } = await this.sequelize.transaction(async (transaction) => {

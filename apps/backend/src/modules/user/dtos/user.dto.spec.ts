@@ -40,6 +40,7 @@ describe('UserDto serialization', () => {
             password: 'super-secret-hash',
             role: { roleId: 3, name: 'User', type: 'user' },
             membershipCount: 4,
+            allProjects: true,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -48,7 +49,7 @@ describe('UserDto serialization', () => {
             excludeExtraneousValues: true,
         })
 
-        expect(serialized).toMatchObject({ userId: 2, membershipCount: 4 })
+        expect(serialized).toMatchObject({ userId: 2, membershipCount: 4, allProjects: true })
         expect('password' in serialized).toBe(false)
     })
 })

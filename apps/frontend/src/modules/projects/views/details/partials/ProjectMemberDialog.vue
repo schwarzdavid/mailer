@@ -92,6 +92,7 @@
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
     import PermissionGrid from '@/modules/roles/components/PermissionGrid.vue'
     import { PROJECT_PERMISSION_GROUPS } from '@/modules/roles/permissionCatalog.ts'
+    import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
     import { useUsersQuery } from '@/modules/users/queries/useUsersQuery.ts'
     import { useRoleLabels } from '@/modules/users/composables/useRoleLabel.ts'
     import { useProjectMemberSetMutation } from '@/modules/projects/mutations/useProjectMemberSetMutation.ts'
@@ -120,6 +121,7 @@
         queryFn,
         enabled: computed(() => model.value && !props.member),
     })
+    const { data: currentUser } = useQuery(useAuthQuery())
     const rolesQuery = useProjectRolesQuery(() => props.project.projectId)
     const { data: roles, isLoading: rolesLoading } = useQuery({ ...rolesQuery, enabled: model })
 
@@ -127,7 +129,12 @@
 
     const userOptions = computed(() =>
         (users.value ?? [])
-            .filter((user) => !props.existing.some((member) => member.userId === user.userId))
+            .filter(
+                (user) =>
+                    !user.allProjects &&
+                    user.userId !== currentUser.value?.userId &&
+                    !props.existing.some((member) => member.userId === user.userId),
+            )
             .map((user) => ({
                 userId: user.userId,
                 name: `${user.firstName} ${user.lastName}`,

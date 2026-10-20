@@ -52,6 +52,11 @@ export const envSchema = z
 
         PUBLIC_API_RATE_LIMIT: z.coerce.number().int().positive().default(60),
         PUBLIC_API_RATE_TTL: z.coerce.number().int().positive().default(60_000),
+
+        FORM_SUBMIT_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+        FORM_SUBMIT_RATE_TTL: z.coerce.number().int().positive().default(600_000),
+        FORM_TOKEN_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+        FORM_TOKEN_RATE_TTL: z.coerce.number().int().positive().default(600_000),
     })
     .superRefine((env, ctx) => {
         if (!env.IMAP_HOST) {

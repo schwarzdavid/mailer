@@ -24,6 +24,12 @@ import {
     PUBLIC_API_IP_THROTTLER,
     PUBLIC_API_THROTTLER,
 } from './modules/api-key/api-key.constants.js'
+import {
+    FORM_SUBMIT_THROTTLER,
+    FORM_TOKEN_THROTTLER,
+    formThrottleKind,
+    formThrottleTracker,
+} from './modules/inbound-form/helpers/form-throttle.js'
 import { Env, envSchema } from './config/env.schema.js'
 import { createRedisClientOptions } from './factories/redis.options.js'
 import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
@@ -94,6 +100,20 @@ import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/f
                                 configService.get('PUBLIC_API_RATE_LIMIT', { infer: true }) *
                                 PUBLIC_API_IP_LIMIT_FACTOR,
                             skipIf: (context) => !isApiKeyRoute(context),
+                        },
+                        {
+                            name: FORM_SUBMIT_THROTTLER,
+                            ttl: configService.get('FORM_SUBMIT_RATE_TTL', { infer: true }),
+                            limit: configService.get('FORM_SUBMIT_RATE_LIMIT', { infer: true }),
+                            getTracker: formThrottleTracker,
+                            skipIf: (context) => formThrottleKind(context) !== 'submit',
+                        },
+                        {
+                            name: FORM_TOKEN_THROTTLER,
+                            ttl: configService.get('FORM_TOKEN_RATE_TTL', { infer: true }),
+                            limit: configService.get('FORM_TOKEN_RATE_LIMIT', { infer: true }),
+                            getTracker: formThrottleTracker,
+                            skipIf: (context) => formThrottleKind(context) !== 'token',
                         },
                     ],
                     storage,

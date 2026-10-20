@@ -116,6 +116,7 @@ describe('UserService', () => {
     let getRoleByType: Mock<RoleService['getRoleByType']>
     let getMembershipsForUser: Mock<ProjectMemberService['getMembershipsForUser']>
     let countMembershipsPerUser: Mock<ProjectMemberService['countMembershipsPerUser']>
+    let getAllProjectsGrants: Mock<ProjectMemberService['getAllProjectsGrants']>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
     let transaction: Mock<Sequelize['transaction']>
 
@@ -133,6 +134,7 @@ describe('UserService', () => {
         getRoleByType = vi.fn<typeof getRoleByType>().mockResolvedValue(userRole)
         getMembershipsForUser = vi.fn<typeof getMembershipsForUser>().mockResolvedValue([])
         countMembershipsPerUser = vi.fn<typeof countMembershipsPerUser>().mockResolvedValue(new Map())
+        getAllProjectsGrants = vi.fn<typeof getAllProjectsGrants>().mockResolvedValue({ roleIds: [], userIds: [] })
         invalidateUser = vi.fn<typeof invalidateUser>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
@@ -151,7 +153,10 @@ describe('UserService', () => {
                     },
                 },
                 { provide: RoleService, useValue: { findRole, getRoleByType } },
-                { provide: ProjectMemberService, useValue: { getMembershipsForUser, countMembershipsPerUser } },
+                {
+                    provide: ProjectMemberService,
+                    useValue: { getMembershipsForUser, countMembershipsPerUser, getAllProjectsGrants },
+                },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
@@ -299,6 +304,18 @@ describe('UserService', () => {
             expect(users.map(({ userId, membershipCount }) => ({ userId, membershipCount }))).toEqual([
                 { userId: 7, membershipCount: 3 },
                 { userId: 8, membershipCount: 0 },
+            ])
+        })
+
+        it('flags users with access to all projects', async () => {
+            findAll.mockResolvedValue([userRow(), userRow({ userId: 8, email: 'linus@example.com' })])
+            getAllProjectsGrants.mockResolvedValue({ roleIds: [], userIds: [8] })
+
+            const users = await service.getUsers()
+
+            expect(users.map(({ userId, allProjects }) => ({ userId, allProjects }))).toEqual([
+                { userId: 7, allProjects: false },
+                { userId: 8, allProjects: true },
             ])
         })
     })

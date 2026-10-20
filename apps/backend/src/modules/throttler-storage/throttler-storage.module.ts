@@ -37,6 +37,6 @@ import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storag
         },
         FailOpenThrottlerStorage,
     ],
-    exports: [FailOpenThrottlerStorage],
+    exports: [FailOpenThrottlerStorage, THROTTLER_REDIS_CLIENT],
 })
 export class ThrottlerStorageModule {}

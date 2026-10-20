@@ -13,10 +13,16 @@ import type { FullUser } from '../../user/interfaces/user.interface.js'
 import type { ProjectImplicitAccess } from '../../project/interfaces/project.interface.js'
 import { PermissionCacheService } from './permission-cache.service.js'
 import { RoleService } from './role.service.js'
+import { AbilityFactory } from './ability-factory.service.js'
 import { assertProjectPermission, canOnProject } from '../helpers/project-access.js'
 import { assertPermissionChangesHeld, assertRoleGrantable } from '../helpers/permission-grants.js'
 import { AppAbility } from '../interfaces/app-ability.js'
-import { ProjectMemberGrant, ProjectMemberInfo, ProjectMembership } from '../interfaces/project-member.interface.js'
+import {
+    AllProjectsGrants,
+    ProjectMemberGrant,
+    ProjectMemberInfo,
+    ProjectMembership,
+} from '../interfaces/project-member.interface.js'
 import { RoleWithPermissions } from '../interfaces/role.interface.js'
 import { isProjectPermission, Permission, PROJECT_PERMISSIONS, ProjectPermission } from '../permission.constants.js'
 
@@ -37,6 +43,7 @@ export class ProjectMemberService {
         @InjectModel(RolePermissionModel) private readonly rolePermissionModel: typeof RolePermissionModel,
         @InjectModel(UserPermissionModel) private readonly userPermissionModel: typeof UserPermissionModel,
         private readonly roleService: RoleService,
+        private readonly abilityFactory: AbilityFactory,
         private readonly permissionCacheService: PermissionCacheService,
         private readonly sequelize: Sequelize,
     ) {}
@@ -84,6 +91,7 @@ export class ProjectMemberService {
         if (!user) {
             throw new NotFoundException('Unknown user')
         }
+        const hasAllProjectsAccess = await this.abilityFactory.hasAllProjectsAccess(user)
 
         const role = await this.roleService.findRole(grant.roleId)
         if (!role || role.scope !== 'project') {
@@ -105,6 +113,9 @@ export class ProjectMemberService {
                       })
                   ).map((entry) => entry.permission)
                 : []
+            if (!existing && hasAllProjectsAccess) {
+                throw new BadRequestException('User already has access to all projects')
+            }
             if (existing?.roleId !== role.roleId) {
                 assertRoleGrantable(rolePermissions, isHeld)
             }
@@ -186,7 +197,7 @@ export class ProjectMemberService {
         )
     }
 
-    private async countNonSuperAdminsWithAllProjects(): Promise<number> {
+    async getAllProjectsGrants(): Promise<AllProjectsGrants> {
         const [rolePermissions, userPermissions] = await Promise.all([
             this.rolePermissionModel.findAll({
                 attributes: ['roleId'],
@@ -198,8 +209,14 @@ export class ProjectMemberService {
             }),
         ])
 
-        const roleIds = rolePermissions.map((row) => row.roleId)
-        const userIds = userPermissions.map((row) => row.userId)
+        return {
+            roleIds: rolePermissions.map((row) => row.roleId),
+            userIds: userPermissions.map((row) => row.userId),
+        }
+    }
+
+    private async countNonSuperAdminsWithAllProjects(): Promise<number> {
+        const { roleIds, userIds } = await this.getAllProjectsGrants()
         if (roleIds.length === 0 && userIds.length === 0) {
             return 0
         }

@@ -30,7 +30,7 @@ const user: UserWithRole = {
     updatedAt: new Date(),
 }
 
-const listEntry: UserListEntry = { ...user, membershipCount: 2 }
+const listEntry: UserListEntry = { ...user, membershipCount: 2, allProjects: false }
 
 const detail: UserDetail = { ...user, permissions: ['domains.read'], memberships: [] }
 

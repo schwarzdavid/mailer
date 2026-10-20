@@ -53,6 +53,33 @@ describe('InboundFormDetailView', () => {
         expect(titles).toEqual(['Endpoint', 'General', 'Fields', 'Security', 'Receivers', 'Delete form'])
     })
 
+    it('shows a fetch example on the endpoint card instead of an HTML form', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormDetailView)
+
+        await vi.waitFor(() => expect(findButton(wrapper, 'Example request')).toBeDefined())
+        await findButton(wrapper, 'Example request')!.trigger('click')
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('fetch('))
+        expect(wrapper.text()).not.toContain('<form')
+    })
+
+    it('opens the integration dialog of a security check, also without update rights', async () => {
+        mockApis()
+        const wrapper = mountInApp(InboundFormDetailView, {}, [
+            { action: 'read', subject: 'Project', conditions: { projectId: { $in: [1] } } },
+        ])
+        await vi.waitFor(() =>
+            expect(wrapper.find('button[aria-label="How to integrate Honeypot"]').exists()).toBe(true),
+        )
+
+        await wrapper.get('button[aria-label="How to integrate Honeypot"]').trigger('click')
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Honeypot integration'))
+        expect(overlayText()).toContain('tabindex="-1"')
+        expect(overlayText()).toContain('name="website"')
+    })
+
     it('summarizes field rules in the fields table', async () => {
         mockApis()
         const wrapper = mountInApp(InboundFormDetailView)
@@ -173,6 +200,23 @@ describe('InboundFormDetailView', () => {
         expect(findButton(wrapper, 'View template')).toBeDefined()
         expect(wrapper.text()).not.toContain('Delete form')
         expect(wrapper.text()).toContain('/api/public/form/contact-request')
+    })
+
+    it('warns when no domains are allowed', async () => {
+        mockApis(formDetail({ allowedHostnames: [] }))
+        const wrapper = mountInApp(InboundFormDetailView)
+
+        await vi.waitFor(() =>
+            expect(wrapper.text()).toContain('No domains are allowed yet, so any website can submit this form.'),
+        )
+    })
+
+    it('lists the allowed domains without a warning', async () => {
+        mockApis(formDetail({ allowedHostnames: ['kunde.at'] }))
+        const wrapper = mountInApp(InboundFormDetailView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('kunde.at'))
+        expect(wrapper.text()).not.toContain('No domains are allowed yet')
     })
 
     it('shows the not-found state', async () => {

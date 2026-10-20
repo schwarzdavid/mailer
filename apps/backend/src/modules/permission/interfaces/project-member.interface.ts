@@ -41,6 +41,11 @@ export interface ProjectMembership {
     permissions: ProjectPermission[]
 }
 
+export interface AllProjectsGrants {
+    roleIds: number[]
+    userIds: number[]
+}
+
 export interface ProjectMemberInfo {
     userId: number
     firstName: string

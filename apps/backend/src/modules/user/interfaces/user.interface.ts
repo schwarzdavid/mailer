@@ -34,6 +34,7 @@ export interface UserUpdate {
 
 export interface UserListEntry extends UserWithRole {
     membershipCount: number
+    allProjects: boolean
 }
 
 export interface UserDetail extends UserWithRole {

@@ -2,7 +2,11 @@ import 'reflect-metadata'
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { validate, type ValidationError } from 'class-validator'
 import { describe, expect, it } from 'vitest'
-import { InboundFormSecurityDto, InboundFormSecurityPutDto } from './inbound-form-security.dto.js'
+import {
+    InboundFormSecurityConfigDto,
+    InboundFormSecurityDto,
+    InboundFormSecurityPutDto,
+} from './inbound-form-security.dto.js'
 import {
     InboundFormSecurity,
     InboundFormSecurityLocation,
@@ -137,5 +141,31 @@ describe('InboundFormSecurityDto', () => {
 
     it('maps a scheme without config to null', () => {
         expect(serialize({ ...stored, type: InboundFormSecurityType.HONEYPOT, config: null }).config).toBeNull()
+    })
+})
+
+describe('InboundFormSecurityConfigDto.fromConfig', () => {
+    it('maps a recaptcha config without exposing the ciphertext', () => {
+        expect(
+            InboundFormSecurityConfigDto.fromConfig(InboundFormSecurityType.RECAPTCHA, {
+                encryptedSecret: 'v1.x',
+                minScore: 0.5,
+                expectedAction: 'contact',
+            }),
+        ).toEqual({ hasSecret: true, minScore: 0.5, expectedAction: 'contact' })
+    })
+
+    it('maps a timed token config without hasSecret', () => {
+        const config = InboundFormSecurityConfigDto.fromConfig(InboundFormSecurityType.TIMED_TOKEN, {
+            minDelaySeconds: 3,
+            maxAgeSeconds: 3600,
+        })
+
+        expect(config).toEqual({ minDelaySeconds: 3, maxAgeSeconds: 3600 })
+        expect(config).not.toHaveProperty('hasSecret')
+    })
+
+    it('maps a missing config to null', () => {
+        expect(InboundFormSecurityConfigDto.fromConfig(InboundFormSecurityType.HONEYPOT, null)).toBeNull()
     })
 })
