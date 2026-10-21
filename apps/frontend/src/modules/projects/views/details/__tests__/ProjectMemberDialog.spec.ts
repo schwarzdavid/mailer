@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ProjectApi, UserApi } from 'api'
+import { AuthApi, ProjectApi, UserApi } from 'api'
 import ProjectMemberDialog from '../partials/ProjectMemberDialog.vue'
 import { mountDialog, overlayButton, overlayText } from '@/__tests__/support.ts'
 import { member, projectDetail, projectRoles, userListItem } from '@/__tests__/fixtures.ts'
+import { signedIn } from '@/modules/users/views/__tests__/userFixtures.ts'
 
 vi.mock('@/helper/waitAtleast.ts', () => ({
     waitAtleast: <T>(promise: Promise<T>) => promise,
@@ -60,6 +61,26 @@ describe('ProjectMemberDialog', () => {
             }),
         )
         await vi.waitFor(() => expect(open.value).toBe(false))
+    })
+
+    it('offers neither the signed-in user nor users with access to all projects', async () => {
+        mockRoles()
+        vi.spyOn(AuthApi, 'currentUser').mockResolvedValue(signedIn('user', 4))
+        vi.spyOn(UserApi, 'getUsers').mockResolvedValue([
+            userListItem(),
+            userListItem({ userId: 4, firstName: 'Ada', lastName: 'Lovelace' }),
+            userListItem({ userId: 5, firstName: 'Lisa', lastName: 'Schneider', allProjects: true }),
+        ])
+        mountDialog(ProjectMemberDialog, { project: projectDetail(), existing: [] })
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Access in Acme Website'))
+        document.body
+            .querySelector<HTMLElement>('.v-overlay-container .v-autocomplete .v-field')!
+            .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        await vi.waitFor(() => expect(overlayText()).toContain('Tom Becker'))
+
+        expect(overlayText()).not.toContain('Ada Lovelace')
+        expect(overlayText()).not.toContain('Lisa Schneider')
     })
 
     it('pre-selects the smallest grantable role even when it is not listed first', async () => {

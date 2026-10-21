@@ -1,7 +1,7 @@
 export enum InboundFormSecurityType {
     RECAPTCHA = 'google-recaptcha',
-    CSRF = 'csrf',
     HONEYPOT = 'honeypot',
+    TIMED_TOKEN = 'timed-token',
 }
 
 export enum InboundFormSecurityLocation {
@@ -13,11 +13,22 @@ export enum InboundFormSecurityLocation {
 export interface InboundFormRecaptchaStoredConfig {
     encryptedSecret: string
     minScore?: number
+    expectedAction?: string
 }
 
-export interface InboundFormRecaptchaConfigInput {
+export interface InboundFormTimedTokenConfig {
+    minDelaySeconds: number
+    maxAgeSeconds: number
+}
+
+export type InboundFormSecurityStoredConfig = InboundFormRecaptchaStoredConfig | InboundFormTimedTokenConfig
+
+export interface InboundFormSecurityConfigInput {
     secret?: string
     minScore?: number
+    expectedAction?: string
+    minDelaySeconds?: number
+    maxAgeSeconds?: number
 }
 
 export interface InboundFormSecurity {
@@ -26,7 +37,7 @@ export interface InboundFormSecurity {
     type: InboundFormSecurityType
     location: InboundFormSecurityLocation
     key: string
-    config: InboundFormRecaptchaStoredConfig | null
+    config: InboundFormSecurityStoredConfig | null
     createdAt: Date
     updatedAt: Date
 }
@@ -34,5 +45,5 @@ export interface InboundFormSecurity {
 export type InboundFormSecurityCreate = Omit<InboundFormSecurity, 'inboundFormSecurityId' | 'createdAt' | 'updatedAt'>
 
 export type InboundFormSecurityUpsert = Omit<InboundFormSecurityCreate, 'inboundFormId' | 'config'> & {
-    config: InboundFormRecaptchaConfigInput | null
+    config: InboundFormSecurityConfigInput | null
 }

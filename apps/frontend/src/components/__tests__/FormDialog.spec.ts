@@ -43,6 +43,10 @@ function buttonByText(text: string) {
     return button
 }
 
+function pressEscape() {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+}
+
 afterEach(() => {
     document.body.innerHTML = ''
 })
@@ -85,6 +89,29 @@ describe('FormDialog', () => {
         await flushPromises()
 
         expect(open.value).toBe(false)
+    })
+
+    it('closes a pristine dialog on Escape', async () => {
+        const { open } = mountDialog()
+        await vi.waitFor(() => expect(document.body.querySelector('form')).not.toBeNull())
+
+        pressEscape()
+        await flushPromises()
+
+        expect(open.value).toBe(false)
+    })
+
+    it('stays open with unsaved changes when the user keeps editing after Escape', async () => {
+        const { open } = mountDialog({ dirty: true })
+        await vi.waitFor(() => expect(document.body.querySelector('form')).not.toBeNull())
+
+        pressEscape()
+        await vi.waitFor(() => expect(document.body.textContent).toContain('Discard unsaved changes?'))
+
+        buttonByText('Keep editing').click()
+        await flushPromises()
+
+        expect(open.value).toBe(true)
     })
 
     it('asks before discarding unsaved changes', async () => {

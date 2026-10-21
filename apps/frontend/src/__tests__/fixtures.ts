@@ -108,6 +108,7 @@ export function formListItem(overrides: Partial<InboundFormListDto> = {}): Inbou
         name: 'Contact request',
         slug: 'contact-request',
         isActive: true,
+        allowedHostnames: [],
         createdAt: created,
         receivers: [receiver()],
         ...overrides,
@@ -160,6 +161,7 @@ export function userListItem(overrides: Partial<UserListDto> = {}): UserListDto 
         createdAt: created,
         updatedAt: created,
         membershipCount: 0,
+        allProjects: false,
         ...overrides,
     }
 }
@@ -172,6 +174,7 @@ export function formDetail(overrides: Partial<InboundFormDetailDto> = {}): Inbou
         name: 'Contact request',
         slug: 'contact-request',
         isActive: true,
+        allowedHostnames: [],
         createdAt: created,
         fields: [
             {

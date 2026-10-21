@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ProjectMemberService } from './project-member.service.js'
 import { RoleService } from './role.service.js'
 import { PermissionCacheService } from './permission-cache.service.js'
+import { AbilityFactory } from './ability-factory.service.js'
 import { ProjectMemberModel } from '../models/project-member.model.js'
 import { ProjectMemberPermissionModel } from '../models/project-member-permission.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
@@ -93,6 +94,7 @@ describe('ProjectMemberService', () => {
     let findRole: Mock<RoleService['findRole']>
     let getProjectRoles: Mock<RoleService['getProjectRoles']>
     let invalidateUser: Mock<PermissionCacheService['invalidateUser']>
+    let hasAllProjectsAccess: Mock<AbilityFactory['hasAllProjectsAccess']>
     let transaction: Mock<Sequelize['transaction']>
 
     const transactionStub = { LOCK: Transaction.LOCK } as Transaction
@@ -112,6 +114,7 @@ describe('ProjectMemberService', () => {
         findRole = vi.fn<typeof findRole>().mockResolvedValue(viewer)
         getProjectRoles = vi.fn<typeof getProjectRoles>().mockResolvedValue([viewer, maintainer, owner])
         invalidateUser = vi.fn<typeof invalidateUser>().mockResolvedValue(undefined)
+        hasAllProjectsAccess = vi.fn<typeof hasAllProjectsAccess>().mockResolvedValue(false)
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation((callback) => (callback as (t: Transaction) => Promise<unknown>)(transactionStub))
@@ -138,6 +141,7 @@ describe('ProjectMemberService', () => {
                 { provide: getModelToken(UserPermissionModel), useValue: { findAll: userPermissionFindAll } },
                 { provide: RoleService, useValue: { findRole, getProjectRoles } },
                 { provide: PermissionCacheService, useValue: { invalidateUser } },
+                { provide: AbilityFactory, useValue: { hasAllProjectsAccess } },
                 { provide: Sequelize, useValue: { transaction } },
             ],
         }).compile()
@@ -232,6 +236,26 @@ describe('ProjectMemberService', () => {
             await expect(service.setMember(1, 2, { roleId: 5, permissions: [] }, userManagerAbility)).rejects.toThrow(
                 new NotFoundException('Unknown user'),
             )
+        })
+
+        it('rejects adding users who already have access to all projects', async () => {
+            hasAllProjectsAccess.mockResolvedValue(true)
+
+            await expect(service.setMember(1, 2, { roleId: 5, permissions: [] }, manageAllAbility)).rejects.toThrow(
+                new BadRequestException('User already has access to all projects'),
+            )
+            expect(hasAllProjectsAccess).toHaveBeenCalledWith({ userId: 2 })
+            expect(memberDestroy).not.toHaveBeenCalled()
+            expect(memberCreate).not.toHaveBeenCalled()
+        })
+
+        it('still lets existing members with access to all projects be edited', async () => {
+            hasAllProjectsAccess.mockResolvedValue(true)
+            memberFindOne.mockResolvedValue(memberRow({}))
+
+            await service.setMember(1, 2, { roleId: 5, permissions: [] }, manageAllAbility)
+
+            expect(memberCreate).toHaveBeenCalled()
         })
 
         it('rejects unknown and global roles', async () => {

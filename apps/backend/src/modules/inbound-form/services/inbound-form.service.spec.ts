@@ -82,6 +82,7 @@ const form: InboundForm = {
     name: 'Contact',
     slug: 'contact',
     isActive: true,
+    allowedHostnames: [],
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -368,6 +369,71 @@ describe('InboundFormService', () => {
             await expect(service.updateForm(1, { domainId: null }, manageAll)).rejects.toThrow(BadRequestException)
         })
 
+        it('normalizes and deduplicates allowed hostnames', async () => {
+            const row = formRow()
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(1, { allowedHostnames: [' Kunde.at', 'kunde.at', 'www.kunde.at'] }, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ allowedHostnames: ['kunde.at', 'www.kunde.at'] })
+        })
+
+        it('rejects an invalid hostname', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await expect(service.updateForm(1, { allowedHostnames: ['https://kunde.at'] }, manageAll)).rejects.toThrow(
+                'Invalid hostname: https://kunde.at',
+            )
+        })
+
+        it('refuses to clear hostnames while a timed token is configured', async () => {
+            const timedToken: InboundFormSecurity = {
+                inboundFormSecurityId: 42,
+                inboundFormId: 1,
+                type: InboundFormSecurityType.TIMED_TOKEN,
+                location: InboundFormSecurityLocation.BODY,
+                key: 'form-token',
+                config: { minDelaySeconds: 3, maxAgeSeconds: 3600 },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+            const row = formRow({ allowedHostnames: ['kunde.at'], inboundFormSecurity: [timedToken] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await expect(service.updateForm(1, { allowedHostnames: [] }, manageAll)).rejects.toThrow(
+                new BadRequestException('Allowed domains cannot be cleared while the timed token is enabled'),
+            )
+            expect(row.update).not.toHaveBeenCalled()
+        })
+
+        it('allows clearing hostnames when no timed token exists', async () => {
+            const row = formRow({ allowedHostnames: ['kunde.at'] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(1, { allowedHostnames: [] }, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ allowedHostnames: [] })
+        })
+
+        it('accepts a non-empty hostname list while a timed token exists', async () => {
+            const timedToken: InboundFormSecurity = {
+                inboundFormSecurityId: 42,
+                inboundFormId: 1,
+                type: InboundFormSecurityType.TIMED_TOKEN,
+                location: InboundFormSecurityLocation.BODY,
+                key: 'form-token',
+                config: { minDelaySeconds: 3, maxAgeSeconds: 3600 },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+            const row = formRow({ allowedHostnames: ['kunde.at'], inboundFormSecurity: [timedToken] })
+            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
+
+            await service.updateForm(1, { allowedHostnames: ['shop.kunde.at'] }, manageAll)
+
+            expect(row.update).toHaveBeenCalledWith({ allowedHostnames: ['shop.kunde.at'] })
+        })
+
         it('applies a simple rename', async () => {
             const row = formRow()
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
@@ -602,12 +668,73 @@ describe('InboundFormService', () => {
             )
         })
 
-        it('rejects the csrf type', async () => {
+        it('rejects a honeypot outside the body', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await expect(
-                service.replaceSecurity(1, [scheme({ type: InboundFormSecurityType.CSRF })], manageAll),
-            ).rejects.toThrow(BadRequestException)
+                service.replaceSecurity(1, [scheme({ location: InboundFormSecurityLocation.HEADER })], manageAll),
+            ).rejects.toThrow(new BadRequestException('Honeypots must use the body location'))
+            expect(securityBulkCreate).not.toHaveBeenCalled()
+        })
+
+        it('stores the expected action for recaptcha', async () => {
+            formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+            await service.replaceSecurity(
+                1,
+                [
+                    scheme({
+                        type: InboundFormSecurityType.RECAPTCHA,
+                        config: { secret: 's', expectedAction: 'contact' },
+                    }),
+                ],
+                manageAll,
+            )
+
+            expect(securityBulkCreate).toHaveBeenCalledWith(
+                [expect.objectContaining({ config: { encryptedSecret: 'encrypted(s)', expectedAction: 'contact' } })],
+                expect.anything(),
+            )
+        })
+
+        describe('timed token', () => {
+            const timedToken = (config: InboundFormSecurityUpsert['config']): InboundFormSecurityUpsert =>
+                scheme({ type: InboundFormSecurityType.TIMED_TOKEN, key: 'form-token', config })
+
+            it('stores the defaults', async () => {
+                formFindByPk.mockResolvedValue(
+                    formRow({ allowedHostnames: ['kunde.at'] }) as unknown as InboundFormModel,
+                )
+
+                await service.replaceSecurity(1, [timedToken(null)], manageAll)
+
+                expect(securityBulkCreate).toHaveBeenCalledWith(
+                    [expect.objectContaining({ config: { minDelaySeconds: 3, maxAgeSeconds: 3600 } })],
+                    expect.anything(),
+                )
+            })
+
+            it('stores the given values', async () => {
+                formFindByPk.mockResolvedValue(
+                    formRow({ allowedHostnames: ['kunde.at'] }) as unknown as InboundFormModel,
+                )
+
+                await service.replaceSecurity(1, [timedToken({ minDelaySeconds: 10, maxAgeSeconds: 600 })], manageAll)
+
+                expect(securityBulkCreate).toHaveBeenCalledWith(
+                    [expect.objectContaining({ config: { minDelaySeconds: 10, maxAgeSeconds: 600 } })],
+                    expect.anything(),
+                )
+            })
+
+            it('rejects a timed token without allowed hostnames', async () => {
+                formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
+
+                await expect(service.replaceSecurity(1, [timedToken(null)], manageAll)).rejects.toThrow(
+                    new BadRequestException('The timed token requires allowed domains'),
+                )
+                expect(securityBulkCreate).not.toHaveBeenCalled()
+            })
         })
 
         const storedRecaptcha: InboundFormSecurity = {

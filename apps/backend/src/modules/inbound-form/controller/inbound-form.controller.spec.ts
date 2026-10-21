@@ -18,6 +18,7 @@ const form: InboundForm = {
     name: 'Contact',
     slug: 'contact',
     isActive: true,
+    allowedHostnames: [],
     createdAt: new Date(),
     updatedAt: new Date(),
 }
@@ -177,6 +178,7 @@ describe('InboundFormController', () => {
                 name: 'Contact',
                 slug: 'contact',
                 isActive: true,
+                allowedHostnames: [],
                 createdAt: form.createdAt,
                 receivers: [
                     {

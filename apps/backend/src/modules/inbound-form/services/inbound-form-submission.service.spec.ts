@@ -14,6 +14,7 @@ import { InboundFormSubmissionModel } from '../models/inbound-form-submission.mo
 import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.js'
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
 import { InboundFormTemplateService } from './inbound-form-template.service.js'
+import { InboundFormTokenService } from './inbound-form-token.service.js'
 import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
 import { MailService, SentMail } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
@@ -37,7 +38,9 @@ import {
     InboundFormSecurity,
     InboundFormSecurityLocation,
     InboundFormSecurityType,
+    InboundFormTimedTokenConfig,
 } from '../interfaces/inbound-form-security.interface.js'
+import { IssuedFormToken, VerifiedFormToken } from '../interfaces/inbound-form-token.interface.js'
 
 const emailField: InboundFormField = {
     inboundFormFieldId: 21,
@@ -97,6 +100,7 @@ const formFull: InboundFormFull = {
     name: 'Contact',
     slug: 'contact',
     isActive: true,
+    allowedHostnames: [],
     createdAt: new Date(),
     updatedAt: new Date(),
     inboundFormFields: [emailField, nameField],
@@ -132,6 +136,8 @@ describe('InboundFormSubmissionService', () => {
     let getPublished: Mock<InboundFormTemplateService['getPublished']>
     let sendMail: Mock<MailService['sendMail']>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
+    let issue: Mock<InboundFormTokenService['issue']>
+    let consume: Mock<InboundFormTokenService['consume']>
     let deliveryRows: DeliveryRow[]
 
     function mockForm(form: InboundFormFull | null) {
@@ -182,12 +188,16 @@ describe('InboundFormSubmissionService', () => {
             deliveryRows.push(row)
             return Promise.resolve(row as unknown as InboundFormDeliveryModel)
         })
-        checkSubmission = vi.fn<typeof checkSubmission>().mockResolvedValue(SecurityCheckResult.PASSED)
+        checkSubmission = vi
+            .fn<typeof checkSubmission>()
+            .mockResolvedValue({ result: SecurityCheckResult.PASSED, token: null })
         getPublished = vi.fn<typeof getPublished>().mockResolvedValue(publishedTemplate)
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 501, smtpMessageId: '<m@x>' })
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
+        issue = vi.fn<typeof issue>()
+        consume = vi.fn<typeof consume>().mockResolvedValue(undefined)
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -200,6 +210,7 @@ describe('InboundFormSubmissionService', () => {
                 { provide: InboundFormTemplateService, useValue: { getPublished } },
                 { provide: MailService, useValue: { sendMail } },
                 { provide: Sequelize, useValue: { transaction } },
+                { provide: InboundFormTokenService, useValue: { issue, consume } },
             ],
         }).compile()
 
@@ -213,14 +224,16 @@ describe('InboundFormSubmissionService', () => {
     it('throws NotFoundException for an unknown or inactive slug', async () => {
         mockForm(null)
 
-        await expect(service.submitForm('nope', submission, {}, {})).rejects.toThrow(NotFoundException)
+        await expect(service.submitForm('nope', submission, {}, {}, '')).rejects.toThrow(NotFoundException)
         expect(formFindOne).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: 'nope', isActive: true } }))
     })
 
     it('requires a live project on the form lookup', async () => {
         formFindOne.mockResolvedValue(null)
 
-        await expect(service.submitForm('contact', {}, {}, {})).rejects.toThrow(new NotFoundException('Unknown form'))
+        await expect(service.submitForm('contact', {}, {}, {}, '')).rejects.toThrow(
+            new NotFoundException('Unknown form'),
+        )
 
         expect(formFindOne).toHaveBeenCalledWith({
             where: { slug: 'contact', isActive: true },
@@ -237,7 +250,7 @@ describe('InboundFormSubmissionService', () => {
     it('rejects invalid data with a BadRequestException and stores nothing', async () => {
         mockForm(formFull)
 
-        await expect(service.submitForm('contact', { data: { email: 'broken' } }, {}, {})).rejects.toThrow(
+        await expect(service.submitForm('contact', { data: { email: 'broken' } }, {}, {}, '')).rejects.toThrow(
             BadRequestException,
         )
         expect(submissionCreate).not.toHaveBeenCalled()
@@ -245,9 +258,9 @@ describe('InboundFormSubmissionService', () => {
 
     it('stores a spam submission without deliveries and sends nothing', async () => {
         mockForm(formFull)
-        checkSubmission.mockResolvedValue(SecurityCheckResult.SPAM)
+        checkSubmission.mockResolvedValue({ result: SecurityCheckResult.SPAM })
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         expect(submissionCreate).toHaveBeenCalledWith(
             expect.objectContaining({ status: InboundFormSubmissionStatus.SPAM }),
@@ -259,9 +272,9 @@ describe('InboundFormSubmissionService', () => {
 
     it('stores a spam submission with the raw payload even when validation would fail', async () => {
         mockForm(formFull)
-        checkSubmission.mockResolvedValue(SecurityCheckResult.SPAM)
+        checkSubmission.mockResolvedValue({ result: SecurityCheckResult.SPAM })
 
-        await expect(service.submitForm('contact', { data: { firstName: 'Max' } }, {}, {})).resolves.toBeUndefined()
+        await expect(service.submitForm('contact', { data: { firstName: 'Max' } }, {}, {}, '')).resolves.toBeUndefined()
 
         expect(submissionCreate).toHaveBeenCalledWith(
             expect.objectContaining({ status: InboundFormSubmissionStatus.SPAM, data: { firstName: 'Max' } }),
@@ -274,7 +287,7 @@ describe('InboundFormSubmissionService', () => {
     it('accepts a submission, renders templates and sends one mail per receiver', async () => {
         mockForm(formFull)
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(2))
 
         expect(submissionCreate).toHaveBeenCalledWith(
@@ -324,7 +337,7 @@ describe('InboundFormSubmissionService', () => {
         mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
         sendMail.mockRejectedValue(new MailSendError(502, new Error('SMTP down')))
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
@@ -339,7 +352,7 @@ describe('InboundFormSubmissionService', () => {
         mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
         sendMail.mockRejectedValue(new Error('SMTP down'))
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
@@ -354,7 +367,7 @@ describe('InboundFormSubmissionService', () => {
         mockForm(formFull)
         getPublished.mockImplementation((receiverId) => Promise.resolve(receiverId === 31 ? publishedTemplate : null))
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
 
         expect(deliveryCreate).toHaveBeenCalledTimes(1)
@@ -366,7 +379,7 @@ describe('InboundFormSubmissionService', () => {
             inboundFormReceivers: [ownerReceiver, { ...confirmationReceiver, isActive: false }],
         })
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
     })
 
@@ -374,7 +387,7 @@ describe('InboundFormSubmissionService', () => {
         mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
         sendMail.mockRejectedValue(new Error('SMTP down'))
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
@@ -393,7 +406,7 @@ describe('InboundFormSubmissionService', () => {
             ),
         )
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
 
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'max@example.com' }), expect.anything())
@@ -417,7 +430,7 @@ describe('InboundFormSubmissionService', () => {
             inboundFormReceivers: [confirmationReceiver],
         })
 
-        await service.submitForm('contact', { data: { firstName: 'Max' } }, {}, {})
+        await service.submitForm('contact', { data: { firstName: 'Max' } }, {}, {}, '')
 
         await vi.waitFor(() =>
             expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
@@ -441,35 +454,44 @@ describe('InboundFormSubmissionService', () => {
             createdAt: new Date(),
             updatedAt: new Date(),
         }
-        mockForm({ ...formFull, inboundFormSecurity: [honeypot] })
+        mockForm({ ...formFull, allowedHostnames: ['kunde.at'], inboundFormSecurity: [honeypot] })
 
         await service.submitForm(
             'contact',
             { security: { website: '' }, data: submission.data },
             { 'x-captcha': 'token' },
             { ref: 'landing' },
+            '203.0.113.7',
         )
 
         expect(checkSubmission).toHaveBeenCalledWith([honeypot], {
             security: { website: '' },
             headers: { 'x-captcha': 'token' },
             query: { ref: 'landing' },
+            allowedHostnames: ['kunde.at'],
+            ip: '203.0.113.7',
         })
     })
 
     it('defaults missing security values to an empty object', async () => {
         mockForm(formFull)
 
-        await service.submitForm('contact', { data: submission.data }, {}, {})
+        await service.submitForm('contact', { data: submission.data }, {}, {}, '')
 
-        expect(checkSubmission).toHaveBeenCalledWith([], { security: {}, headers: {}, query: {} })
+        expect(checkSubmission).toHaveBeenCalledWith([], {
+            security: {},
+            headers: {},
+            query: {},
+            allowedHostnames: [],
+            ip: '',
+        })
     })
 
     it('stores nothing and sends nothing when the security check rejects', async () => {
         mockForm(formFull)
         checkSubmission.mockRejectedValue(new ForbiddenException('Captcha verification failed'))
 
-        await expect(service.submitForm('contact', submission, {}, {})).rejects.toThrow(ForbiddenException)
+        await expect(service.submitForm('contact', submission, {}, {}, '')).rejects.toThrow(ForbiddenException)
 
         expect(submissionCreate).not.toHaveBeenCalled()
         expect(transaction).not.toHaveBeenCalled()
@@ -479,7 +501,7 @@ describe('InboundFormSubmissionService', () => {
     it('rejects a missing data payload when the form has required fields', async () => {
         mockForm(formFull)
 
-        await expect(service.submitForm('contact', { security: {} }, {}, {})).rejects.toThrow(BadRequestException)
+        await expect(service.submitForm('contact', { security: {} }, {}, {}, '')).rejects.toThrow(BadRequestException)
         expect(submissionCreate).not.toHaveBeenCalled()
     })
 
@@ -491,6 +513,7 @@ describe('InboundFormSubmissionService', () => {
             { data: { email: 'max@example.com', firstName: 'Max', isAdmin: true, script: '<script>' } },
             {},
             {},
+            '',
         )
 
         expect(submissionCreate).toHaveBeenCalledWith(
@@ -510,7 +533,7 @@ describe('InboundFormSubmissionService', () => {
             callback(transactionHandle),
         )
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         expect(submissionCreate).toHaveBeenCalledWith(expect.anything(), {
             returning: true,
@@ -530,7 +553,7 @@ describe('InboundFormSubmissionService', () => {
         mockForm(formFull)
         transaction.mockRejectedValue(new Error('deadlock detected'))
 
-        await expect(service.submitForm('contact', submission, {}, {})).rejects.toThrow('deadlock detected')
+        await expect(service.submitForm('contact', submission, {}, {}, '')).rejects.toThrow('deadlock detected')
         expect(sendMail).not.toHaveBeenCalled()
     })
 
@@ -544,7 +567,7 @@ describe('InboundFormSubmissionService', () => {
                 }),
         )
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledOnce())
         expect(deliveryRows[0]!.update).not.toHaveBeenCalled()
@@ -572,7 +595,7 @@ describe('InboundFormSubmissionService', () => {
             return Promise.resolve(row as unknown as InboundFormDeliveryModel)
         })
 
-        await expect(service.submitForm('contact', submission, {}, {})).resolves.toBeUndefined()
+        await expect(service.submitForm('contact', submission, {}, {}, '')).resolves.toBeUndefined()
 
         await vi.waitFor(() =>
             expect(logError).toHaveBeenCalledWith('Recording the outcome of delivery 1 failed: db gone'),
@@ -594,7 +617,7 @@ describe('InboundFormSubmissionService', () => {
             return Promise.resolve(row as unknown as InboundFormDeliveryModel)
         })
 
-        await service.submitForm('contact', submission, {}, {})
+        await service.submitForm('contact', submission, {}, {}, '')
 
         await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(2))
         await vi.waitFor(() =>
@@ -607,7 +630,13 @@ describe('InboundFormSubmissionService', () => {
     it('renders the subject without html escaping', async () => {
         mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
 
-        await service.submitForm('contact', { data: { email: 'max@example.com', firstName: "O'Brien & Co" } }, {}, {})
+        await service.submitForm(
+            'contact',
+            { data: { email: 'max@example.com', firstName: "O'Brien & Co" } },
+            {},
+            {},
+            '',
+        )
 
         await vi.waitFor(() =>
             expect(sendMail).toHaveBeenCalledWith(
@@ -618,5 +647,130 @@ describe('InboundFormSubmissionService', () => {
                 expect.anything(),
             ),
         )
+    })
+
+    describe('timed token', () => {
+        const timedTokenConfig: InboundFormTimedTokenConfig = { minDelaySeconds: 3, maxAgeSeconds: 3600 }
+        const timedToken: InboundFormSecurity = {
+            inboundFormSecurityId: 52,
+            inboundFormId: 1,
+            type: InboundFormSecurityType.TIMED_TOKEN,
+            location: InboundFormSecurityLocation.BODY,
+            key: 'formToken',
+            config: timedTokenConfig,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+        const verified: VerifiedFormToken = { nonce: 'nonce-1', maxAgeSeconds: 3600 }
+        const protectedForm: InboundFormFull = {
+            ...formFull,
+            allowedHostnames: ['kunde.at'],
+            inboundFormSecurity: [timedToken],
+        }
+        const kundeOrigin = { origin: 'https://kunde.at' }
+
+        it('consumes the token after field validation', async () => {
+            mockForm(protectedForm)
+            checkSubmission.mockResolvedValue({ result: SecurityCheckResult.PASSED, token: verified })
+
+            await expect(
+                service.submitForm('contact', { data: { email: 'broken' } }, kundeOrigin, {}, '203.0.113.7'),
+            ).rejects.toThrow(BadRequestException)
+            expect(consume).not.toHaveBeenCalled()
+
+            await service.submitForm('contact', submission, kundeOrigin, {}, '203.0.113.7')
+
+            expect(consume).toHaveBeenCalledExactlyOnceWith(verified)
+            expect(consume.mock.invocationCallOrder[0]).toBeLessThan(submissionCreate.mock.invocationCallOrder[0]!)
+        })
+
+        it('keeps a token usable after a captcha failure', async () => {
+            mockForm(protectedForm)
+            checkSubmission.mockRejectedValue(new ForbiddenException('Captcha verification failed'))
+
+            await expect(service.submitForm('contact', submission, kundeOrigin, {}, '203.0.113.7')).rejects.toThrow(
+                new ForbiddenException('Captcha verification failed'),
+            )
+            expect(consume).not.toHaveBeenCalled()
+        })
+
+        it('stores nothing when the token was already used', async () => {
+            mockForm(protectedForm)
+            checkSubmission.mockResolvedValue({ result: SecurityCheckResult.PASSED, token: verified })
+            consume.mockRejectedValue(new ForbiddenException('Form token already used'))
+
+            await expect(service.submitForm('contact', submission, kundeOrigin, {}, '203.0.113.7')).rejects.toThrow(
+                new ForbiddenException('Form token already used'),
+            )
+            expect(transaction).not.toHaveBeenCalled()
+            expect(submissionCreate).not.toHaveBeenCalled()
+            expect(sendMail).not.toHaveBeenCalled()
+        })
+
+        it('consumes nothing for a form without a timed token', async () => {
+            mockForm(formFull)
+
+            await service.submitForm('contact', submission, {}, {}, '')
+
+            expect(consume).not.toHaveBeenCalled()
+            expect(submissionCreate).toHaveBeenCalledOnce()
+        })
+
+        describe('issueToken', () => {
+            const issued: IssuedFormToken = {
+                token: 'payload.signature',
+                notBefore: new Date('2026-10-20T10:00:03.000Z'),
+                expiresAt: new Date('2026-10-20T11:00:00.000Z'),
+                waitMs: 3000,
+            }
+
+            it('issues a token bound to the form and ip', async () => {
+                mockForm(protectedForm)
+                issue.mockReturnValue(issued)
+
+                await expect(service.issueToken('contact', kundeOrigin, '203.0.113.7')).resolves.toEqual(issued)
+                expect(issue).toHaveBeenCalledWith(1, '203.0.113.7', timedTokenConfig)
+                expect(formFindOne).toHaveBeenCalledWith({
+                    where: { slug: 'contact', isActive: true },
+                    include: [InboundFormSecurityModel, { model: ProjectModel, required: true }],
+                })
+            })
+
+            it('rejects an unknown or inactive slug', async () => {
+                mockForm(null)
+
+                await expect(service.issueToken('nope', kundeOrigin, '203.0.113.7')).rejects.toThrow(
+                    new NotFoundException('Unknown form'),
+                )
+                expect(issue).not.toHaveBeenCalled()
+            })
+
+            it('rejects a form without a timed token scheme', async () => {
+                mockForm({ ...protectedForm, inboundFormSecurity: [] })
+
+                await expect(service.issueToken('contact', kundeOrigin, '203.0.113.7')).rejects.toThrow(
+                    new NotFoundException('Unknown form'),
+                )
+                expect(issue).not.toHaveBeenCalled()
+            })
+
+            it('rejects a foreign origin', async () => {
+                mockForm(protectedForm)
+
+                await expect(
+                    service.issueToken('contact', { origin: 'https://evil.at' }, '203.0.113.7'),
+                ).rejects.toThrow(new ForbiddenException('Origin not allowed'))
+                expect(issue).not.toHaveBeenCalled()
+            })
+
+            it('rejects issuance when no hostnames are listed', async () => {
+                mockForm({ ...protectedForm, allowedHostnames: [] })
+
+                await expect(service.issueToken('contact', kundeOrigin, '203.0.113.7')).rejects.toThrow(
+                    new ForbiddenException('Origin not allowed'),
+                )
+                expect(issue).not.toHaveBeenCalled()
+            })
+        })
     })
 })

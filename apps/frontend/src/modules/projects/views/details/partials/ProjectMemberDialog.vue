@@ -10,7 +10,7 @@
         :submit-label="member ? t('cta.save') : t('module.projects.members.dialog.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="dirty"
+        :dirty="changed"
         :submittable="!noGrantableRole"
         @submit="onSubmit"
     >
@@ -85,6 +85,7 @@
     import type { ProjectDetailDto, ProjectMemberDto, ProjectPermission, ProjectRoleDto } from 'api'
     import DisclosureBox from '@/components/DisclosureBox.vue'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import InlineAlert from '@/components/InlineAlert.vue'
     import ReadonlyValue from '@/components/ReadonlyValue.vue'
     import { useNotify } from '@/composables/useNotify.ts'
@@ -92,6 +93,7 @@
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
     import PermissionGrid from '@/modules/roles/components/PermissionGrid.vue'
     import { PROJECT_PERMISSION_GROUPS } from '@/modules/roles/permissionCatalog.ts'
+    import { useAuthQuery } from '@/modules/auth/queries/useAuthQuery.ts'
     import { useUsersQuery } from '@/modules/users/queries/useUsersQuery.ts'
     import { useRoleLabels } from '@/modules/users/composables/useRoleLabel.ts'
     import { useProjectMemberSetMutation } from '@/modules/projects/mutations/useProjectMemberSetMutation.ts'
@@ -120,6 +122,7 @@
         queryFn,
         enabled: computed(() => model.value && !props.member),
     })
+    const { data: currentUser } = useQuery(useAuthQuery())
     const rolesQuery = useProjectRolesQuery(() => props.project.projectId)
     const { data: roles, isLoading: rolesLoading } = useQuery({ ...rolesQuery, enabled: model })
 
@@ -127,7 +130,12 @@
 
     const userOptions = computed(() =>
         (users.value ?? [])
-            .filter((user) => !props.existing.some((member) => member.userId === user.userId))
+            .filter(
+                (user) =>
+                    !user.allProjects &&
+                    user.userId !== currentUser.value?.userId &&
+                    !props.existing.some((member) => member.userId === user.userId),
+            )
             .map((user) => ({
                 userId: user.userId,
                 name: `${user.firstName} ${user.lastName}`,
@@ -173,11 +181,13 @@
     }
 
     const initialExtras = computed(() => (props.member ? [...props.member.permissions] : []))
-    const dirty = computed(
-        () =>
-            selectedUserId.value !== null ||
-            selectedRoleId.value !== (props.member?.role.roleId ?? defaultRoleId()) ||
-            [...extraPermissions.value].sort().join() !== [...initialExtras.value].sort().join(),
+    const changed = useFormChanged(
+        () => ({
+            userId: selectedUserId.value,
+            roleId: selectedRoleId.value,
+            permissions: [...extraPermissions.value].sort(),
+        }),
+        () => ({ userId: null, roleId: defaultRoleId(), permissions: [...initialExtras.value].sort() }),
     )
 
     watch(rolePermissions, (permissions) => {

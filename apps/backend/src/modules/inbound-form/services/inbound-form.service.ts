@@ -17,9 +17,10 @@ import {
     InboundFormFieldUpsert,
 } from '../interfaces/inbound-form-field.interface.js'
 import {
-    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
     InboundFormSecurityCreate,
+    InboundFormSecurityLocation,
+    InboundFormSecurityStoredConfig,
     InboundFormSecurityType,
     InboundFormSecurityUpsert,
 } from '../interfaces/inbound-form-security.interface.js'
@@ -28,12 +29,16 @@ import { InboundFormReceiver, InboundFormReceiverUpsert } from '../interfaces/in
 import { parsePlaceholder } from '../helpers/placeholder.js'
 import { pickDefined } from '../../../helpers/pick-defined.js'
 import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { normalizeHostname } from '../helpers/hostname.js'
+import { isRecaptchaConfig } from '../helpers/security-config.js'
 import { findPatternProblem } from '../helpers/pattern-safety.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
 import { assertProjectPermission, assertProjectReadable } from '../../permission/helpers/project-access.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { User } from '../../user/interfaces/user.interface.js'
 
+const DEFAULT_MIN_DELAY_SECONDS = 3
+const DEFAULT_MAX_AGE_SECONDS = 3600
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export const FORM_LIST_ORDER: OrderItem[] = [
@@ -49,7 +54,7 @@ export interface InboundFormCreateRequest {
 }
 
 export type InboundFormUpdateRequest = Partial<
-    Pick<InboundFormCreateRequest, 'name' | 'slug' | 'domainId'> & { isActive: boolean }
+    Pick<InboundFormCreateRequest, 'name' | 'slug' | 'domainId'> & { isActive: boolean; allowedHostnames: string[] }
 >
 
 const FORM_UPDATABLE_KEYS = [
@@ -57,6 +62,7 @@ const FORM_UPDATABLE_KEYS = [
     'slug',
     'domainId',
     'isActive',
+    'allowedHostnames',
 ] as const satisfies readonly (keyof InboundFormUpdateRequest)[]
 
 const RECEIVER_UPDATABLE_KEYS = [
@@ -126,6 +132,17 @@ export class InboundFormService {
         return form.get({ plain: true }) as InboundFormFull
     }
 
+    private normalizeHostnames(raw: string[]): string[] {
+        const normalized = raw.map((value) => {
+            const hostname = normalizeHostname(value)
+            if (hostname === null) {
+                throw new BadRequestException(`Invalid hostname: ${value}`)
+            }
+            return hostname
+        })
+        return [...new Set(normalized)]
+    }
+
     async updateForm(
         inboundFormId: number,
         request: InboundFormUpdateRequest,
@@ -145,6 +162,16 @@ export class InboundFormService {
                 for (const receiver of form.inboundFormReceivers) {
                     this.assertEmailFrom(receiver.emailFrom, domain)
                 }
+            }
+        }
+
+        if (update.allowedHostnames !== undefined) {
+            update.allowedHostnames = this.normalizeHostnames(update.allowedHostnames)
+            const hasTimedToken = form.inboundFormSecurity.some(
+                (scheme) => scheme.type === InboundFormSecurityType.TIMED_TOKEN,
+            )
+            if (update.allowedHostnames.length === 0 && hasTimedToken) {
+                throw new BadRequestException('Allowed domains cannot be cleared while the timed token is enabled')
             }
         }
 
@@ -248,8 +275,14 @@ export class InboundFormService {
         }
 
         for (const scheme of schemes) {
-            if (scheme.type === InboundFormSecurityType.CSRF) {
-                throw new BadRequestException('The csrf scheme is not supported yet')
+            if (
+                scheme.type === InboundFormSecurityType.HONEYPOT &&
+                scheme.location !== InboundFormSecurityLocation.BODY
+            ) {
+                throw new BadRequestException('Honeypots must use the body location')
+            }
+            if (scheme.type === InboundFormSecurityType.TIMED_TOKEN && form.allowedHostnames.length === 0) {
+                throw new BadRequestException('The timed token requires allowed domains')
             }
         }
 
@@ -326,8 +359,14 @@ export class InboundFormService {
 
     private async toStoredSecurityConfig(
         scheme: InboundFormSecurityUpsert,
-        currentRecaptcha: InboundFormRecaptchaStoredConfig | null,
-    ): Promise<InboundFormRecaptchaStoredConfig | null> {
+        currentRecaptcha: InboundFormSecurityStoredConfig | null,
+    ): Promise<InboundFormSecurityStoredConfig | null> {
+        if (scheme.type === InboundFormSecurityType.TIMED_TOKEN) {
+            return {
+                minDelaySeconds: scheme.config?.minDelaySeconds ?? DEFAULT_MIN_DELAY_SECONDS,
+                maxAgeSeconds: scheme.config?.maxAgeSeconds ?? DEFAULT_MAX_AGE_SECONDS,
+            }
+        }
         if (scheme.type !== InboundFormSecurityType.RECAPTCHA) {
             return null
         }
@@ -335,13 +374,19 @@ export class InboundFormService {
         const secret = scheme.config?.secret
         const encryptedSecret = secret
             ? await this.secretEncryptionService.encrypt(secret)
-            : currentRecaptcha?.encryptedSecret
+            : isRecaptchaConfig(currentRecaptcha)
+              ? currentRecaptcha.encryptedSecret
+              : undefined
         if (!encryptedSecret) {
             throw new BadRequestException('Recaptcha requires a secret')
         }
 
-        const minScore = scheme.config?.minScore
-        return typeof minScore === 'number' ? { encryptedSecret, minScore } : { encryptedSecret }
+        const { minScore, expectedAction } = scheme.config ?? {}
+        return {
+            encryptedSecret,
+            ...(typeof minScore === 'number' && { minScore }),
+            ...(expectedAction && { expectedAction }),
+        }
     }
 
     private async loadForm(inboundFormId: number): Promise<InboundFormModel> {

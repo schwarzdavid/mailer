@@ -1,5 +1,5 @@
 <template>
-    <VDialog :model-value="!!pending" max-width="440" persistent @keydown.esc="cancel">
+    <VDialog :model-value="!!pending" max-width="440" @update:model-value="cancel">
         <VCard v-if="current" class="confirm-dialog" :border="false">
             <div class="confirm-dialog__body">
                 <h2 class="confirm-dialog__title">{{ current.title }}</h2>

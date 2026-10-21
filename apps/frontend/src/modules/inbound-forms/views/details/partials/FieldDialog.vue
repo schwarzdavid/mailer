@@ -10,7 +10,7 @@
         :submit-label="field ? t('cta.save') : t('module.inboundForms.details.fields.add')"
         :pending="saving"
         :error="error"
-        :dirty="meta.dirty"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <div class="form-grid form-grid--2">
@@ -113,6 +113,7 @@
     import { useI18n } from 'vue-i18n'
     import type { InboundFormFieldDto, InboundFormFieldUpsertDto, InboundFormFieldValidationDto } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
     const props = withDefaults(
@@ -150,7 +151,7 @@
         }
     }
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z
                 .object({
@@ -204,6 +205,8 @@
     const [pattern] = defineField('pattern')
     const [min] = defineField('min')
     const [max] = defineField('max')
+
+    const changed = useFormChanged(values, () => meta.value.initialValues)
 
     watch(
         model,

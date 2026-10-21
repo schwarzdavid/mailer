@@ -5,7 +5,7 @@
         :submit-label="t('module.inboundForms.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <p>{{ t('module.inboundForms.add.intro') }}</p>
@@ -53,6 +53,7 @@
     import { useQuery } from '@tanstack/vue-query'
     import { useRouter } from 'vue-router'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
@@ -73,7 +74,7 @@
     const { mutateAsync, isPending } = useInboundFormCreateMutation()
     const router = useRouter()
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 name: z.string().trim().min(1).max(255),
@@ -90,6 +91,8 @@
     const [name] = defineField('name')
     const [slug] = defineField('slug')
     const [domainId] = defineField('domainId')
+
+    const changed = useFormChanged(values, () => meta.value.initialValues)
 
     watch(name, (value) => {
         if (!slugTouched.value) {

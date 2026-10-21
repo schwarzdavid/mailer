@@ -21,6 +21,7 @@ import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
 import { InboundFormSecurityModel } from './inbound-form-security.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import type { Relation } from '../../../types/relation.js'
+import { ALLOWED_HOSTNAMES_COMMENT, MAX_HOSTNAME_LENGTH } from '../helpers/hostname.js'
 
 @Table({
     tableName: 'inbound_form',
@@ -56,6 +57,11 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
     @AllowNull(false)
     @Column(DataType.BOOLEAN)
     declare isActive: boolean
+
+    @Default([])
+    @AllowNull(false)
+    @Column({ type: DataType.ARRAY(DataType.STRING(MAX_HOSTNAME_LENGTH)), comment: ALLOWED_HOSTNAMES_COMMENT })
+    declare allowedHostnames: string[]
 
     @BelongsTo(() => DomainModel, {
         onDelete: 'SET NULL',

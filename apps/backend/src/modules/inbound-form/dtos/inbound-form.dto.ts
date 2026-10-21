@@ -28,6 +28,10 @@ export class InboundFormDto {
     isActive!: boolean
 
     @Expose()
+    @ApiProperty({ type: [String] })
+    allowedHostnames!: string[]
+
+    @Expose()
     createdAt!: Date
 
     static fromInboundForm(form: InboundForm): InboundFormDto {
@@ -38,6 +42,7 @@ export class InboundFormDto {
             name: form.name,
             slug: form.slug,
             isActive: form.isActive,
+            allowedHostnames: form.allowedHostnames,
             createdAt: form.createdAt,
         }
     }

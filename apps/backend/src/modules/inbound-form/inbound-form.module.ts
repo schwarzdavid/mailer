@@ -17,6 +17,12 @@ import { InboundFormService } from './services/inbound-form.service.js'
 import { InboundFormTemplateService } from './services/inbound-form-template.service.js'
 import { InboundFormSecurityService } from './services/inbound-form-security.service.js'
 import { InboundFormSubmissionService } from './services/inbound-form-submission.service.js'
+import {
+    FORM_TOKEN_CLOCK,
+    InboundFormTokenService,
+    systemFormTokenClock,
+} from './services/inbound-form-token.service.js'
+import { ThrottlerStorageModule } from '../throttler-storage/throttler-storage.module.js'
 
 @Module({
     imports: [
@@ -33,6 +39,7 @@ import { InboundFormSubmissionService } from './services/inbound-form-submission
         ProjectModule,
         MailModule,
         EncryptionModule,
+        ThrottlerStorageModule,
     ],
     controllers: [InboundFormController, PublicInboundFormController],
     providers: [
@@ -40,6 +47,8 @@ import { InboundFormSubmissionService } from './services/inbound-form-submission
         InboundFormTemplateService,
         InboundFormSecurityService,
         InboundFormSubmissionService,
+        InboundFormTokenService,
+        { provide: FORM_TOKEN_CLOCK, useValue: systemFormTokenClock },
     ],
 })
 export class InboundFormModule {}

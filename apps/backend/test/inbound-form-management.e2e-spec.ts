@@ -10,6 +10,8 @@ import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './supp
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
 import { InboundFormSecurityModel } from '../src/modules/inbound-form/models/inbound-form-security.model.js'
+import { InboundFormRecaptchaStoredConfig } from '../src/modules/inbound-form/interfaces/inbound-form-security.interface.js'
+import { isRecaptchaConfig } from '../src/modules/inbound-form/helpers/security-config.js'
 import { decryptSecret } from '../src/helpers/secret-encryption.js'
 
 interface FormBody {
@@ -269,20 +271,20 @@ describe('InboundForm management + delivery (e2e)', () => {
                 .expect(400)
         })
 
-        it('replaces security schemes and rejects unsupported ones', async () => {
+        it('replaces security schemes and rejects a header honeypot and duplicate honeypots', async () => {
             const response = await http()
                 .put(`/api/inbound-form/${formId}/security`)
                 .set('Authorization', asOwner())
-                .send({ security: [{ type: 'honeypot', location: 'query', key: 'trap' }] })
+                .send({ security: [{ type: 'honeypot', location: 'body', key: 'trap' }] })
                 .expect(200)
             expect(response.body).toEqual([
-                expect.objectContaining({ type: 'honeypot', location: 'query', key: 'trap', config: null }),
+                expect.objectContaining({ type: 'honeypot', location: 'body', key: 'trap', config: null }),
             ])
 
             await http()
                 .put(`/api/inbound-form/${formId}/security`)
                 .set('Authorization', asOwner())
-                .send({ security: [{ type: 'csrf', location: 'header', key: 'x-csrf' }] })
+                .send({ security: [{ type: 'honeypot', location: 'header', key: 'x-trap' }] })
                 .expect(400)
             await http()
                 .put(`/api/inbound-form/${formId}/security`)
@@ -535,11 +537,10 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(await fetchMessagesTo(mailhogUrl, unpublishedAddress)).toEqual([])
         })
 
-        it('treats a filled query honeypot as spam', async () => {
+        it('treats a filled body honeypot as spam', async () => {
             await http()
                 .post(`/api/public/form/${slug}`)
-                .query({ trap: 'gotcha' })
-                .send({ data: { name: 'Bot', email: 'bot@ifm-submitter.test' } })
+                .send({ security: { trap: 'gotcha' }, data: { name: 'Bot', email: 'bot@ifm-submitter.test' } })
                 .expect(201)
 
             const submission = await latestSubmission(formId)
@@ -733,6 +734,14 @@ describe('InboundForm management + delivery (e2e)', () => {
             }))!
         }
 
+        async function storedRecaptchaConfig(): Promise<InboundFormRecaptchaStoredConfig> {
+            const { config } = await storedRecaptcha()
+            if (!isRecaptchaConfig(config)) {
+                throw new Error('Stored recaptcha config is missing')
+            }
+            return config
+        }
+
         function expectNoSecretMaterial(body: unknown, encryptedSecret: string) {
             const serialized = JSON.stringify(body)
             expect(serialized).not.toContain(captchaSecret)
@@ -759,7 +768,7 @@ describe('InboundForm management + delivery (e2e)', () => {
                 .set('Authorization', asOwner())
                 .send({
                     security: [
-                        { type: 'honeypot', location: 'header', key: 'X-Trap' },
+                        { type: 'honeypot', location: 'body', key: 'trap' },
                         {
                             type: 'google-recaptcha',
                             location: 'body',
@@ -773,7 +782,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         })
 
         it('stores the reCAPTCHA secret only as ciphertext', async () => {
-            const config = (await storedRecaptcha()).config!
+            const config = await storedRecaptchaConfig()
 
             expect(Object.keys(config).sort()).toEqual(['encryptedSecret', 'minScore'])
             expect(config.encryptedSecret).not.toContain(captchaSecret)
@@ -781,7 +790,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         })
 
         it('never returns the secret or its ciphertext to owners or read-only members', async () => {
-            const { encryptedSecret } = (await storedRecaptcha()).config!
+            const { encryptedSecret } = await storedRecaptchaConfig()
             const owner = await http().get(`/api/inbound-form/${captchaFormId}`).set('Authorization', asOwner())
             const viewer = await http()
                 .get(`/api/inbound-form/${captchaFormId}`)
@@ -796,20 +805,20 @@ describe('InboundForm management + delivery (e2e)', () => {
         })
 
         it('keeps the stored secret when the scheme is resent without one', async () => {
-            const before = (await storedRecaptcha()).config!
+            const before = await storedRecaptchaConfig()
 
             const response = await http()
                 .put(`/api/inbound-form/${captchaFormId}/security`)
                 .set('Authorization', asOwner())
                 .send({
                     security: [
-                        { type: 'honeypot', location: 'header', key: 'X-Trap' },
+                        { type: 'honeypot', location: 'body', key: 'trap' },
                         { type: 'google-recaptcha', location: 'body', key: 'captcha', config: { minScore: 0.6 } },
                     ],
                 })
                 .expect(200)
 
-            const after = (await storedRecaptcha()).config!
+            const after = await storedRecaptchaConfig()
             expect(after).toEqual({ encryptedSecret: before.encryptedSecret, minScore: 0.6 })
             await expect(decryptSecret(after.encryptedSecret, encryptionSecret)).resolves.toBe(captchaSecret)
             expectNoSecretMaterial(response.body, after.encryptedSecret)
@@ -822,8 +831,11 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(await latestSubmission(captchaFormId)).toBeNull()
         })
 
-        it('classifies a header honeypot hit as spam before checking the captcha', async () => {
-            await http().post(`/api/public/form/${captchaSlug}`).set('X-Trap', 'filled').send({ data: {} }).expect(201)
+        it('classifies a body honeypot hit as spam before checking the captcha', async () => {
+            await http()
+                .post(`/api/public/form/${captchaSlug}`)
+                .send({ security: { trap: 'filled' }, data: {} })
+                .expect(201)
 
             expect((await latestSubmission(captchaFormId))?.status).toBe('spam')
         })

@@ -5,7 +5,7 @@
         :submit-label="t('module.roles.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <VTextField
@@ -58,6 +58,7 @@
     import { useRouter } from 'vue-router'
     import type { CatalogPermission, RoleScope } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
@@ -79,7 +80,7 @@
     const { data: roles } = useQuery(useRolesQuery())
     const { data: held } = useQuery(useAuthPermissionsQuery())
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 name: z.string().trim().min(1).max(100),
@@ -95,6 +96,8 @@
     const [scope] = defineField('scope')
     const [description] = defineField('description')
     const [startFrom] = defineField('startFrom')
+
+    const changed = useFormChanged(values, () => meta.value.initialValues)
 
     const scopeOptions = computed(() => SCOPES.map((value) => ({ value, title: t(`module.roles.scope.${value}`) })))
     const heldPermissions = computed<Record<RoleScope, Set<string>>>(() => ({

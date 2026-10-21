@@ -39,8 +39,8 @@
     import ReadonlyValue from '@/components/ReadonlyValue.vue'
     import SectionCard from '@/components/SectionCard.vue'
     import { useNotify } from '@/composables/useNotify.ts'
-    import { exampleForm } from '@/modules/inbound-forms/helpers/exampleForm.ts'
     import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import { exampleRequest } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto; canUpdate: boolean }>()
@@ -52,14 +52,7 @@
     const isActive = ref(props.form.isActive)
 
     const endpointUrl = computed(() => formEndpointUrl(props.form.slug))
-    const example = computed(() =>
-        exampleForm(
-            endpointUrl.value,
-            props.form.fields,
-            props.form.security,
-            t('module.inboundForms.details.endpoint.send'),
-        ),
-    )
+    const example = computed(() => exampleRequest(endpointUrl.value, props.form.fields))
 
     watch(
         () => props.form.isActive,

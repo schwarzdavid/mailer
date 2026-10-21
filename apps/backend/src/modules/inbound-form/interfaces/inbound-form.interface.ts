@@ -9,6 +9,7 @@ export interface InboundForm {
     name: string
     slug: string
     isActive: boolean
+    allowedHostnames: string[]
     createdAt: Date
     updatedAt: Date
 }
@@ -23,4 +24,5 @@ export interface InboundFormFull extends InboundForm {
     inboundFormSecurity: InboundFormSecurity[]
 }
 
-export type InboundFormCreate = Omit<InboundForm, 'inboundFormId' | 'createdAt' | 'updatedAt'>
+export type InboundFormCreate = Omit<InboundForm, 'inboundFormId' | 'createdAt' | 'updatedAt' | 'allowedHostnames'> &
+    Partial<Pick<InboundForm, 'allowedHostnames'>>

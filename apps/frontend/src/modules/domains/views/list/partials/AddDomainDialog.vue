@@ -5,7 +5,6 @@
         :submit-label="t('module.domains.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty"
         @submit="onSubmit"
     >
         <i18n-t keypath="module.domains.add.intro" tag="p">
@@ -50,7 +49,7 @@
     const { mutateAsync, isPending } = useDomainCreateMutation()
     const router = useRouter()
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 fqdn: z

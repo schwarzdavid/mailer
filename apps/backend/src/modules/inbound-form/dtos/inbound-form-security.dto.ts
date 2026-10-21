@@ -2,6 +2,7 @@ import { Expose, Type } from 'class-transformer'
 import {
     IsArray,
     IsEnum,
+    IsInt,
     IsNotEmpty,
     IsNumber,
     IsOptional,
@@ -13,14 +14,15 @@ import {
 } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import {
-    InboundFormRecaptchaConfigInput,
-    InboundFormRecaptchaStoredConfig,
     InboundFormSecurity,
+    InboundFormSecurityConfigInput,
     InboundFormSecurityLocation,
+    InboundFormSecurityStoredConfig,
     InboundFormSecurityType,
 } from '../interfaces/inbound-form-security.interface.js'
+import { isRecaptchaConfig, isTimedTokenConfig } from '../helpers/security-config.js'
 
-export class InboundFormRecaptchaConfigUpsertDto implements InboundFormRecaptchaConfigInput {
+export class InboundFormSecurityConfigUpsertDto implements InboundFormSecurityConfigInput {
     @Expose()
     @ApiProperty({
         type: String,
@@ -33,28 +35,75 @@ export class InboundFormRecaptchaConfigUpsertDto implements InboundFormRecaptcha
     secret?: string
 
     @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 0, maximum: 1 })
     @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(1)
     minScore?: number
+
+    @Expose()
+    @ApiProperty({ type: String, required: false, maxLength: 100 })
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    expectedAction?: string
+
+    @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 1, maximum: 60 })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(60)
+    minDelaySeconds?: number
+
+    @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 60, maximum: 86400 })
+    @IsOptional()
+    @IsInt()
+    @Min(60)
+    @Max(86400)
+    maxAgeSeconds?: number
 }
 
-export class InboundFormRecaptchaConfigDto {
+export class InboundFormSecurityConfigDto {
     @Expose()
-    @ApiProperty({ type: Boolean })
-    hasSecret!: boolean
+    @ApiProperty({ type: Boolean, required: false })
+    hasSecret?: boolean
 
     @Expose()
     @ApiProperty({ type: Number, required: false, minimum: 0, maximum: 1 })
     minScore?: number
 
-    static fromConfig(config: InboundFormRecaptchaStoredConfig | null): InboundFormRecaptchaConfigDto | null {
-        if (!config) {
-            return null
+    @Expose()
+    @ApiProperty({ type: String, required: false, maxLength: 100 })
+    expectedAction?: string
+
+    @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 1, maximum: 60 })
+    minDelaySeconds?: number
+
+    @Expose()
+    @ApiProperty({ type: Number, required: false, minimum: 60, maximum: 86400 })
+    maxAgeSeconds?: number
+
+    static fromConfig(
+        type: InboundFormSecurityType,
+        config: InboundFormSecurityStoredConfig | null,
+    ): InboundFormSecurityConfigDto | null {
+        if (type === InboundFormSecurityType.RECAPTCHA && isRecaptchaConfig(config)) {
+            return {
+                hasSecret: !!config.encryptedSecret,
+                minScore: config.minScore,
+                expectedAction: config.expectedAction,
+            }
         }
 
-        return { hasSecret: !!config.encryptedSecret, minScore: config.minScore }
+        if (type === InboundFormSecurityType.TIMED_TOKEN && isTimedTokenConfig(config)) {
+            return { minDelaySeconds: config.minDelaySeconds, maxAgeSeconds: config.maxAgeSeconds }
+        }
+
+        return null
     }
 }
 
@@ -78,8 +127,8 @@ export class InboundFormSecurityUpsertDto {
     @Expose()
     @IsOptional()
     @ValidateNested()
-    @Type(() => InboundFormRecaptchaConfigUpsertDto)
-    config: InboundFormRecaptchaConfigUpsertDto | null = null
+    @Type(() => InboundFormSecurityConfigUpsertDto)
+    config: InboundFormSecurityConfigUpsertDto | null = null
 }
 
 export class InboundFormSecurityPutDto {
@@ -106,8 +155,8 @@ export class InboundFormSecurityDto {
     key!: string
 
     @Expose()
-    @Type(() => InboundFormRecaptchaConfigDto)
-    config: InboundFormRecaptchaConfigDto | null = null
+    @Type(() => InboundFormSecurityConfigDto)
+    config: InboundFormSecurityConfigDto | null = null
 
     static fromSecurity(security: InboundFormSecurity): InboundFormSecurityDto {
         return {
@@ -115,7 +164,7 @@ export class InboundFormSecurityDto {
             type: security.type,
             location: security.location,
             key: security.key,
-            config: InboundFormRecaptchaConfigDto.fromConfig(security.config),
+            config: InboundFormSecurityConfigDto.fromConfig(security.type, security.config),
         }
     }
 }

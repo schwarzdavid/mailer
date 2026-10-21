@@ -45,6 +45,10 @@ export class UserListDto extends UserDto {
     @Expose()
     @ApiProperty({ type: Number })
     membershipCount!: number
+
+    @Expose()
+    @ApiProperty({ type: Boolean })
+    allProjects!: boolean
 }
 
 export class UserMembershipDto {

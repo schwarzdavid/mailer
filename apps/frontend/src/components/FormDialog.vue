@@ -4,7 +4,6 @@
         :max-width="maxWidth"
         :fullscreen="xs"
         :scrollable="false"
-        persistent
         @update:model-value="onDialogUpdate"
     >
         <VCard class="form-dialog" :class="{ 'form-dialog--fullscreen': xs }" :border="false">

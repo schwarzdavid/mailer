@@ -3,7 +3,7 @@ import { AuthApi, RoleApi } from 'api'
 import type { Router } from 'vue-router'
 import { flushPromises } from '@vue/test-utils'
 import AddRoleDialog from '../partials/AddRoleDialog.vue'
-import { mountDialog, overlayText, setOverlayInput, submitOverlayForm } from '@/__tests__/support.ts'
+import { mountDialog, overlayButton, overlayText, setOverlayInput, submitOverlayForm } from '@/__tests__/support.ts'
 import { allRoles, heldAll, heldOnly, projectRoleSummaries } from '@/modules/roles/__tests__/roleFixtures.ts'
 import { RouteNames } from '@/router/RouteNames.ts'
 
@@ -115,6 +115,28 @@ describe('AddRoleDialog', () => {
                 body: { name: 'Guest', scope: 'project', description: null, permissions: ['read'] },
             }),
         )
+    })
+
+    it('closes without asking once an entered value is reverted', async () => {
+        const { open } = await openDialog()
+
+        await setOverlayInput('name', 'Ops')
+        await setOverlayInput('name', '')
+        overlayButton('Cancel').click()
+        await flushPromises()
+
+        expect(overlayText()).not.toContain('Discard unsaved changes?')
+        expect(open.value).toBe(false)
+    })
+
+    it('asks before discarding an entered value', async () => {
+        const { open } = await openDialog()
+
+        await setOverlayInput('name', 'Ops')
+        overlayButton('Cancel').click()
+
+        await vi.waitFor(() => expect(overlayText()).toContain('Discard unsaved changes?'))
+        expect(open.value).toBe(true)
     })
 
     it('keeps the dialog open with the error when creating fails', async () => {

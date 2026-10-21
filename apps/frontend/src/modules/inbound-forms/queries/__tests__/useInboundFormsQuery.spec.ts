@@ -11,6 +11,7 @@ const form: InboundFormListDto = {
     name: 'Contact',
     slug: 'contact',
     isActive: true,
+    allowedHostnames: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     receivers: [],
 }
