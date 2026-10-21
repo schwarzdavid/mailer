@@ -10,6 +10,7 @@ import { ReadonlyVisitor } from '@nestjs/swagger/plugin'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { createOpenApiDocument } from '../src/factories/app.setup.js'
+import { createPreviewOpenApiDocument } from '../src/openapi/preview-document.js'
 import { JwtAuthGuard } from '../src/modules/auth/guards/jwt-auth.guard.js'
 import { PUBLIC_KEY } from '../src/modules/auth/decorators/Public.js'
 import { createTestApp } from './support/app.js'
@@ -145,6 +146,10 @@ describe('OpenAPI contract', () => {
 
     afterAll(async () => {
         await app?.close()
+    })
+
+    it('generates the same document in preview mode as the booted app', async () => {
+        expect(await createPreviewOpenApiDocument()).toEqual(document)
     })
 
     it('documents every controller route', () => {

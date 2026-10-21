@@ -52,9 +52,10 @@ Backend-specific:
 
 ```bash
 pnpm --filter backend test:e2e     # e2e suite (spins up Postgres/Redis via Testcontainers)
-pnpm --filter backend migrate up   # apply migrations (umzug CLI: up | down | create --name x)
-pnpm --filter backend generate     # boot Nest with --spec-only to emit packages/api/assets/openapi.json
-pnpm --filter api build            # regenerate the typed client from that spec
+pnpm --filter backend migrate up   # apply migrations from source under tsx (umzug CLI: up | down | pending | executed | create; no command = up)
+pnpm --filter backend migrate create --name 019-example.ts --prefix NONE   # new migration file from umzug's default template (type it as MigrationFn<QueryInterface>); source-only (tsx), not for dist (the .ts suffix is required, the NNN is typed by hand)
+pnpm --filter backend build && pnpm --filter backend migrate:prod up       # the production path: node dist/migrate.js up
+pnpm build --filter api            # backend build → backend#generate (spec, no DB needed) → typed client
 ```
 
 ## Architecture
@@ -64,11 +65,11 @@ pnpm --filter api build            # regenerate the typed client from that spec
 The backend defines the contract; the frontend never hand-writes request/response types:
 
 1. NestJS controllers + DTOs (decorated with `@nestjs/swagger` `@ApiProperty`, wired via the `@nestjs/swagger` CLI plugin in `nest-cli.json`) describe every endpoint.
-2. `apps/backend/src/main.ts` builds the OpenAPI document and, in non-production or with `--spec-only`, writes it to `packages/api/assets/openapi.json`.
-3. `packages/api` runs `openapi-ts` (`openapi-ts.config.ts`) to emit into `dist/`: SDK classes grouped by tag as `{{Tag}}Api` (e.g. `AuthApi.login`, `AuthApi.currentUser`), plus TS types and Zod schemas. `throwOnError: true` means SDK calls throw on non-2xx.
+2. `apps/backend/dist/openapi.js` (from `src/openapi.ts`) builds the OpenAPI document in Nest preview mode (no DB or Redis, placeholder env filled in by the script) and writes it to the path given as its argument. The backend's `generate` script runs it into `apps/backend/openapi.json`, a gitignored output of the Turbo task `generate` (which depends on the backend `build`); `main.ts` writes nothing.
+3. `api#build` depends on `backend#generate` in `turbo.json` and runs `openapi-ts` (`openapi-ts.config.ts`, input `apps/backend/openapi.json`) to emit into `dist/`: SDK classes grouped by tag as `{{Tag}}Api` (e.g. `AuthApi.login`, `AuthApi.currentUser`), plus TS types and Zod schemas. `throwOnError: true` means SDK calls throw on non-2xx.
 4. The frontend imports from `api` (SDK + types) and `api/client` (the fetch client, configured in `main.ts`).
 
-After changing any endpoint, regenerate: `pnpm --filter backend generate` then `pnpm --filter api build`.
+After changing any endpoint, regenerate with `pnpm build --filter api` (Turbo builds the backend first). Under `pnpm dev`, Turbo first runs `backend#build`, `backend#generate` and `api#build`, and only then starts the dev tasks. `backend#dev` waits for `generate` because `nest start --watch` empties `dist` on start. `packages/api/scripts/watch.ts` then runs the backend's `generate` script after each backend rebuild: one run at a time, after the output has settled. `openapi-ts` only runs when the spec actually changed.
 
 ### Backend (NestJS)
 
@@ -87,7 +88,7 @@ Cross-cutting wiring (`app.module.ts`): `ConfigModule` (global, reads root `.env
 
 **Auth flow:** Passport with `local` and `jwt` strategies. `JwtAuthGuard` extends the passport JWT guard but honors a `@Public()` metadata marker to skip auth. Apply `@JwtAuth()` (composed decorator) to controllers/routes that require a token. `@Principal()` is a param decorator that returns the authenticated `User` (401s if absent).
 
-**Migrations:** `umzug` over Sequelize, driven by `src/migrate.ts` (not Sequelize CLI). Migration files are `src/migrations/NNN-*.ts` with `up`/`down` taking `{ context: QueryInterface }`. `pnpm migrate` runs `migrate.ts` under `tsx`, which imports each migration itself because umzug's default resolver rejects `.ts` files. `autoLoadModels` builds tables in dev, but migrations are the source of truth for schema.
+**Migrations:** `umzug` over Sequelize, driven by `src/migrate.ts` (not Sequelize CLI). Migration files are `src/migrations/NNN-*.ts` with `up`/`down` taking `{ context: QueryInterface }`. `src/factories/umzug.factory.ts` globs migrations by the runner's own extension (`.ts` under `tsx`, `.js` from `dist/`), so the same code serves `pnpm migrate` in dev and `node dist/migrate.js` in production (`nest build` emits both). Names are stored in `SequelizeMeta` without an extension (`001-create-users`), and a Postgres session advisory lock (`MIGRATION_LOCK_KEY`) serialises concurrent runs. In production migrations run as a separate one-shot step, `node dist/migrate.js up`, never at app boot. `migrate.ts` validates only the `DB_*` keys and `BACKEND_ENCRYPTION_SECRET`. `autoLoadModels` builds tables in dev, but migrations are the source of truth for schema.
 
 ### Frontend (Vue 3)
 

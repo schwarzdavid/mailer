@@ -3,13 +3,31 @@
     "globalDependencies": ["tsconfig.json", "tsconfig.build.json", "eslint.config.ts", "prettier.config.ts"],
     "tasks": {
         "dev": {
+            "dependsOn": ["^build"],
+            "cache": false,
+            "persistent": true
+        },
+        "backend#dev": {
+            "dependsOn": ["generate"],
+            "cache": false,
+            "persistent": true
+        },
+        "api#dev": {
+            "dependsOn": ["build"],
             "cache": false,
             "persistent": true
         },
         "build": {
             "dependsOn": ["^build"],
-            "inputs": ["$TURBO_DEFAULT$", "assets/openapi.json"],
             "outputs": ["dist/**", ".output/**"]
+        },
+        "api#build": {
+            "dependsOn": ["backend#generate"],
+            "outputs": ["dist/**"]
+        },
+        "generate": {
+            "dependsOn": ["build"],
+            "outputs": ["openapi.json"]
         },
         "lint": {
             "outputs": []
@@ -26,10 +44,6 @@
         },
         "test:cov": {
             "outputs": ["coverage/**"]
-        },
-        "generate": {
-            "dependsOn": ["^build"],
-            "outputs": ["src/generated/**", "../../openapi/**"]
         }
     }
 }

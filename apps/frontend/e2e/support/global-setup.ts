@@ -1,5 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { startInfrastructure, type Infrastructure } from './infrastructure.ts'
 import { freePort, runCommand, startServer, type ServerProcess } from './processes.ts'
@@ -7,17 +6,16 @@ import { freePort, runCommand, startServer, type ServerProcess } from './process
 const frontendDir = resolve(import.meta.dirname, '..', '..')
 const repoRoot = resolve(frontendDir, '..', '..')
 const backendDir = join(repoRoot, 'apps', 'backend')
-const apiDir = join(repoRoot, 'packages', 'api')
 const workDir = join(frontendDir, 'node_modules', '.tmp', 'e2e')
 const backendWorkDir = join(backendDir, 'node_modules', '.tmp', 'e2e')
 const frontendDistDir = join(workDir, 'dist')
 const generatedSpecPath = join(workDir, 'openapi.json')
-const committedSpecPath = join(apiDir, 'assets', 'openapi.json')
 
 const log = (message: string) => console.log(`[e2e] ${message}`)
 
 async function buildBackend(): Promise<void> {
     await mkdir(backendWorkDir, { recursive: true })
+    await copyFile(join(backendDir, 'package.json'), join(backendWorkDir, 'package.json'))
     await writeFile(
         join(backendWorkDir, 'tsconfig.json'),
         JSON.stringify({
@@ -30,22 +28,6 @@ async function buildBackend(): Promise<void> {
         cwd: backendDir,
         logFile: join(workDir, 'backend-build.log'),
     })
-}
-
-async function readOptional(path: string): Promise<string | null> {
-    return readFile(path, 'utf8').catch(() => null)
-}
-
-async function syncApiClient(): Promise<void> {
-    const generated = await readFile(generatedSpecPath, 'utf8')
-    const current = await readOptional(committedSpecPath)
-    if (generated === current && existsSync(join(apiDir, 'dist', 'index.ts'))) {
-        return
-    }
-    log('OpenAPI spec changed, regenerating the api client')
-    await mkdir(join(apiDir, 'assets'), { recursive: true })
-    await copyFile(generatedSpecPath, committedSpecPath)
-    await runCommand('pnpm --filter api build', { cwd: repoRoot, logFile: join(workDir, 'api-build.log') })
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
@@ -70,10 +52,16 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         ])
 
         log('Applying migrations')
-        await runCommand('pnpm --filter backend migrate up', {
-            cwd: repoRoot,
+        await runCommand(`node "${join(backendWorkDir, 'dist', 'migrate.js')}" up`, {
+            cwd: backendDir,
             env: { ...infrastructure.backendEnv },
             logFile: join(workDir, 'migrate.log'),
+        })
+
+        log('Generating the OpenAPI spec')
+        await runCommand(`node "${join(backendWorkDir, 'dist', 'openapi.js')}" "${generatedSpecPath}"`, {
+            cwd: backendDir,
+            logFile: join(workDir, 'openapi.log'),
         })
 
         const backendPort = await freePort()
@@ -88,14 +76,17 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
                     ...infrastructure.backendEnv,
                     NODE_ENV: 'test',
                     PORT: String(backendPort),
-                    OPENAPI_PATH: generatedSpecPath,
                 },
                 logFile: join(workDir, 'backend.log'),
             },
         )
         cleanups.push(backend.stop)
 
-        await syncApiClient()
+        log('Generating the api client')
+        await runCommand(`pnpm --filter api exec openapi-ts -i "${generatedSpecPath}"`, {
+            cwd: repoRoot,
+            logFile: join(workDir, 'api-build.log'),
+        })
 
         log('Building the frontend')
         await runCommand(`pnpm exec vite build --outDir "${frontendDistDir}" --emptyOutDir --logLevel warn`, {

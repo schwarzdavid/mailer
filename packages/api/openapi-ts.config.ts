@@ -1,7 +1,7 @@
 import { UserConfig } from '@hey-api/openapi-ts'
 
 export default {
-    input: './assets/openapi.json',
+    input: '../../apps/backend/openapi.json',
     output: './dist',
     plugins: [
         '@hey-api/typescript',

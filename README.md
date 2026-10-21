@@ -64,17 +64,24 @@ docker compose -f dev/docker-compose.yml up -d
 
 ### 4. Run the database migrations
 
+Migrations are recorded in the `SequelizeMeta` table without a file extension. If your dev database was already migrated by an earlier version, it still holds `.ts`-suffixed names. Convert them once **before** running `migrate up`, otherwise every migration would run again and fail:
+
+```sql
+UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
+```
+
+Then apply the migrations (a fresh database needs no rename):
+
 ```bash
 pnpm --filter backend migrate up
 ```
 
-### 5. Generate the API client
+### 5. The API client
 
-The OpenAPI spec and the generated client are not committed, so you have to create them once (and again after every API change). Generating the spec boots the backend, so Postgres and Redis must already be running.
+The OpenAPI spec (`apps/backend/openapi.json`) and the generated client (`packages/api/dist`) are not committed. Neither needs a database or Redis: the backend's `generate` task writes the spec from the compiled backend in Nest's preview mode, without booting the app, and `packages/api` builds the client from it. `pnpm dev` and `pnpm build` both run these steps first, so a fresh clone needs no extra step. Under `pnpm dev` the client is regenerated whenever the backend is rebuilt. Without `pnpm dev`, regenerate it with:
 
 ```bash
-pnpm --filter backend generate
-pnpm --filter api build
+pnpm build --filter api
 ```
 
 ### 6. Start the apps
@@ -99,6 +106,24 @@ pnpm --filter backend test:e2e    # backend e2e tests (needs Docker, uses Testco
 pnpm --filter frontend test:e2e   # full-stack Playwright tests (needs Docker; once: pnpm --filter frontend exec playwright install chromium)
 pnpm check                        # lint + typecheck + test + format check
 ```
+
+## Production
+
+The backend never migrates the database on startup. Build it, then run the migrations as a one-shot step before starting the app (for example as a deploy job or an init container):
+
+```bash
+pnpm --filter backend build
+pnpm --filter backend migrate:prod up     # runs node dist/migrate.js up; needs the DB_* and BACKEND_ENCRYPTION_SECRET variables
+pnpm --filter backend start:prod
+```
+
+Before the first `migrate:prod up` against a database that an earlier version already migrated, run this one-off rename, because migration names are now stored without a file extension and otherwise every migration looks pending. Fresh databases don't need it.
+
+```sql
+UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
+```
+
+Concurrent runs are safe: a Postgres advisory lock lets one runner apply the pending migrations while the others wait and then find nothing left to do.
 
 ## Running behind a reverse proxy
 

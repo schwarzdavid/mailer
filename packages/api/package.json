@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "build": "openapi-ts",
-    "dev": "chokidar \"assets/openapi.json\" -c openapi-ts"
+    "dev": "node scripts/watch.ts"
   },
   "files": [
     "dist",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
-    "chokidar-cli": "^3.0.0"
+    "chokidar": "^5.0.0"
   },
   "dependencies": {
     "zod": "^4.4.3"

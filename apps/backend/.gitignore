@@ -1,5 +1,6 @@
 # compiled output
 /dist
+/openapi.json
 /node_modules
 /build
 

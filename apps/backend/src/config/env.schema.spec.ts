@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { envSchema } from './env.schema.js'
+import { envSchema, migrationEnvSchema } from './env.schema.js'
 
 const requiredEnv: Record<string, string> = {
     BACKEND_JWT_SECRET: 'jwt-secret',
@@ -58,6 +58,29 @@ describe('envSchema', () => {
 
     it('accepts a missing IMAP_HOST without credentials', () => {
         expect(envSchema.safeParse(requiredEnv).success).toBe(true)
+    })
+
+    describe('migrationEnvSchema', () => {
+        it('accepts the encryption secret alone and defaults the database host', () => {
+            const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x' })
+
+            expect(env.DB_HOST).toBe('localhost')
+        })
+
+        it('coerces the database port from its string form', () => {
+            expect(migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x', DB_PORT: '5432' }).DB_PORT).toBe(5432)
+        })
+
+        it('requires the encryption secret', () => {
+            const result = migrationEnvSchema.safeParse({})
+
+            expect(result.success).toBe(false)
+            expect(result.error?.issues.map((issue) => issue.path)).toContainEqual(['BACKEND_ENCRYPTION_SECRET'])
+        })
+
+        it('does not require SMTP or JWT settings', () => {
+            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: 'x' }).success).toBe(true)
+        })
     })
 
     describe('TRUST_PROXY', () => {

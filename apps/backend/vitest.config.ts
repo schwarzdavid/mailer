@@ -21,6 +21,7 @@ export default defineConfig({
             exclude: [
                 ...coverageConfigDefaults.exclude,
                 'src/main.ts',
+                'src/openapi.ts',
                 'src/migrate.ts',
                 'src/migrations/**',
                 'src/**/*.module.ts',

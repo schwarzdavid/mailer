@@ -19,54 +19,61 @@ const trustProxy = z
         return value
     })
 
-export const envSchema = z
-    .object({
-        PORT: port.default(8000),
-        TRUST_PROXY: trustProxy,
+const envShape = {
+    PORT: port.default(8000),
+    TRUST_PROXY: trustProxy,
 
-        DB_HOST: z.string().default('localhost'),
-        DB_PORT: port.optional(),
-        DB_USERNAME: z.string().optional(),
-        DB_PASSWORD: z.string().optional(),
-        DB_DATABASE: z.string().optional(),
+    DB_HOST: z.string().default('localhost'),
+    DB_PORT: port.optional(),
+    DB_USERNAME: z.string().optional(),
+    DB_PASSWORD: z.string().optional(),
+    DB_DATABASE: z.string().optional(),
 
-        REDIS_HOST: z.string().default('127.0.0.1'),
-        REDIS_PORT: port.default(6379),
+    REDIS_HOST: z.string().default('127.0.0.1'),
+    REDIS_PORT: port.default(6379),
 
-        BACKEND_JWT_SECRET: z.string().min(1),
-        BACKEND_ENCRYPTION_SECRET: z.string().min(1),
+    BACKEND_JWT_SECRET: z.string().min(1),
+    BACKEND_ENCRYPTION_SECRET: z.string().min(1),
 
-        SMTP_HOST: z.string().min(1),
-        SMTP_PORT: port,
-        SMTP_SECURE: z.stringbool().default(false),
-        SMTP_USER: z.string().default(''),
-        SMTP_PASSWORD: z.string().default(''),
+    SMTP_HOST: z.string().min(1),
+    SMTP_PORT: port,
+    SMTP_SECURE: z.stringbool().default(false),
+    SMTP_USER: z.string().default(''),
+    SMTP_PASSWORD: z.string().default(''),
 
-        IMAP_HOST: z.string().optional(),
-        IMAP_PORT: port.default(993),
-        IMAP_SECURE: z.stringbool().default(true),
-        IMAP_USER: z.string().optional(),
-        IMAP_PASSWORD: z.string().optional(),
+    IMAP_HOST: z.string().optional(),
+    IMAP_PORT: port.default(993),
+    IMAP_SECURE: z.stringbool().default(true),
+    IMAP_USER: z.string().optional(),
+    IMAP_PASSWORD: z.string().optional(),
 
-        OPENAPI_PATH: z.string().optional(),
+    PUBLIC_API_RATE_LIMIT: z.coerce.number().int().positive().default(60),
+    PUBLIC_API_RATE_TTL: z.coerce.number().int().positive().default(60_000),
 
-        PUBLIC_API_RATE_LIMIT: z.coerce.number().int().positive().default(60),
-        PUBLIC_API_RATE_TTL: z.coerce.number().int().positive().default(60_000),
+    FORM_SUBMIT_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+    FORM_SUBMIT_RATE_TTL: z.coerce.number().int().positive().default(600_000),
+    FORM_TOKEN_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+    FORM_TOKEN_RATE_TTL: z.coerce.number().int().positive().default(600_000),
+}
 
-        FORM_SUBMIT_RATE_LIMIT: z.coerce.number().int().positive().default(5),
-        FORM_SUBMIT_RATE_TTL: z.coerce.number().int().positive().default(600_000),
-        FORM_TOKEN_RATE_LIMIT: z.coerce.number().int().positive().default(5),
-        FORM_TOKEN_RATE_TTL: z.coerce.number().int().positive().default(600_000),
-    })
-    .superRefine((env, ctx) => {
-        if (!env.IMAP_HOST) {
-            return
+export const envSchema = z.object(envShape).superRefine((env, ctx) => {
+    if (!env.IMAP_HOST) {
+        return
+    }
+    for (const key of ['IMAP_USER', 'IMAP_PASSWORD'] as const) {
+        if (!env[key]) {
+            ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when IMAP_HOST is set` })
         }
-        for (const key of ['IMAP_USER', 'IMAP_PASSWORD'] as const) {
-            if (!env[key]) {
-                ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when IMAP_HOST is set` })
-            }
-        }
-    })
+    }
+})
+
+export const migrationEnvSchema = z.object({
+    DB_HOST: envShape.DB_HOST,
+    DB_PORT: envShape.DB_PORT,
+    DB_USERNAME: envShape.DB_USERNAME,
+    DB_PASSWORD: envShape.DB_PASSWORD,
+    DB_DATABASE: envShape.DB_DATABASE,
+    BACKEND_ENCRYPTION_SECRET: envShape.BACKEND_ENCRYPTION_SECRET,
+})
 
 export type Env = z.infer<typeof envSchema>
