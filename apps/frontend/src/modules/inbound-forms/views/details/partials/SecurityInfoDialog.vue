@@ -1,30 +1,28 @@
 <template>
     <FormDialog v-model="model" :title="title" :submit-label="t('dialog.close')" :submittable="false" width="lg">
-        <template v-if="scheme">
-            <p>{{ t(`module.inboundForms.details.security.info.${scheme.type}.intro`) }}</p>
-            <CopyField :value="snippet" :label="t('module.inboundForms.details.security.info.snippetLabel')" />
-            <p>{{ t(`module.inboundForms.details.security.info.${scheme.type}.note`) }}</p>
-        </template>
+        <component :is="infoComponents[scheme.type]" v-if="scheme" :scheme="scheme" :form="form" />
     </FormDialog>
 </template>
 
 <script setup lang="ts">
-    import { computed } from 'vue'
+    import { computed, type Component } from 'vue'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormDetailDto, InboundFormSecurityDto } from 'api'
-    import CopyField from '@/components/CopyField.vue'
     import FormDialog from '@/components/FormDialog.vue'
-    import { formClientScriptUrl, formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
-    import {
-        honeypotSnippet,
-        recaptchaSnippet,
-        timedTokenSnippet,
-    } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
+    import HoneypotInfo from '@/modules/inbound-forms/views/details/partials/security-info/HoneypotInfo.vue'
+    import RecaptchaInfo from '@/modules/inbound-forms/views/details/partials/security-info/RecaptchaInfo.vue'
+    import TimedTokenInfo from '@/modules/inbound-forms/views/details/partials/security-info/TimedTokenInfo.vue'
 
     const props = defineProps<{ scheme: InboundFormSecurityDto | null; form: InboundFormDetailDto }>()
     const model = defineModel<boolean>({ required: true })
 
     const { t } = useI18n()
+
+    const infoComponents: Record<InboundFormSecurityDto['type'], Component> = {
+        honeypot: HoneypotInfo,
+        'google-recaptcha': RecaptchaInfo,
+        'timed-token': TimedTokenInfo,
+    }
 
     const title = computed(() =>
         props.scheme
@@ -33,19 +31,4 @@
               })
             : '',
     )
-
-    const snippet = computed(() => {
-        const scheme = props.scheme
-        if (!scheme) {
-            return ''
-        }
-        const endpoint = formEndpointUrl(props.form.slug)
-        if (scheme.type === 'honeypot') {
-            return honeypotSnippet(endpoint, props.form.slug, scheme)
-        }
-        if (scheme.type === 'google-recaptcha') {
-            return recaptchaSnippet(endpoint, props.form.slug, scheme)
-        }
-        return timedTokenSnippet(endpoint, formClientScriptUrl(), props.form.slug, scheme)
-    })
 </script>

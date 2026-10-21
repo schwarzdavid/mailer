@@ -890,18 +890,23 @@
                     "info": {
                         "label": "How to integrate {type}",
                         "title": "{type} integration",
-                        "snippetLabel": "integration code",
+                        "steps": {
+                            "field": "Add the field",
+                            "import": "Load the script",
+                            "token": "Get the token",
+                            "send": "Send it with the submission"
+                        },
                         "honeypot": {
                             "intro": "A field that humans never see and leave empty, while bots fill it in. Submissions with a value in it are stored as spam and still answered with success, so bots learn nothing.",
-                            "note": "Hide the field with CSS rather than type=\"hidden\", which bots skip. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                            "note": "Hide the field with CSS rather than type=\"hidden\", which bots skip."
                         },
                         "google-recaptcha": {
                             "intro": "Your website requests a reCAPTCHA token from Google and sends it along. The server verifies it with Google before accepting the submission.",
-                            "note": "Replace SITE_KEY with your reCAPTCHA site key. The website's domain must be in this form's allowed domains and in the reCAPTCHA admin console. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                            "note": "Replace SITE_KEY with your reCAPTCHA site key. The website's domain must be in this form's allowed domains and in the reCAPTCHA admin console."
                         },
                         "timed-token": {
                             "intro": "A single-use token that is bound to the visitor's IP and only becomes valid after the minimum delay, so instant bot submissions are rejected. It requires allowed domains.",
-                            "note": "Fetch the token once per submission. If the server answers 403, retry once with a fresh token. If this form uses several checks, use a single submit handler and send every check's value in the same request (one fetch): merge the lines that build the security, securityHeaders or securityQuery variable into that one handler."
+                            "note": "Fetch a fresh token for every submission."
                         }
                     },
                     "hostnames": {
