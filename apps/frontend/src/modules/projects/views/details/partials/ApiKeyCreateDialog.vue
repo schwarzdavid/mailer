@@ -6,7 +6,6 @@
         :submit-label="t('module.projects.apiKeys.dialog.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="name.trim() !== ''"
         @submit="onSubmit"
     >
         <p>{{ t('module.projects.apiKeys.dialog.intro') }}</p>

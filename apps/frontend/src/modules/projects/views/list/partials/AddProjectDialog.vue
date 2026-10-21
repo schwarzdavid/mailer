@@ -5,7 +5,6 @@
         :submit-label="t('module.projects.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty"
         @submit="onSubmit"
     >
         <p>{{ t('module.projects.add.intro') }}</p>
@@ -42,7 +41,7 @@
     const router = useRouter()
     const errorMessage = ref<string | null>(null)
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 name: z

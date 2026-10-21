@@ -5,7 +5,6 @@
         :submit-label="t('cta.save')"
         :pending="saving"
         :error="error"
-        :dirty="meta.dirty"
         @submit="onSubmit"
     >
         <VCombobox
@@ -48,7 +47,7 @@
         return value.length <= MAX_HOSTNAME_LENGTH && value.split('.').every((label) => HOSTNAME_LABEL.test(label))
     }
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 hostnames: z.array(

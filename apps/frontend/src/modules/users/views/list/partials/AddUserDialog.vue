@@ -6,7 +6,7 @@
         :submit-label="t('module.users.add.submit')"
         :pending="isPending"
         :error="errorMessage"
-        :dirty="meta.dirty || extraPermissions.length > 0"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <div class="form-grid form-grid--2">
@@ -71,6 +71,7 @@
     import DisclosureBox from '@/components/DisclosureBox.vue'
     import FormDialog from '@/components/FormDialog.vue'
     import PasswordField from '@/components/PasswordField.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useAuthPermissionsQuery } from '@/modules/auth/queries/useAuthPermissionsQuery.ts'
@@ -94,7 +95,7 @@
     const { data: held } = useQuery(useAuthPermissionsQuery())
     const defaultRoleId = computed(() => roles.value?.find((role) => role.type === 'user')?.roleId)
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 firstName: z.string().trim().min(1),
@@ -112,6 +113,11 @@
     const [password] = defineField('password')
     const [roleId] = defineField('roleId')
 
+    const changed = useFormChanged(
+        () => ({ ...values, extraPermissions: [...extraPermissions.value].sort() }),
+        () => meta.value.initialValues,
+    )
+
     const selectedRole = computed(() => roles.value?.find((role) => role.roleId === roleId.value))
     const rolePermissions = computed(() => (selectedRole.value?.permissions ?? []).filter(isGlobalPermission))
 
@@ -122,7 +128,7 @@
     watch(
         [model, defaultRoleId],
         ([open], previous) => {
-            if (open && (!previous?.[0] || !meta.value.dirty)) {
+            if (open && (!previous?.[0] || !changed.value)) {
                 errorMessage.value = null
                 extraPermissions.value = []
                 resetForm({ values: { roleId: defaultRoleId.value } })

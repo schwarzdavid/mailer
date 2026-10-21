@@ -9,7 +9,7 @@
         :submit-label="scheme ? t('cta.save') : t('module.inboundForms.details.security.add')"
         :pending="saving"
         :error="error"
-        :dirty="meta.dirty"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <VSelect
@@ -111,6 +111,7 @@
     import { mdiLockOutline } from '@mdi/js'
     import type { InboundFormSecurityConfigUpsertDto, InboundFormSecurityDto, InboundFormSecurityUpsertDto } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import PasswordField from '@/components/PasswordField.vue'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
@@ -168,7 +169,7 @@
         () => props.scheme?.type === 'google-recaptcha' && props.scheme.config?.hasSecret === true,
     )
 
-    const { defineField, handleSubmit, errors, resetForm, meta } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z
                 .object({
@@ -204,6 +205,8 @@
     const [expectedAction] = defineField('expectedAction')
     const [minDelaySeconds] = defineField('minDelaySeconds')
     const [maxAgeSeconds] = defineField('maxAgeSeconds')
+
+    const changed = useFormChanged(values, () => meta.value.initialValues)
 
     function defaultType(): EditableType {
         if (props.scheme) {

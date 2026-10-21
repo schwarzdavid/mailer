@@ -52,6 +52,16 @@ describe('ConfirmDialogHost', () => {
         await expect(result).resolves.toBe(false)
     })
 
+    it('resolves false on Escape', async () => {
+        mountView(Host)
+        const result = useConfirm()({ title: 'Delete project?', confirmLabel: 'Delete', destructive: true })
+        await waitForDialog()
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+        await expect(result).resolves.toBe(false)
+    })
+
     it('keeps the dialog open and shows the error when the action fails', async () => {
         mountView(Host)
         const action: Mock<() => Promise<unknown>> = vi

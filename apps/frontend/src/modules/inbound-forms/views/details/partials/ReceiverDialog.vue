@@ -9,7 +9,7 @@
         :submit-label="receiver ? t('cta.save') : t('module.inboundForms.details.receivers.add')"
         :pending="saving"
         :error="error"
-        :dirty="meta.dirty"
+        :dirty="changed"
         @submit="onSubmit"
     >
         <VTextField
@@ -79,6 +79,7 @@
     import { useI18n } from 'vue-i18n'
     import type { InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
+    import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
 
     const props = withDefaults(
@@ -103,7 +104,7 @@
     )
     const placeholderExample = computed(() => placeholderItems.value[0]?.value ?? '{{email}}')
 
-    const { defineField, handleSubmit, errors, resetForm, meta, setFieldValue } = useForm({
+    const { defineField, handleSubmit, errors, resetForm, resetField, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 emailFrom: z.email().refine((value) => !props.domainFqdn || value.endsWith(`@${props.domainFqdn}`), {
@@ -122,6 +123,8 @@
     const [emailReplyTo] = defineField('emailReplyTo')
     const [isActive] = defineField('isActive')
 
+    const changed = useFormChanged(values, () => meta.value.initialValues)
+
     function defaultSender(fqdn: string | null): string {
         return fqdn ? `noreply@${fqdn}` : ''
     }
@@ -130,7 +133,7 @@
         () => props.domainFqdn,
         (fqdn) => {
             if (model.value && !props.receiver && fqdn && !emailFrom.value) {
-                setFieldValue('emailFrom', defaultSender(fqdn), false)
+                resetField('emailFrom', { value: defaultSender(fqdn) })
             }
         },
     )
