@@ -1,0 +1,175 @@
+name: mailer
+
+x-logging: &logging
+    driver: json-file
+    options:
+        max-size: 10m
+        max-file: '5'
+
+services:
+    postgres:
+        image: postgres:17-alpine
+        restart: unless-stopped
+        logging: *logging
+        environment:
+            POSTGRES_DB: ${DB_DATABASE:?DB_DATABASE is required}
+            POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME is required}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+
+    redis:
+        image: redis:8-alpine
+        restart: unless-stopped
+        logging: *logging
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 5s
+            timeout: 3s
+            retries: 10
+        volumes:
+            - redis-data:/data
+
+    migrate:
+        image: ghcr.io/schwarzdavid/mailer-backend:${IMAGE_TAG:-latest}
+        restart: 'no'
+        logging: *logging
+        command: ['node', 'dist/migrate.js', 'up']
+        env_file: .env
+        environment:
+            DB_HOST: postgres
+            DB_PORT: '5432'
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    backend:
+        image: ghcr.io/schwarzdavid/mailer-backend:${IMAGE_TAG:-latest}
+        restart: unless-stopped
+        logging: *logging
+        env_file: .env
+        environment:
+            NODE_ENV: production
+            PORT: '8000'
+            TRUST_PROXY: '1'
+            DB_HOST: postgres
+            DB_PORT: '5432'
+            REDIS_HOST: redis
+            REDIS_PORT: '6379'
+            SMTP_HOST: mail
+            SMTP_PORT: '587'
+            SMTP_SECURE: 'false'
+            SMTP_TLS_SERVERNAME: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+            SMTP_USER: bounce@${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+            SMTP_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+            IMAP_HOST: mail
+            IMAP_PORT: '143'
+            IMAP_SECURE: 'false'
+            IMAP_TLS_SERVERNAME: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+            IMAP_USER: bounce@${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+            IMAP_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+        read_only: true
+        tmpfs:
+            - /tmp
+        init: true
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - -e
+                - fetch('http://127.0.0.1:8000/api/setup/status').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))
+            interval: 10s
+            timeout: 5s
+            retries: 6
+            start_period: 20s
+        networks:
+            - default
+            - mail
+        depends_on:
+            migrate:
+                condition: service_completed_successfully
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+
+    web:
+        image: ghcr.io/schwarzdavid/mailer-web:${IMAGE_TAG:-latest}
+        restart: unless-stopped
+        logging: *logging
+        environment:
+            SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required}
+            MAIL_HOSTNAME: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+        ports:
+            - '${HTTP_PORT:-80}:80'
+            - '${HTTPS_PORT:-443}:443'
+            - '${HTTPS_PORT:-443}:443/udp'
+        volumes:
+            - caddy-data:/data
+            - caddy-config:/config
+        depends_on:
+            backend:
+                condition: service_healthy
+
+    mail:
+        image: ghcr.io/docker-mailserver/docker-mailserver:15.1.0
+        hostname: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
+        restart: unless-stopped
+        logging: *logging
+        stop_grace_period: 1m
+        environment:
+            SSL_TYPE: manual
+            SSL_CERT_PATH: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}.crt
+            SSL_KEY_PATH: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}.key
+            PERMIT_DOCKER: none
+            SPOOF_PROTECTION: '1'
+            ENABLE_OPENDKIM: '0'
+            ENABLE_OPENDMARC: '0'
+            ENABLE_POLICYD_SPF: '0'
+            ENABLE_AMAVIS: '0'
+            ENABLE_RSPAMD: '0'
+            ENABLE_CLAMAV: '0'
+            ENABLE_FAIL2BAN: '0'
+            ENABLE_POP3: '0'
+            ENABLE_UPDATE_CHECK: '0'
+        ports:
+            - '${SMTP_PUBLIC_PORT:-25}:25'
+        volumes:
+            - mail-data:/var/mail
+            - mail-state:/var/mail-state
+            - mail-logs:/var/log/mail
+            - mail-config:/tmp/docker-mailserver
+            - caddy-data:/caddy:ro
+        configs:
+            - source: mail-postfix-main
+              target: /tmp/docker-mailserver/postfix-main.cf
+        healthcheck:
+            test: "ss --listening --ipv4 --tcp | grep --silent ':smtp' || exit 1"
+            timeout: 3s
+            retries: 0
+        networks:
+            - mail
+
+configs:
+    mail-postfix-main:
+        content: |
+            mydestination = localhost.$$mydomain, localhost
+
+networks:
+    default:
+    mail:
+
+volumes:
+    postgres-data:
+    redis-data:
+    caddy-data:
+    caddy-config:
+    mail-data:
+    mail-state:
+    mail-logs:
+    mail-config:

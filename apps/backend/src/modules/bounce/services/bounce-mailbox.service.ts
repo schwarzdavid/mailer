@@ -68,6 +68,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
     }
 
     private async processMailbox(): Promise<void> {
+        const servername = this.configService.get('IMAP_TLS_SERVERNAME', { infer: true })
         const client = new ImapFlow({
             host: this.configService.getOrThrow('IMAP_HOST', { infer: true }),
             port: this.configService.get('IMAP_PORT', { infer: true }),
@@ -76,6 +77,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
                 user: this.configService.getOrThrow('IMAP_USER', { infer: true }),
                 pass: this.configService.getOrThrow('IMAP_PASSWORD', { infer: true }),
             },
+            ...(servername ? { tls: { servername } } : {}),
             logger: false,
         })
 

@@ -30,6 +30,7 @@
             "outputs": ["openapi.json"]
         },
         "lint": {
+            "dependsOn": ["^build"],
             "outputs": []
         },
         "lint:fix": {
@@ -40,9 +41,11 @@
             "outputs": []
         },
         "test": {
+            "dependsOn": ["^build"],
             "outputs": []
         },
         "test:cov": {
+            "dependsOn": ["^build"],
             "outputs": ["coverage/**"]
         }
     }

@@ -16,6 +16,7 @@
 **/src/generated/
 openapi/
 packages/api/assets/
+apps/backend/openapi.json
 
 # Turbo cache & TS build info
 **/.turbo/

@@ -4,6 +4,7 @@ export default {
     tabWidth: 4,
     singleQuote: true,
     trailingComma: 'all',
+    endOfLine: 'auto',
     overrides: [
         {
             files: ['package.json'],

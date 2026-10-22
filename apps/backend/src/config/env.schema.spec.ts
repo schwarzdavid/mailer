@@ -60,6 +60,17 @@ describe('envSchema', () => {
         expect(envSchema.safeParse(requiredEnv).success).toBe(true)
     })
 
+    it('keeps the TLS servernames optional and passes them through when set', () => {
+        expect(envSchema.parse(requiredEnv)).not.toHaveProperty('SMTP_TLS_SERVERNAME')
+        expect(
+            envSchema.parse({
+                ...requiredEnv,
+                SMTP_TLS_SERVERNAME: 'mx.example.com',
+                IMAP_TLS_SERVERNAME: 'mx.example.com',
+            }),
+        ).toMatchObject({ SMTP_TLS_SERVERNAME: 'mx.example.com', IMAP_TLS_SERVERNAME: 'mx.example.com' })
+    })
+
     describe('migrationEnvSchema', () => {
         it('accepts the encryption secret alone and defaults the database host', () => {
             const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x' })

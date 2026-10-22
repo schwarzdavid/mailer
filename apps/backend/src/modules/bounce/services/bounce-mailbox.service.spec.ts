@@ -126,6 +126,23 @@ describe('BounceMailboxService', () => {
         expect(imapClient.logout).toHaveBeenCalled()
     })
 
+    it('verifies the server certificate against IMAP_TLS_SERVERNAME when it differs from the host', async () => {
+        config.IMAP_HOST = 'mail'
+        config.IMAP_TLS_SERVERNAME = 'mx.example.com'
+
+        await service.pollRound()
+
+        expect(ImapFlow).toHaveBeenCalledWith(
+            expect.objectContaining({ host: 'mail', tls: { servername: 'mx.example.com' } }),
+        )
+    })
+
+    it('leaves the TLS options untouched when IMAP_TLS_SERVERNAME is unset', async () => {
+        await service.pollRound()
+
+        expect(vi.mocked(ImapFlow).mock.calls[0]?.[0]).not.toHaveProperty('tls')
+    })
+
     it('marks non-DSN messages seen without recording anything', async () => {
         parse.mockResolvedValue(null)
 

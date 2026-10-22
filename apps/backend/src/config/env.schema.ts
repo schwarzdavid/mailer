@@ -40,12 +40,14 @@ const envShape = {
     SMTP_SECURE: z.stringbool().default(false),
     SMTP_USER: z.string().default(''),
     SMTP_PASSWORD: z.string().default(''),
+    SMTP_TLS_SERVERNAME: z.string().optional(),
 
     IMAP_HOST: z.string().optional(),
     IMAP_PORT: port.default(993),
     IMAP_SECURE: z.stringbool().default(true),
     IMAP_USER: z.string().optional(),
     IMAP_PASSWORD: z.string().optional(),
+    IMAP_TLS_SERVERNAME: z.string().optional(),
 
     PUBLIC_API_RATE_LIMIT: z.coerce.number().int().positive().default(60),
     PUBLIC_API_RATE_TTL: z.coerce.number().int().positive().default(60_000),

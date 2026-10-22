@@ -36,6 +36,14 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
+function permanentRecipientRejectionCode(error: unknown): number | undefined {
+    if (!(error instanceof Error) || !('command' in error) || error.command !== 'RCPT TO') {
+        return undefined
+    }
+    const responseCode = 'responseCode' in error ? error.responseCode : undefined
+    return typeof responseCode === 'number' && responseCode >= 500 ? responseCode : undefined
+}
+
 @Injectable()
 export class MailService {
     private readonly logger = new Logger(MailService.name)
@@ -125,9 +133,8 @@ export class MailService {
     }
 
     private async recordRejection(emailAddress: string, error: unknown): Promise<void> {
-        const responseCode =
-            error instanceof Error ? (error as Error & { responseCode?: number }).responseCode : undefined
-        if (!responseCode || responseCode < 500) {
+        const responseCode = permanentRecipientRejectionCode(error)
+        if (responseCode === undefined) {
             return
         }
 
@@ -136,13 +143,12 @@ export class MailService {
                 emailAddress,
                 type: BounceType.PERMANENT,
                 statusCode: String(responseCode),
-                reason: error instanceof Error ? error.message : String(error),
+                reason: errorMessage(error),
                 messageId: null,
                 receivedAt: new Date(),
             })
         } catch (recordError) {
-            const message = recordError instanceof Error ? recordError.message : String(recordError)
-            this.logger.error(`Failed to record rejection bounce for ${emailAddress}: ${message}`)
+            this.logger.error(`Failed to record rejection bounce for ${emailAddress}: ${errorMessage(recordError)}`)
         }
     }
 }

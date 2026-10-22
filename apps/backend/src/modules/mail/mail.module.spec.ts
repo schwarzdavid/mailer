@@ -70,4 +70,20 @@ describe('MailModule transporter', () => {
 
         expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ secure: false }))
     })
+
+    it('verifies the server certificate against SMTP_TLS_SERVERNAME when it differs from the host', () => {
+        transporterFactory()(configFor({ SMTP_HOST: 'mail', SMTP_TLS_SERVERNAME: 'mx.example.com' }))
+
+        expect(createTransportMock).toHaveBeenCalledWith(
+            expect.objectContaining({ host: 'mail', tls: { servername: 'mx.example.com' } }),
+        )
+    })
+
+    it('leaves the TLS options untouched when SMTP_TLS_SERVERNAME is unset or empty', () => {
+        transporterFactory()(configFor({}))
+        transporterFactory()(configFor({ SMTP_TLS_SERVERNAME: '' }))
+
+        expect(createTransportMock.mock.calls[0]?.[0]).not.toHaveProperty('tls')
+        expect(createTransportMock.mock.calls[1]?.[0]).not.toHaveProperty('tls')
+    })
 })

@@ -11,7 +11,7 @@ What works so far:
 - **Inbound forms.** You define a form with its fields, security checks (reCAPTCHA, CSRF, honeypot) and receivers. A static website can then POST its contact form straight to a public endpoint. Each accepted submission goes out to the receivers as a DKIM-signed email, rendered from a versioned Handlebars template. The template editor has a live preview.
 - **Domains & DNS.** You register sending domains, the service generates DKIM keys for them, and it lists the DNS records each domain needs (SPF, DKIM, DMARC, MX, A/AAAA, PTR). A scheduled job checks those records regularly and reports their health.
 - **Platform sending domain.** You configure the service's own infrastructure domain once, in the settings or during first-start onboarding. It is used as the SPF include and as the bounce (return-path) domain.
-- **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and SMTP 5xx rejections are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
+- **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and recipients the SMTP server rejects with a 5xx at `RCPT TO` are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
 - **Projects.** Projects group inbound forms and the domains assigned to them.
 - **Users, roles & permissions.** Global roles (Super Admin, Admin, User and custom ones) carry global permissions; project roles (Viewer, Editor, Maintainer, Owner and custom ones) carry project permissions (`read`, `update`, `delete`, `forms.manage`, `api_keys.manage`, `members.manage`). Users get a global role plus optional extra permissions, project members get a project role plus optional extras, and nobody can grant more than they hold. Roles are managed under Administration → Roles. Access checks use CASL on both the backend and the frontend.
 
@@ -109,7 +109,104 @@ pnpm check                        # lint + typecheck + test + format check
 
 ## Production
 
-The backend never migrates the database on startup. Build it, then run the migrations as a one-shot step before starting the app (for example as a deploy job or an init container):
+### Deploying with Docker Compose
+
+The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the static frontend and the `/api` proxy), the backend, PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). Caddy publishes ports 80 and 443; the backend is reachable only through it, and `/docs` (Swagger UI) is not exposed. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The images `ghcr.io/schwarzdavid/mailer-backend` and `ghcr.io/schwarzdavid/mailer-web` are tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. They are built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
+
+1. **Before the first start:**
+    - Install Docker with Docker Compose 2.23.1 or newer on an `amd64` VPS.
+    - Create DNS A/AAAA records for `SITE_ADDRESS` and for `MAIL_HOSTNAME` (e.g. `mx.example.com`) pointing at the VPS.
+    - Set the PTR (reverse DNS) record of the VPS IP to `MAIL_HOSTNAME` in your provider's console.
+    - Make sure your provider allows outbound connections to port 25. Many block it by default (Hetzner Cloud, for example), and the mail server cannot deliver anything until it is unblocked.
+    - Open ports 25, 80 and 443 inbound.
+2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets, including `MAIL_PASSWORD` (`openssl rand -base64 48`). For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own.
+3. Run `docker login ghcr.io` with a personal access token that has `read:packages`, because the packages are private.
+4. **First deploy:** start the stack, and finish the first-time setup in the browser immediately, because the setup endpoints are public until the first user exists. There is no running backend yet, so the one-shot `migrate` service simply runs before the backend starts:
+
+    ```bash
+    docker compose pull && docker compose up -d
+    ```
+
+    Right after `up -d`, within two minutes, create the bounce mailbox and the `postmaster` alias. docker-mailserver waits two minutes for its first account and then restarts; if you miss the window, run the commands again once the container is back up. The accounts persist in the `mail-config` volume. The commands read `.env` in a subshell: values exported into your own shell would override later edits to `.env` in every following `docker compose` call.
+
+    ```bash
+    (set -a; . ./.env; docker compose exec mail setup email add "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
+    (set -a; . ./.env; docker compose exec mail setup alias add "postmaster@$MAIL_HOSTNAME" "bounce@$MAIL_HOSTNAME")
+    ```
+
+    The mail server uses the certificate that Caddy obtains for `MAIL_HOSTNAME`. Until Caddy has it, `mail` restarts and stays unhealthy; it comes up on its own once the certificate is there. Caddy renews it about every 60 days, and the mail server picks up the renewed certificate without a restart.
+
+5. **Verify the deployment** (after the first deploy and after every update):
+    - `docker compose ps` lists `postgres`, `redis`, `backend`, `web` and `mail` as `healthy`.
+    - The mail server presents a Let's Encrypt certificate for `MAIL_HOSTNAME` on port 25 (the issuer names Let's Encrypt, the subject `MAIL_HOSTNAME`):
+
+        ```bash
+        (. ./.env; openssl s_client -starttls smtp -connect "$MAIL_HOSTNAME:25" -servername "$MAIL_HOSTNAME" </dev/null 2>/dev/null | openssl x509 -noout -issuer -subject)
+        ```
+
+    - Send a test mail from the app (through an inbound form or the public send API) to an address you control. It arrives, and the project's "Sent mail" page lists it as sent.
+
+6. **Mail setup in the app:** configure `MAIL_HOSTNAME` as the sending domain, with the VPS IP as the server IP. The mail server only lets the backend send with the envelope sender `bounce@MAIL_HOSTNAME`, so any other sending domain fails. The app then shows the A, MX, SPF, DKIM and DMARC records to create. Warm up the IP: raise the sending volume slowly over the first weeks, because a new IP that suddenly sends a lot lands in spam folders or on blocklists.
+7. **Rotating secrets:**
+    - **Mail password:** set the new `MAIL_PASSWORD` in `.env`, then update the account and recreate the backend so it picks up the new value:
+
+        ```bash
+        (set -a; . ./.env; docker compose exec mail setup email update "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
+        docker compose up -d backend
+        ```
+
+    - **Database password:** the Postgres image applies `DB_PASSWORD` (`POSTGRES_PASSWORD`) only when it initialises an empty volume, so editing `.env` alone locks the backend out. Set the new `DB_PASSWORD` in `.env`, change it in the database, then recreate the backend:
+
+        ```bash
+        (set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "ALTER USER \"$DB_USERNAME\" PASSWORD '$DB_PASSWORD'")
+        docker compose up -d backend
+        ```
+
+8. **Update:** take `compose.yml` from the commit of the new image and diff `deploy/.env.example` from that commit against your `.env` for new or renamed keys. With a pinned tag, set `IMAGE_TAG` to the new `sha-<sha>`. First record the revision that is running now, which you need for a rollback:
+
+    ```bash
+    docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend)"
+    ```
+
+    Then run these commands in this order. Do not shorten them to `docker compose pull && docker compose up -d`: when the image changes, a bare `up -d` replaces the running backend first and only then runs the migration, so a failing migration would leave you with no backend. With the explicit `migrate` step, a failing migration stops the sequence and the old backend keeps serving:
+
+    ```bash
+    docker compose pull
+    docker compose run --rm migrate
+    docker compose up -d
+    docker image prune -f
+    ```
+
+    If `run --rm migrate` fails, do not run `docker compose up` in any form until you have rolled back (step 9) or fixed forward with a new image: any `up` replaces the still-serving backend with the pulled image.
+
+9. **Rollback:** migrations are not rolled back automatically. If the newer version applied migrations, first revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it:
+
+    ```bash
+    docker compose run --rm migrate node dist/migrate.js executed
+    docker compose run --rm migrate node dist/migrate.js down --to <name>
+    ```
+
+    Then set `IMAGE_TAG=sha-<sha>` of the recorded revision in `.env`, put that commit's `compose.yml` back, and run the same commands as for an update.
+
+10. **Updating docker-mailserver:** its tag is pinned in `compose.yml` (`ghcr.io/docker-mailserver/docker-mailserver:15.1.0`), and `IMAGE_TAG` does not touch it. To update it, bump the tag in `deploy/compose.yml`, re-run the local smoke test (step 11), then copy the file to the VPS and run `docker compose pull mail && docker compose up -d mail`.
+11. **Local smoke test:** build both images and run the stack from them. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks routing, caching and security headers, the login throttle and migrations. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. Caddy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
+
+    ```bash
+    SITE_ADDRESS=:80 DB_DATABASE=mailer DB_USERNAME=mailer DB_PASSWORD=x MAIL_HOSTNAME=x MAIL_PASSWORD=x IMAGE_TAG=local docker compose -f deploy/compose.yml -f deploy/compose.build.yml build
+    IMAGE_TAG=local bash deploy/smoke-test.sh
+    ```
+
+Compose sets `TRUST_PROXY=1` for the backend itself, matching Caddy as the single proxy hop (see below).
+
+The bounce mailbox grows over time: the backend only marks processed mails as `\Seen` and never deletes them (see open todos).
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` and `web` Docker targets and runs `deploy/smoke-test.sh` against them. Only `images` publishes: on a push to `main`, and nowhere else, it pushes both images to GHCR, each tagged `latest` and `sha-<7-char sha>`. Pull requests build and smoke-test the images but push nothing. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
+
+### Without Docker
+
+The backend never migrates the database on startup. Build it, then run the migrations as a one-shot step before starting the app:
 
 ```bash
 pnpm --filter backend build
@@ -138,6 +235,8 @@ Rate limits (login, public form submissions, setup) are counted per client IP ad
 
 Don't set `TRUST_PROXY=true` unless the backend can only be reached through the proxy: it trusts the left-most address in `X-Forwarded-For`, which any client can forge to get around the rate limits. When `TRUST_PROXY` is unset, `X-Forwarded-For` is ignored.
 
+In the Docker Compose deployment, `TRUST_PROXY` is fixed to `1` in `compose.yml` (Caddy is the single hop), and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, edit the value in `compose.yml`.
+
 Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, requests are let through without rate limiting and a warning is logged.
 
 ## Public send API
@@ -162,8 +261,9 @@ The key may also be passed as `?key=…`, but query strings tend to end up in lo
     - [ ] VERP / per-delivery return paths, so bounces can be linked back to the inbound form delivery that caused them
     - [ ] Pagination for the bounce log
     - [ ] Automatic purge of old bounce rows
+    - [ ] Purge processed mails from the bounce mailbox, which the poller only marks as `\Seen`
     - [ ] An e2e test suite for the bounce module
 - [ ] **Transactional domain creation** Creating a domain or the sending domain takes several steps that do not yet run in a single transaction.
 - [ ] **Branding settings** Customization options such as colors and a logo on the settings screen and in onboarding.
-- [ ] **Production deployment** Dockerfiles, a production compose/deployment setup and deployment documentation.
-- [ ] **CI pipeline** Run `pnpm check` and the e2e suite automatically on every push.
+- [x] **Production deployment** Dockerfiles, a production compose/deployment setup and deployment documentation.
+- [x] **CI pipeline** Run `pnpm check` and the e2e suite automatically on every push.

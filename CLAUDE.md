@@ -20,7 +20,11 @@ pnpm + Turborepo monorepo. Three workspaces (`apps/*`, `packages/*`):
 - `apps/frontend` — Vue 3 SPA (Vuetify, Vue Router, TanStack Query, vue-i18n, vee-validate + Zod).
 - `packages/api` — Typed client + Zod schemas generated from the backend's OpenAPI spec by `@hey-api/openapi-ts`. Consumed by the frontend as `api` (`workspace:*`).
 
+`.github/workflows/ci.yml` is the CI pipeline (`pnpm check`, both e2e suites, then image build, smoke test and GHCR publish on `main`).
+
 `dev/docker-compose.yml` provides local Postgres, Redis, MailHog (outbound SMTP sink), and GreenMail (SMTP :3025 / IMAP :3143 — the bounce mailbox: inject DSN mails via its SMTP port and the backend's IMAP poller ingests them). Runtime config comes from a root `.env` (gitignored, template in `.env.example`) — see keys referenced in `apps/backend/src/app.module.ts`, `apps/backend/src/modules/mail/mail.module.ts`, and the bounce module (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_ENCRYPTION_SECRET`, `SMTP_*`, `IMAP_*`).
+
+`Dockerfile` (stages `build`, `backend`, `web`) and `deploy/` (production `compose.yml`, `compose.build.yml` for local image builds, `Caddyfile`, `.env.example`, `smoke-test.sh`) make up the Docker Compose production deployment: Caddy serves the SPA and proxies `/api/*` to the backend, and the one-shot `migrate` service runs before `backend` starts. On a first deploy that ordering is enough; an update runs `docker compose run --rm migrate` explicitly between `pull` and `up -d` (README runbook), so a failing migration never replaces the serving backend. The `/docs` Swagger UI is not proxied. The `mail` service (docker-mailserver, hostname `MAIL_HOSTNAME`) publishes only port 25, which accepts mail for local recipients only (no relay); the backend submits on 587 and polls the bounce mailbox on 143 over the internal `mail` network, both STARTTLS with the account `bounce@MAIL_HOSTNAME`, and compose sets the backend's `SMTP_*`/`IMAP_*` from `MAIL_*` itself. The backend reaches it by the service name `mail` and verifies its certificate against `MAIL_HOSTNAME` through `SMTP_TLS_SERVERNAME`/`IMAP_TLS_SERVERNAME`; `MAIL_HOSTNAME` is deliberately not a network alias, so the domain DNS checks resolve it publicly. Its TLS certificate is the one Caddy obtains for `MAIL_HOSTNAME`, read from the `caddy-data` volume.
 
 ## Common commands
 
@@ -39,6 +43,8 @@ pnpm check          # lint + typecheck + test + format (the full gate)
 
 Target one workspace with `pnpm --filter backend <script>` or `pnpm --filter frontend <script>`.
 
+`lint`, `typecheck`, `test` and `test:cov` depend on `^build` in `turbo.json`, so on a fresh clone `pnpm lint`/`pnpm test` first build the backend, generate the spec and build the `api` client (Turbo-cached afterwards).
+
 Run a **single test file** (Vitest):
 
 ```bash
@@ -56,6 +62,13 @@ pnpm --filter backend migrate up   # apply migrations from source under tsx (umz
 pnpm --filter backend migrate create --name 019-example.ts --prefix NONE   # new migration file from umzug's default template (type it as MigrationFn<QueryInterface>); source-only (tsx), not for dist (the .ts suffix is required, the NNN is typed by hand)
 pnpm --filter backend build && pnpm --filter backend migrate:prod up       # the production path: node dist/migrate.js up
 pnpm build --filter api            # backend build → backend#generate (spec, no DB needed) → typed client
+```
+
+Production stack (needs Docker, curl and openssl; the smoke test uses the compose project `mailer-smoke`, ports 18080/18443/18025, and ends with `down -v`):
+
+```bash
+SITE_ADDRESS=:80 DB_DATABASE=mailer DB_USERNAME=mailer DB_PASSWORD=x MAIL_HOSTNAME=x MAIL_PASSWORD=x IMAGE_TAG=local docker compose -f deploy/compose.yml -f deploy/compose.build.yml build   # build both images
+IMAGE_TAG=local bash deploy/smoke-test.sh   # run the stack from the local images and check routing, headers, throttling, migrations, mail relay/submission/bounce ingestion and the mail certificate lifecycle
 ```
 
 ## Architecture

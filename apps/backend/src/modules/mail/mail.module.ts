@@ -23,12 +23,14 @@ import type { Env } from '../../config/env.schema.js'
             useFactory(configService: ConfigService<Env, true>) {
                 const user = configService.get('SMTP_USER', { infer: true })
                 const pass = configService.get('SMTP_PASSWORD', { infer: true })
+                const servername = configService.get('SMTP_TLS_SERVERNAME', { infer: true })
 
                 return createTransport({
                     host: configService.get('SMTP_HOST', { infer: true }),
                     port: configService.get('SMTP_PORT', { infer: true }),
                     secure: configService.get('SMTP_SECURE', { infer: true }),
                     auth: user ? { user, pass } : undefined,
+                    ...(servername ? { tls: { servername } } : {}),
                 })
             },
         },
