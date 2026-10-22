@@ -62,15 +62,17 @@ docker compose -f dev/docker-compose.yml up -d
 | MailHog    | Catches all outgoing mail | SMTP `1025`, web UI http://localhost:8025       |
 | GreenMail  | Bounce mailbox            | SMTP `3025` (inject DSNs), IMAP `3143` (polled) |
 
-### 4. Run the database migrations
+### 4. Database migrations
 
-Migrations are recorded in the `SequelizeMeta` table without a file extension. If your dev database was already migrated by an earlier version, it still holds `.ts`-suffixed names. Convert them once **before** running `migrate up`, otherwise every migration would run again and fail:
+The backend applies pending migrations itself every time it starts, under `pnpm dev` as well, and refuses to start if one of them fails. Each run is a single transaction, so a failed run leaves the database as it was.
+
+Migrations are recorded in the `SequelizeMeta` table without a file extension. If your dev database was already migrated by an earlier version, it still holds `.ts`-suffixed names. Convert them once **before** the backend starts, otherwise every migration would run again and fail (a fresh database needs no rename):
 
 ```sql
 UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
 ```
 
-Then apply the migrations (a fresh database needs no rename):
+To apply them without starting the backend, or to inspect and revert them, use the migration CLI (`up | down | pending | executed`):
 
 ```bash
 pnpm --filter backend migrate up
@@ -111,7 +113,7 @@ pnpm check                        # lint + typecheck + test + format check
 
 ### Deploying with Docker Compose
 
-The production stack in `deploy/compose.yml` runs the backend, which serves the built frontend and the API from one image, a stock Caddy reverse proxy (service `proxy`, automatic HTTPS), PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). The Caddyfile is inline in `compose.yml`, so the VPS needs only `compose.yml` and `.env`. `proxy` terminates TLS for `SITE_ADDRESS` and `MAIL_HOSTNAME`, compresses responses, adds `X-Robots-Tag: noindex, nofollow` and forwards every request to the backend. It publishes ports 80 and 443; the backend is reachable only through it. The image sets `NODE_ENV=production`, and `compose.yml` pins it, so a value in `.env` does not override it. With it, the backend serves `/app/public` (the built frontend, copied in by the image) and refuses to start if `index.html` is missing: `/assets/*` with a one-year `immutable` cache, other files and the `index.html` fallback for client routes with `no-cache`. A missing `/assets/*` file and an unknown `/api/*` path return a 404, never the SPA. `NODE_ENV=production` also turns off Swagger UI: `/docs` exists only outside production, so in production it falls back to the SPA. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The single image `ghcr.io/schwarzdavid/mailer-backend` (used by `backend` and the one-shot `migrate`) is tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. `proxy` runs the stock `caddy:2.11.7-alpine`, pinned in `compose.yml`, and `IMAGE_TAG` does not touch it. The backend image is built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
+The production stack in `deploy/compose.yml` runs the backend, which serves the built frontend and the API from one image, a stock Caddy reverse proxy (service `proxy`, automatic HTTPS), PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). The Caddyfile is inline in `compose.yml`, so the VPS needs only `compose.yml` and `.env`. `proxy` terminates TLS for `SITE_ADDRESS` and `MAIL_HOSTNAME`, compresses responses, adds `X-Robots-Tag: noindex, nofollow` and forwards every request to the backend. It publishes ports 80 and 443; the backend is reachable only through it. The image sets `NODE_ENV=production`, and `compose.yml` pins it, so a value in `.env` does not override it. With it, the backend serves `/app/public` (the built frontend, copied in by the image) and refuses to start if `index.html` is missing: `/assets/*` with a one-year `immutable` cache, other files and the `index.html` fallback for client routes with `no-cache`. A missing `/assets/*` file and an unknown `/api/*` path return a 404, never the SPA. `NODE_ENV=production` also turns off Swagger UI: `/docs` exists only outside production, so in production it falls back to the SPA. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The single image `ghcr.io/schwarzdavid/mailer-backend` (the `backend` service, which applies pending database migrations itself whenever it starts) is tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. `proxy` runs the stock `caddy:2.11.7-alpine`, pinned in `compose.yml`, and `IMAGE_TAG` does not touch it. The backend image is built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
 
 1. **Before the first start:**
     - Install Docker with Docker Compose 2.23.1 or newer on an `amd64` VPS.
@@ -121,7 +123,7 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     - Open ports 25, 80 and 443 inbound.
 2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets, including `MAIL_PASSWORD` (`openssl rand -base64 48`). For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own.
 3. Run `docker login ghcr.io` with a personal access token that has `read:packages`, because the packages are private.
-4. **First deploy:** start the stack, and finish the first-time setup in the browser immediately, because the setup endpoints are public until the first user exists. There is no running backend yet, so the one-shot `migrate` service simply runs before the backend starts:
+4. **First deploy:** start the stack, and finish the first-time setup in the browser immediately, because the setup endpoints are public until the first user exists. The backend creates the database schema itself when it starts:
 
     ```bash
     docker compose pull && docker compose up -d
@@ -168,30 +170,30 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend)"
     ```
 
-    Then run these commands in this order. Do not shorten them to `docker compose pull && docker compose up -d`: when the image changes, a bare `up -d` replaces the running backend first and only then runs the migration, so a failing migration would leave you with no backend. With the explicit `migrate` step, a failing migration stops the sequence and the old backend keeps serving:
+    Then pull and restart. The new backend applies its migrations when it starts:
 
     ```bash
     docker compose pull
-    docker compose run --rm migrate
-    docker compose up -d
+    docker compose up -d --remove-orphans
     docker image prune -f
     ```
 
-    A host that ran the earlier stack with a separate `web` service needs `docker compose up -d --remove-orphans` for this one update, because the old `web` container otherwise keeps ports 80 and 443. A fresh VPS needs nothing extra.
+    `--remove-orphans` removes services that the new `compose.yml` no longer has, such as the `migrate` and `web` services of earlier versions.
 
-    If `run --rm migrate` fails, the whole migration run is rolled back, so the database is unchanged and the old backend keeps serving against it. Do not run `docker compose up` in any form until you have set `IMAGE_TAG` back to the running version or fixed forward with a new image: any `up` replaces the still-serving backend with the pulled image.
+    If a migration fails, the backend logs `Migration <name> (up) failed`, does not start and keeps restarting; the site is down until you act (`docker compose logs backend`). The failed migration run is rolled back as a whole, so the database is exactly as before the update. Either set `IMAGE_TAG` back to the recorded revision, put that commit's `compose.yml` back and run `docker compose up -d`, or fix forward with a new image.
 
-9. **Rollback:** a failed migration run rolls itself back, but migrations that succeeded stay applied. If the newer version applied migrations, first revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it:
+9. **Rollback after a successful update:** migrations that succeeded stay applied when you go back to an older image, and the older backend does not know them. If the newer version applied migrations and you want them reverted, stop the backend and revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it, all in one transaction:
 
     ```bash
-    docker compose run --rm migrate node dist/migrate.js executed
-    docker compose run --rm migrate node dist/migrate.js down --to <name>
+    docker compose stop backend
+    docker compose run --rm backend node dist/migrate.js executed
+    docker compose run --rm backend node dist/migrate.js down --to <name>
     ```
 
     Then set `IMAGE_TAG=sha-<first 7 characters of the recorded revision>` in `.env`, put that commit's `compose.yml` back, and run the same commands as for an update.
 
 10. **Updating docker-mailserver and Caddy:** their tags are pinned in `compose.yml` (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1` and `caddy:2.11.7-alpine`), and `IMAGE_TAG` does not touch them. To update one, bump the tag in `deploy/compose.yml`, re-run the local smoke test (step 11), then copy the file to the VPS and run `docker compose pull mail && docker compose up -d mail` (or `proxy`).
-11. **Local smoke test:** build the backend image and run the stack from it. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, the login throttle and migrations. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
+11. **Local smoke test:** build the backend image and run the stack from it. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, the login throttle, that the backend migrates the database when it starts, that a failing migration keeps it from serving until the migrations can run, and that `up -d` replaces it. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
 
     ```bash
     docker build -t ghcr.io/schwarzdavid/mailer-backend:local .
@@ -208,17 +210,18 @@ The bounce mailbox grows over time: the backend only marks processed mails as `\
 
 ### Without Docker
 
-The backend never migrates the database on startup. Build it, then run the migrations as a one-shot step before starting the app:
+Build the backend and start it. It applies pending migrations itself before it starts serving:
 
 ```bash
 pnpm --filter backend build
-pnpm --filter backend migrate:prod up     # runs node dist/migrate.js up; needs the DB_* and BACKEND_ENCRYPTION_SECRET variables
 pnpm --filter backend start:prod
 ```
 
+`pnpm --filter backend migrate:prod <command>` (`node dist/migrate.js`, needs only the `DB_*` variables and `BACKEND_ENCRYPTION_SECRET`) applies, lists or reverts migrations without starting the app.
+
 `NODE_ENV` (`development`, `test` or `production`, default `development`) applies here. Set to `production`, it turns off Swagger UI at `/docs`, and the backend serves the built frontend from `apps/backend/public` (`/app/public` in the image) and refuses to start if `index.html` is missing there, so copy `apps/frontend/dist` to `apps/backend/public` first. It serves that directory at the root, falls back to its `index.html` for client routes and answers missing `/assets/*` files and unknown `/api/*` paths with a 404. Outside production it serves no static files. Put a TLS-terminating reverse proxy in front of it in production (see below).
 
-Before the first `migrate:prod up` against a database that an earlier version already migrated, run this one-off rename, because migration names are now stored without a file extension and otherwise every migration looks pending. Fresh databases don't need it.
+Before the first start against a database that an earlier version already migrated, run this one-off rename, because migration names are now stored without a file extension and otherwise every migration looks pending. Fresh databases don't need it.
 
 ```sql
 UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');

@@ -51,13 +51,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
             buildBackend(),
         ])
 
-        log('Applying migrations')
-        await runCommand(`node "${join(backendWorkDir, 'dist', 'migrate.js')}" up`, {
-            cwd: backendDir,
-            env: { ...infrastructure.backendEnv },
-            logFile: join(workDir, 'migrate.log'),
-        })
-
         log('Generating the OpenAPI spec')
         await runCommand(`node "${join(backendWorkDir, 'dist', 'openapi.js')}" "${generatedSpecPath}"`, {
             cwd: backendDir,

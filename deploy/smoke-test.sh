@@ -420,39 +420,39 @@ done
     fail "mail was restarted or replaced during renewal"
 pass "renewed certificate is served on 25 and 143 without a restart ($initial_serial -> $renewed_serial)"
 
-pending=$(dc run --rm -T migrate node dist/migrate.js pending --json | tail -n 1 | tr -d '[:space:]')
-[ "$pending" = "[]" ] || fail "re-running migrations reports pending: $pending"
-pass "migrations are idempotent"
+pending=$(dc exec -T backend node dist/migrate.js pending --json | tail -n 1 | tr -d '[:space:]')
+[ "$pending" = "[]" ] || fail "the backend started with pending migrations: $pending"
+pass "the backend applied every migration when it started"
+
+failing_migration=017-harden-inbound-forms
+dc exec -T postgres psql -U mailer -d mailer -qc "DELETE FROM \"SequelizeMeta\" WHERE name = '$failing_migration'"
+dc restart backend >/dev/null
+deadline=$((SECONDS + 60))
+until dc logs backend 2>&1 | grep -q "Migration $failing_migration (up) failed"; do
+    [ "$SECONDS" -lt "$deadline" ] || fail "the backend did not report the failing migration $failing_migration within 60 s"
+    sleep 2
+done
+failed_status=$(curl -sS -o /dev/null -w "%{http_code}" "$base/api/setup/status" || true)
+[ "$failed_status" != 200 ] || fail "the backend serves although its migration failed"
+dc exec -T postgres psql -U mailer -d mailer -qc "INSERT INTO \"SequelizeMeta\" (name) VALUES ('$failing_migration')"
+dc restart backend >/dev/null
+wait_healthy backend 120 || fail "the backend did not recover within 120 s once its migrations could run"
+request GET /api/setup/status
+expect_status 200 "backend after the failing migration was resolved"
+pass "a failing migration keeps the backend from serving (HTTP $failed_status), and it recovers once the migrations run"
 
 old_backend=$(dc ps -q backend)
 [ -n "$old_backend" ] || fail "no running backend container"
-cat >"$tmp/compose.fail.yml" <<'YML'
-services:
-    migrate:
-        command: ["node", "-e", "process.exit(1)"]
-    backend:
-        environment:
-            SMOKE_REVISION: "2"
-YML
-if dc -f "$tmp/compose.fail.yml" run --rm -T migrate && dc -f "$tmp/compose.fail.yml" up -d --pull missing; then
-    fail "update sequence with a failing migration exited zero"
-fi
-request GET /api/setup/status
-expect_status 200 "backend after failed migration"
-[ "$(dc ps -q backend)" = "$old_backend" ] || fail "backend container was replaced after a failed migration"
-pass "failed migration step keeps the old backend serving"
-
 cat >"$tmp/compose.revision.yml" <<'YML'
 services:
     backend:
         environment:
             SMOKE_REVISION: "2"
 YML
-dc -f "$tmp/compose.revision.yml" run --rm -T migrate
 dc -f "$tmp/compose.revision.yml" up -d --pull missing --wait
 request GET /api/setup/status
 expect_status 200 "backend after update"
 [ "$(dc ps -q backend)" != "$old_backend" ] || fail "update did not replace the backend container"
-pass "migrate then up replaces the backend"
+pass "up -d replaces the backend"
 
 echo "smoke test passed"
