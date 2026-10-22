@@ -4,6 +4,7 @@ import { envSchema, migrationEnvSchema } from './env.schema.js'
 const requiredEnv: Record<string, string> = {
     BACKEND_JWT_SECRET: 'jwt-secret',
     BACKEND_ENCRYPTION_SECRET: 'encryption-secret',
+    MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '1025',
 }
@@ -39,12 +40,25 @@ describe('envSchema', () => {
         expect(envSchema.safeParse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '0' }).success).toBe(false)
     })
 
-    it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'SMTP_HOST', 'SMTP_PORT'])('requires %s', (key) => {
-        const result = envSchema.safeParse({ ...requiredEnv, [key]: undefined })
-
-        expect(result.success).toBe(false)
-        expect(result.error?.issues.map((issue) => issue.path)).toContainEqual([key])
+    it('normalizes MAIL_HOSTNAME to lower case without surrounding whitespace', () => {
+        expect(envSchema.parse({ ...requiredEnv, MAIL_HOSTNAME: ' MX.Example.com ' }).MAIL_HOSTNAME).toBe(
+            'mx.example.com',
+        )
     })
+
+    it.each(['localhost', 'https://mx.example.com', 'mx example.com', ''])('rejects "%s" as MAIL_HOSTNAME', (value) => {
+        expect(envSchema.safeParse({ ...requiredEnv, MAIL_HOSTNAME: value }).success).toBe(false)
+    })
+
+    it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'MAIL_HOSTNAME', 'SMTP_HOST', 'SMTP_PORT'])(
+        'requires %s',
+        (key) => {
+            const result = envSchema.safeParse({ ...requiredEnv, [key]: undefined })
+
+            expect(result.success).toBe(false)
+            expect(result.error?.issues.map((issue) => issue.path)).toContainEqual([key])
+        },
+    )
 
     it('rejects ports outside the valid range', () => {
         expect(envSchema.safeParse({ ...requiredEnv, SMTP_PORT: '70000' }).success).toBe(false)

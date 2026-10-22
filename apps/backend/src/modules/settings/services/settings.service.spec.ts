@@ -1,8 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/sequelize'
 import { ConflictException, Logger, NotFoundException } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import { Sequelize } from 'sequelize-typescript'
+import type { Transaction } from 'sequelize'
+import { resolve4, resolve6 } from 'node:dns/promises'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SettingsService } from './settings.service.js'
+import { SENDING_DOMAIN_LOCK_KEY } from '../settings.constants.js'
 import { SettingsModel } from '../models/settings.model.js'
 import { Settings, SettingsCreate } from '../interfaces/settings.interface.js'
 import { DomainService } from '../../domain/services/domain.service.js'
@@ -15,6 +20,16 @@ import {
     DomainDnsRecordUse,
 } from '../../domain/interfaces/domain-dns.interface.js'
 
+vi.mock('node:dns/promises', () => ({
+    resolve4: vi.fn(),
+    resolve6: vi.fn(),
+}))
+
+const resolveA = vi.mocked(resolve4)
+const resolveAaaa = vi.mocked(resolve6)
+
+const MAIL_HOSTNAME = 'mail.sending-domain.org'
+
 type SettingsRow = Settings & { get(options: { plain: true }): Settings; save: Mock<() => Promise<void>> }
 
 const settingsRow = (base: Settings): SettingsRow => ({
@@ -25,9 +40,12 @@ const settingsRow = (base: Settings): SettingsRow => ({
 
 describe('SettingsService', () => {
     let service: SettingsService
+    let query: Mock<Sequelize['query']>
+    let transaction: Mock<Sequelize['transaction']>
     let findOne: Mock<() => Promise<SettingsRow | null>>
     let create: Mock<(values: SettingsCreate, options: { returning: true }) => Promise<SettingsRow>>
     let getDomainById: Mock<DomainService['getDomainById']>
+    let getDomainByFqdn: Mock<DomainService['getDomainByFqdn']>
     let createSendingDomain: Mock<DomainService['createSendingDomain']>
     let recreateSendingDomainRecords: Mock<DomainService['recreateSendingDomainRecords']>
     let deleteDomain: Mock<DomainService['deleteDomain']>
@@ -41,7 +59,7 @@ describe('SettingsService', () => {
             type: DomainDnsRecordType.TXT,
             use: DomainDnsRecordUse.SPF,
             status: DomainDnsRecordStatus.INVALID,
-            host: 'mail.sending-domain.org',
+            host: MAIL_HOSTNAME,
             value: 'v=spf1 ip4:203.0.113.10 -all',
             current: null,
             createdAt: new Date(),
@@ -51,12 +69,14 @@ describe('SettingsService', () => {
 
     const sendingDomain: Domain = {
         domainId: 10,
-        fqdn: 'mail.sending-domain.org',
+        fqdn: MAIL_HOSTNAME,
         rootDomain: 'sending-domain.org',
         activeDkimId: 77,
         dnsRecords: records,
         lastCheckedAt: null,
     }
+
+    const staleDomain: Domain = { ...sendingDomain, fqdn: 'mail.old-sending.org', rootDomain: 'old-sending.org' }
 
     const reloadedDomain: Domain = {
         ...sendingDomain,
@@ -74,15 +94,30 @@ describe('SettingsService', () => {
         updatedAt: new Date(),
     }
 
+    const expectLockTaken = () => {
+        expect(query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(:key)', {
+            replacements: { key: SENDING_DOMAIN_LOCK_KEY },
+            transaction: transactionStub,
+        })
+    }
+
+    const transactionStub = {} as Transaction
+
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
         vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
+        query = vi.fn<typeof query>().mockResolvedValue([[], 0])
+        transaction = vi
+            .fn<typeof transaction>()
+            .mockImplementation((callback) => (callback as (t: Transaction) => Promise<unknown>)(transactionStub))
         findOne = vi.fn<typeof findOne>().mockResolvedValue(null)
         create = vi
             .fn<typeof create>()
             .mockImplementation((values) => Promise.resolve(settingsRow({ ...settings, ...values })))
         getDomainById = vi.fn<typeof getDomainById>().mockResolvedValue(sendingDomain)
+        getDomainByFqdn = vi.fn<typeof getDomainByFqdn>().mockResolvedValue(null)
         createSendingDomain = vi.fn<typeof createSendingDomain>().mockResolvedValue(sendingDomain)
         recreateSendingDomainRecords = vi.fn<typeof recreateSendingDomainRecords>().mockResolvedValue(sendingDomain)
         deleteDomain = vi.fn<typeof deleteDomain>().mockResolvedValue(undefined)
@@ -92,9 +127,17 @@ describe('SettingsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 SettingsService,
+                { provide: Sequelize, useValue: { transaction, query } },
+                { provide: ConfigService, useValue: { get: () => MAIL_HOSTNAME } },
                 {
                     provide: DomainService,
-                    useValue: { getDomainById, createSendingDomain, recreateSendingDomainRecords, deleteDomain },
+                    useValue: {
+                        getDomainById,
+                        getDomainByFqdn,
+                        createSendingDomain,
+                        recreateSendingDomainRecords,
+                        deleteDomain,
+                    },
                 },
                 { provide: DomainDnsService, useValue: { regenerateCustomerSpfRecords, reloadDnsRecords } },
                 { provide: getModelToken(SettingsModel), useValue: { findOne, create } },
@@ -106,6 +149,8 @@ describe('SettingsService', () => {
 
     afterEach(() => {
         vi.restoreAllMocks()
+        resolveA.mockReset()
+        resolveAaaa.mockReset()
     })
 
     describe('getSettings', () => {
@@ -169,7 +214,7 @@ describe('SettingsService', () => {
 
             expect(getDomainById).toHaveBeenCalledWith(10)
             expect(result).toEqual({
-                fqdn: 'mail.sending-domain.org',
+                fqdn: MAIL_HOSTNAME,
                 serverIpv4: '203.0.113.10',
                 serverIpv6: null,
                 lastCheckedAt: null,
@@ -178,13 +223,57 @@ describe('SettingsService', () => {
         })
     })
 
+    describe('getSendingDomainProposal', () => {
+        it('proposes MAIL_HOSTNAME with the first addresses it resolves to', async () => {
+            resolveA.mockResolvedValue(['203.0.113.10', '203.0.113.11'])
+            resolveAaaa.mockResolvedValue(['2001:db8::10'])
+
+            await expect(service.getSendingDomainProposal()).resolves.toEqual({
+                fqdn: MAIL_HOSTNAME,
+                serverIpv4: '203.0.113.10',
+                serverIpv6: '2001:db8::10',
+            })
+            expect(resolveA).toHaveBeenCalledWith(MAIL_HOSTNAME)
+            expect(resolveAaaa).toHaveBeenCalledWith(MAIL_HOSTNAME)
+        })
+
+        it('leaves the addresses empty when the records do not exist', async () => {
+            resolveA.mockRejectedValue(Object.assign(new Error('queryA ENOTFOUND'), { code: 'ENOTFOUND' }))
+            resolveAaaa.mockRejectedValue(Object.assign(new Error('queryAaaa ENODATA'), { code: 'ENODATA' }))
+
+            await expect(service.getSendingDomainProposal()).resolves.toEqual({
+                fqdn: MAIL_HOSTNAME,
+                serverIpv4: null,
+                serverIpv6: null,
+            })
+        })
+
+        it('keeps the IPv4 address when only the IPv6 lookup fails', async () => {
+            resolveA.mockResolvedValue(['203.0.113.10'])
+            resolveAaaa.mockRejectedValue(new Error('queryAaaa ETIMEOUT'))
+
+            await expect(service.getSendingDomainProposal()).resolves.toEqual({
+                fqdn: MAIL_HOSTNAME,
+                serverIpv4: '203.0.113.10',
+                serverIpv6: null,
+            })
+        })
+    })
+
     describe('configureSendingDomain', () => {
-        const config = { fqdn: 'mail.sending-domain.org', serverIpv4: '203.0.113.10', serverIpv6: null }
+        const ips = { serverIpv4: '203.0.113.10', serverIpv6: null }
 
-        it('creates the domain and the settings row on first configuration', async () => {
-            const result = await service.configureSendingDomain(config)
+        it('takes the sending domain lock before changing anything', async () => {
+            await service.configureSendingDomain(ips)
 
-            expect(createSendingDomain).toHaveBeenCalledWith('mail.sending-domain.org', {
+            expectLockTaken()
+            expect(query.mock.invocationCallOrder[0]).toBeLessThan(createSendingDomain.mock.invocationCallOrder[0]!)
+        })
+
+        it('creates the MAIL_HOSTNAME domain and the settings row on first configuration', async () => {
+            const result = await service.configureSendingDomain(ips)
+
+            expect(createSendingDomain).toHaveBeenCalledWith(MAIL_HOSTNAME, {
                 serverIpv4: '203.0.113.10',
                 serverIpv6: null,
             })
@@ -197,13 +286,13 @@ describe('SettingsService', () => {
             expect(result.records).toEqual(reloadedDomain.dnsRecords)
         })
 
-        it('recreates the record set when the fqdn is unchanged', async () => {
+        it('recreates the record set when the stored domain matches MAIL_HOSTNAME', async () => {
             const row = settingsRow(settings)
             findOne.mockResolvedValue(row)
 
-            await service.configureSendingDomain({ ...config, serverIpv6: '2001:db8::1' })
+            await service.configureSendingDomain({ ...ips, serverIpv6: '2001:db8::1' })
 
-            expect(recreateSendingDomainRecords).toHaveBeenCalledWith('mail.sending-domain.org', {
+            expect(recreateSendingDomainRecords).toHaveBeenCalledWith(MAIL_HOSTNAME, {
                 serverIpv4: '203.0.113.10',
                 serverIpv6: '2001:db8::1',
             })
@@ -213,16 +302,17 @@ describe('SettingsService', () => {
             expect(row.save).toHaveBeenCalledOnce()
         })
 
-        it('creates a new domain and deletes the old one when the fqdn changes', async () => {
+        it('replaces a stored domain that differs from MAIL_HOSTNAME', async () => {
             const row = settingsRow(settings)
             findOne.mockResolvedValue(row)
-            const newDomain: Domain = { ...sendingDomain, domainId: 11, fqdn: 'mail.other-sending.org' }
+            getDomainById.mockResolvedValue(staleDomain)
+            const newDomain: Domain = { ...sendingDomain, domainId: 11 }
             createSendingDomain.mockResolvedValue(newDomain)
             reloadDnsRecords.mockResolvedValue(newDomain)
 
-            await service.configureSendingDomain({ ...config, fqdn: 'mail.other-sending.org' })
+            await service.configureSendingDomain(ips)
 
-            expect(createSendingDomain).toHaveBeenCalledWith('mail.other-sending.org', {
+            expect(createSendingDomain).toHaveBeenCalledWith(MAIL_HOSTNAME, {
                 serverIpv4: '203.0.113.10',
                 serverIpv6: null,
             })
@@ -237,9 +327,69 @@ describe('SettingsService', () => {
         it('returns the unrefreshed records when the initial dns check fails', async () => {
             reloadDnsRecords.mockRejectedValue(new Error('resolver down'))
 
-            const result = await service.configureSendingDomain(config)
+            const result = await service.configureSendingDomain(ips)
 
             expect(result.records).toEqual(records)
+        })
+    })
+
+    describe('reconcileSendingDomain', () => {
+        it('runs on application bootstrap', async () => {
+            findOne.mockResolvedValue(settingsRow(settings))
+            getDomainById.mockResolvedValue(staleDomain)
+
+            await service.onApplicationBootstrap()
+
+            expectLockTaken()
+            expect(createSendingDomain).toHaveBeenCalledWith(MAIL_HOSTNAME, expect.anything())
+        })
+
+        it('does nothing before a sending domain is configured', async () => {
+            await service.reconcileSendingDomain()
+
+            expect(getDomainById).not.toHaveBeenCalled()
+            expect(createSendingDomain).not.toHaveBeenCalled()
+            expect(create).not.toHaveBeenCalled()
+        })
+
+        it('leaves a sending domain that matches MAIL_HOSTNAME untouched', async () => {
+            findOne.mockResolvedValue(settingsRow(settings))
+
+            await service.reconcileSendingDomain()
+
+            expect(createSendingDomain).not.toHaveBeenCalled()
+            expect(recreateSendingDomainRecords).not.toHaveBeenCalled()
+            expect(deleteDomain).not.toHaveBeenCalled()
+            expect(regenerateCustomerSpfRecords).not.toHaveBeenCalled()
+        })
+
+        it('switches a stale sending domain to MAIL_HOSTNAME with the stored addresses', async () => {
+            const row = settingsRow({ ...settings, serverIpv6: '2001:db8::10' })
+            findOne.mockResolvedValue(row)
+            getDomainById.mockResolvedValue(staleDomain)
+            const newDomain: Domain = { ...sendingDomain, domainId: 11 }
+            createSendingDomain.mockResolvedValue(newDomain)
+
+            await service.reconcileSendingDomain()
+
+            expect(deleteDomain).toHaveBeenCalledWith(10)
+            expect(createSendingDomain).toHaveBeenCalledWith(MAIL_HOSTNAME, {
+                serverIpv4: '203.0.113.10',
+                serverIpv6: '2001:db8::10',
+            })
+            expect(row.sendingDomainId).toBe(11)
+            expect(regenerateCustomerSpfRecords).toHaveBeenCalledWith(newDomain)
+        })
+
+        it('refuses to switch when MAIL_HOSTNAME is registered as a customer domain', async () => {
+            findOne.mockResolvedValue(settingsRow(settings))
+            getDomainById.mockResolvedValue(staleDomain)
+            getDomainByFqdn.mockResolvedValue({ ...sendingDomain, domainId: 12 })
+
+            await expect(service.reconcileSendingDomain()).rejects.toThrow(/registered as a customer domain/)
+            expect(getDomainByFqdn).toHaveBeenCalledWith(MAIL_HOSTNAME)
+            expect(deleteDomain).not.toHaveBeenCalled()
+            expect(createSendingDomain).not.toHaveBeenCalled()
         })
     })
 

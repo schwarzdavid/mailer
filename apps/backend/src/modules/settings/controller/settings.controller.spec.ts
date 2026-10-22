@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SettingsController } from './settings.controller.js'
 import { SettingsService } from '../services/settings.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
-import { SendingDomain } from '../interfaces/settings.interface.js'
+import { SendingDomain, SendingDomainProposal } from '../interfaces/settings.interface.js'
 import { SettingsDto } from '../dtos/settings.dto.js'
 import {
     DomainDnsRecordStatus,
@@ -34,14 +34,22 @@ const sendingDomain: SendingDomain = {
     ],
 }
 
+const proposal: SendingDomainProposal = {
+    fqdn: 'mail.sending-domain.org',
+    serverIpv4: '203.0.113.10',
+    serverIpv6: null,
+}
+
 describe('SettingsController', () => {
     let controller: SettingsController
     let getSendingDomain: Mock<SettingsService['getSendingDomain']>
+    let getSendingDomainProposal: Mock<SettingsService['getSendingDomainProposal']>
     let configureSendingDomain: Mock<SettingsService['configureSendingDomain']>
     let refreshSendingDomain: Mock<SettingsService['refreshSendingDomain']>
 
     beforeEach(async () => {
         getSendingDomain = vi.fn<typeof getSendingDomain>().mockResolvedValue(sendingDomain)
+        getSendingDomainProposal = vi.fn<typeof getSendingDomainProposal>().mockResolvedValue(proposal)
         configureSendingDomain = vi.fn<typeof configureSendingDomain>().mockResolvedValue(sendingDomain)
         refreshSendingDomain = vi.fn<typeof refreshSendingDomain>().mockResolvedValue(sendingDomain)
 
@@ -50,7 +58,12 @@ describe('SettingsController', () => {
             providers: [
                 {
                     provide: SettingsService,
-                    useValue: { getSendingDomain, configureSendingDomain, refreshSendingDomain },
+                    useValue: {
+                        getSendingDomain,
+                        getSendingDomainProposal,
+                        configureSendingDomain,
+                        refreshSendingDomain,
+                    },
                 },
             ],
         })
@@ -101,16 +114,20 @@ describe('SettingsController', () => {
         })
     })
 
+    describe('getSendingDomainProposal', () => {
+        it('returns the proposal from the service', async () => {
+            await expect(controller.getSendingDomainProposal()).resolves.toBe(proposal)
+        })
+    })
+
     describe('configureSendingDomain', () => {
-        it('passes the configuration through to the service', async () => {
+        it('passes the server addresses through to the service', async () => {
             const result = await controller.configureSendingDomain({
-                fqdn: 'mail.sending-domain.org',
                 serverIpv4: '203.0.113.10',
                 serverIpv6: '2001:db8::10',
             })
 
             expect(configureSendingDomain).toHaveBeenCalledWith({
-                fqdn: 'mail.sending-domain.org',
                 serverIpv4: '203.0.113.10',
                 serverIpv6: '2001:db8::10',
             })
@@ -118,10 +135,9 @@ describe('SettingsController', () => {
         })
 
         it('normalizes an omitted IPv6 address to null', async () => {
-            await controller.configureSendingDomain({ fqdn: 'mail.sending-domain.org', serverIpv4: '203.0.113.10' })
+            await controller.configureSendingDomain({ serverIpv4: '203.0.113.10' })
 
             expect(configureSendingDomain).toHaveBeenCalledWith({
-                fqdn: 'mail.sending-domain.org',
                 serverIpv4: '203.0.113.10',
                 serverIpv6: null,
             })

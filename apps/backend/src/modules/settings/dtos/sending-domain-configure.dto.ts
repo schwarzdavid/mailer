@@ -1,16 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose } from 'class-transformer'
-import { IsFQDN, IsIP, IsNotEmpty, IsOptional, IsString } from 'class-validator'
-import { IsIcann } from '../../domain/validators/IsIcann.js'
+import { IsIP, IsOptional } from 'class-validator'
 
 export class SendingDomainConfigureDto {
-    @Expose()
-    @IsString()
-    @IsNotEmpty()
-    @IsFQDN()
-    @IsIcann()
-    fqdn!: string
-
     @Expose()
     @IsIP('4')
     serverIpv4!: string

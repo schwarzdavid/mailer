@@ -1,5 +1,6 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers'
+import { sendingDomain } from './fixtures.ts'
 
 export interface BackendEnv {
     DB_HOST: string
@@ -11,6 +12,7 @@ export interface BackendEnv {
     REDIS_PORT: string
     BACKEND_JWT_SECRET: string
     BACKEND_ENCRYPTION_SECRET: string
+    MAIL_HOSTNAME: string
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
@@ -71,6 +73,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
             REDIS_PORT: String(redis.getMappedPort(6379)),
             BACKEND_JWT_SECRET: 'playwright-jwt-secret',
             BACKEND_ENCRYPTION_SECRET: 'playwright-encryption-secret',
+            MAIL_HOSTNAME: sendingDomain,
             SMTP_HOST: mailhog.getHost(),
             SMTP_PORT: String(mailhog.getMappedPort(1025)),
             SMTP_SECURE: 'false',

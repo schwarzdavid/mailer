@@ -19,6 +19,13 @@ const trustProxy = z
         return value
     })
 
+const mailHostname = z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.hostname())
+    .refine((value) => value.includes('.'), { message: 'Must be a fully qualified domain name' })
+
 const envShape = {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: port.default(8000),
@@ -35,6 +42,8 @@ const envShape = {
 
     BACKEND_JWT_SECRET: z.string().min(1),
     BACKEND_ENCRYPTION_SECRET: z.string().min(1),
+
+    MAIL_HOSTNAME: mailHostname,
 
     SMTP_HOST: z.string().min(1),
     SMTP_PORT: port,

@@ -187,6 +187,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'DELETE /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
     'GET /settings': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
+    'GET /settings/sending-domain/proposal': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
     'PUT /settings/sending-domain': { guards: jwt, abilities: ['update:Settings'], scopedByPrincipal: false },
     'POST /settings/sending-domain/refresh': {
         guards: jwt,

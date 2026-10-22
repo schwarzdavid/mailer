@@ -10,7 +10,7 @@ What works so far:
 
 - **Inbound forms.** You define a form with its fields, security checks (reCAPTCHA, CSRF, honeypot) and receivers. A static website can then POST its contact form straight to a public endpoint. Each accepted submission goes out to the receivers as a DKIM-signed email, rendered from a versioned Handlebars template. The template editor has a live preview.
 - **Domains & DNS.** You register sending domains, the service generates DKIM keys for them, and it lists the DNS records each domain needs (SPF, DKIM, DMARC, MX, A/AAAA, PTR). A scheduled job checks those records regularly and reports their health.
-- **Platform sending domain.** You configure the service's own infrastructure domain once, in the settings or during first-start onboarding. It is used as the SPF include and as the bounce (return-path) domain.
+- **Platform sending domain.** The service's own infrastructure domain is `MAIL_HOSTNAME` from the environment; there is exactly one. During first-start onboarding (or later in the settings) you only enter the server's IP addresses, pre-filled from the A/AAAA records of `MAIL_HOSTNAME` where those exist. It is used as the SPF include and as the bounce (return-path) domain. If `MAIL_HOSTNAME` changes, the backend switches the sending domain to the new name on its next start, keeping the stored IP addresses: it generates a new DKIM key and new records for it and rewrites the SPF include of every customer domain, whose owners then have to update their DNS. It refuses to start if the new name is already registered as a customer domain.
 - **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and recipients the SMTP server rejects with a 5xx at `RCPT TO` are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
 - **Projects.** Projects group inbound forms and the domains assigned to them.
 - **Users, roles & permissions.** Global roles (Super Admin, Admin, User and custom ones) carry global permissions; project roles (Viewer, Editor, Maintainer, Owner and custom ones) carry project permissions (`read`, `update`, `delete`, `forms.manage`, `api_keys.manage`, `members.manage`). Users get a global role plus optional extra permissions, project members get a project role plus optional extras, and nobody can grant more than they hold. Roles are managed under Administration → Roles. Access checks use CASL on both the backend and the frontend.
@@ -94,7 +94,7 @@ pnpm dev
 - Backend API: http://localhost:8000/api
 - Swagger UI: http://localhost:8000/docs (mounted only when `NODE_ENV` is not `production`)
 
-On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user and configure the platform sending domain. Locally, the DNS records will stay "pending", which is expected.
+On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user and enter the server addresses for the platform sending domain, which is `MAIL_HOSTNAME` from `.env` (`mail.example.com` in the template). Locally, the DNS records will stay "pending", which is expected.
 
 ### Useful commands
 
@@ -146,7 +146,7 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
 
     - Send a test mail from the app (through an inbound form or the public send API) to an address you control. It arrives, and the project's "Sent mail" page lists it as sent.
 
-6. **Mail setup in the app:** configure `MAIL_HOSTNAME` as the sending domain, with the VPS IP as the server IP. The mail server only lets the backend send with the envelope sender `bounce@MAIL_HOSTNAME`, so any other sending domain fails. The app then shows the A, MX, SPF, DKIM and DMARC records to create. Warm up the IP: raise the sending volume slowly over the first weeks, because a new IP that suddenly sends a lot lands in spam folders or on blocklists.
+6. **Mail setup in the app:** the backend reads `MAIL_HOSTNAME` from `.env` and uses it as the sending domain, which matches the mail server, because that only lets the backend send with the envelope sender `bounce@MAIL_HOSTNAME`. The onboarding wizard shows the name and asks only for the server IPs, pre-filled from the A/AAAA records of `MAIL_HOSTNAME` created in step 1; correct them if those records are outdated. The app then shows the A, MX, SPF, DKIM and DMARC records to create. Warm up the IP: raise the sending volume slowly over the first weeks, because a new IP that suddenly sends a lot lands in spam folders or on blocklists.
 7. **Rotating secrets:**
     - **Mail password:** set the new `MAIL_PASSWORD` in `.env`, then update the account and recreate the backend so it picks up the new value:
 
@@ -179,9 +179,9 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
 
     A host that ran the earlier stack with a separate `web` service needs `docker compose up -d --remove-orphans` for this one update, because the old `web` container otherwise keeps ports 80 and 443. A fresh VPS needs nothing extra.
 
-    If `run --rm migrate` fails, do not run `docker compose up` in any form until you have rolled back (step 9) or fixed forward with a new image: any `up` replaces the still-serving backend with the pulled image.
+    If `run --rm migrate` fails, the whole migration run is rolled back, so the database is unchanged and the old backend keeps serving against it. Do not run `docker compose up` in any form until you have set `IMAGE_TAG` back to the running version or fixed forward with a new image: any `up` replaces the still-serving backend with the pulled image.
 
-9. **Rollback:** migrations are not rolled back automatically. If the newer version applied migrations, first revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it:
+9. **Rollback:** a failed migration run rolls itself back, but migrations that succeeded stay applied. If the newer version applied migrations, first revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it:
 
     ```bash
     docker compose run --rm migrate node dist/migrate.js executed
@@ -202,9 +202,9 @@ Compose sets `TRUST_PROXY=1` for the backend itself, matching Caddy as the singl
 
 The bounce mailbox grows over time: the backend only marks processed mails as `\Seen` and never deletes them (see open todos).
 
-### Release pipeline
+### CI and release pipeline
 
-`.github/workflows/release.yml` runs only when a GitHub release is published, in four jobs, not on pushes or pull requests. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` Docker target, the only image, and runs `deploy/smoke-test.sh` against it (the stock Caddy and docker-mailserver images are pulled for the test). Only after the smoke test passes does it push the image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
+`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs `deploy/smoke-test.sh` against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
 
 ### Without Docker
 
@@ -224,7 +224,7 @@ Before the first `migrate:prod up` against a database that an earlier version al
 UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
 ```
 
-Concurrent runs are safe: a Postgres advisory lock lets one runner apply the pending migrations while the others wait and then find nothing left to do.
+Each `up` or `down` run is a single transaction: if one migration fails, every migration of that run is rolled back as well, and the database is left exactly as it was before the run. Concurrent runs are safe: a Postgres advisory lock lets one runner apply the pending migrations while the others wait and then find nothing left to do.
 
 ## Running behind a reverse proxy
 
@@ -270,4 +270,4 @@ The key may also be passed as `?key=…`, but query strings tend to end up in lo
 - [ ] **Transactional domain creation** Creating a domain or the sending domain takes several steps that do not yet run in a single transaction.
 - [ ] **Branding settings** Customization options such as colors and a logo on the settings screen and in onboarding.
 - [x] **Production deployment** Dockerfiles, a production compose/deployment setup and deployment documentation.
-- [x] **Release pipeline** Run `pnpm check`, the e2e suites and the smoke test, then publish the image, for every published GitHub release.
+- [x] **CI and release pipeline** Run `pnpm check`, the e2e suites, the image build and the smoke test on every push and pull request to `main`, and publish the image for every published GitHub release.

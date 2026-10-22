@@ -18,13 +18,12 @@ test('a fresh installation sets up the first administrator and the sending domai
 
     await expect(page.getByRole('heading', { name: 'Where does this server send from?' })).toBeVisible()
     await expect(page.getByText(`Signed in as ${admin.firstName} ${admin.lastName}`)).toBeVisible()
-    await input(page, 'fqdn').fill('not a domain')
+    await expect(page.getByText(sendingDomain, { exact: true })).toBeVisible()
+    await expect(input(page, 'fqdn')).toHaveCount(0)
     await input(page, 'serverIpv4').fill('999.1.1.1')
     await input(page, 'serverIpv4').blur()
-    await expect(page.getByText('Enter a domain name, like mail.example.com.')).toBeVisible()
     await expect(page.getByText('Enter an IPv4 address, like 203.0.113.10.')).toBeVisible()
 
-    await input(page, 'fqdn').fill(sendingDomain)
     await input(page, 'serverIpv4').fill('203.0.113.10')
     await page.getByRole('button', { name: 'Save and continue' }).click()
 
@@ -40,7 +39,8 @@ test('a fresh installation sets up the first administrator and the sending domai
     expect(values.some((value) => value.startsWith('v=DKIM1'))).toBe(true)
 
     await page.getByRole('button', { name: 'Sending domain' }).click()
-    await expect(input(page, 'fqdn')).toHaveValue(sendingDomain)
+    await expect(input(page, 'serverIpv4')).toHaveValue('203.0.113.10')
+    await expect(page.getByText(sendingDomain, { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'DNS records' }).click()
 
     await page.getByRole('button', { name: 'Finish setup' }).click()

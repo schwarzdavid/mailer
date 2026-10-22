@@ -10,23 +10,14 @@ async function violations(plain: object): Promise<string[]> {
 }
 
 describe('SendingDomainConfigureDto', () => {
-    const valid = { fqdn: 'mail.sending-domain.org', serverIpv4: '203.0.113.10' }
+    const valid = { serverIpv4: '203.0.113.10' }
 
-    it('accepts a domain with an IPv4 address', async () => {
+    it('accepts an IPv4 address', async () => {
         await expect(violations(valid)).resolves.toEqual([])
     })
 
     it('accepts an optional IPv6 address', async () => {
         await expect(violations({ ...valid, serverIpv6: '2001:db8::10' })).resolves.toEqual([])
-    })
-
-    it.each([
-        ['an empty domain', ''],
-        ['a bare label', 'localhost'],
-        ['a URL', 'https://mail.example.com'],
-        ['a non-ICANN suffix', 'mail.example.invalidtld'],
-    ])('rejects %s', async (_, fqdn) => {
-        await expect(violations({ ...valid, fqdn })).resolves.toEqual(['fqdn'])
     })
 
     it.each(['2001:db8::10', '203.0.113', '999.0.113.10', ''])(
@@ -41,6 +32,6 @@ describe('SendingDomainConfigureDto', () => {
     })
 
     it('requires the IPv4 address', async () => {
-        await expect(violations({ fqdn: valid.fqdn })).resolves.toEqual(['serverIpv4'])
+        await expect(violations({})).resolves.toEqual(['serverIpv4'])
     })
 })

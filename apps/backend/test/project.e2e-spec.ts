@@ -73,7 +73,7 @@ describe('Project (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token, 'mail.sending-project.org')
+        await configureSendingDomain(app, token)
     })
 
     afterAll(async () => {

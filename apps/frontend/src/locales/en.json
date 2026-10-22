@@ -495,13 +495,14 @@
             "sendingDomain": {
                 "title": "Sending domain",
                 "description": "The host name and IP addresses this server sends mail from. Saving updates the DNS records below.",
-                "domainHint": "A host name that points to this server, such as mail.example.com.",
+                "domainHint": "Set by MAIL_HOSTNAME in the server configuration. Change it there and restart the server to switch.",
+                "addressHint": "Pre-filled from the A and AAAA records of {fqdn} where they exist. Correct them if those records are outdated.",
                 "saved": "Sending domain saved",
                 "error": "Couldn't save the sending domain",
                 "confirm": {
-                    "title": "Change the sending domain?",
+                    "title": "Change the server addresses?",
                     "body": "All DNS records are generated again for {fqdn}. Mail may be rejected until you publish them.",
-                    "action": "Change domain"
+                    "action": "Change addresses"
                 }
             },
             "records": {

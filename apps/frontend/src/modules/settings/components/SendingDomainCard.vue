@@ -11,17 +11,8 @@
                 :title="t('module.settings.sendingDomain.error')"
                 :text="errorMessage"
             />
-            <VTextField
-                v-model="fqdn"
-                name="fqdn"
-                class="span-2 mono-field"
-                :label="requiredLabel(t('field.domain'))"
-                placeholder="mail.example.com"
-                :hint="t('module.settings.sendingDomain.domainHint')"
-                persistent-hint
-                :error-messages="errors.fqdn"
-                aria-required="true"
-            />
+            <ReadonlyValue class="span-2" :label="t('field.domain')" :value="fqdn" mono />
+            <p class="span-2 sending-domain__hint">{{ t('module.settings.sendingDomain.domainHint') }}</p>
             <VTextField
                 v-model="serverIpv4"
                 name="serverIpv4"
@@ -39,9 +30,12 @@
                 placeholder="2001:db8::10"
                 :error-messages="errors.serverIpv6"
             />
+            <p v-if="!sendingDomain" class="span-2 sending-domain__hint">
+                {{ t('module.settings.sendingDomain.addressHint', { fqdn: fqdn ?? '' }) }}
+            </p>
         </form>
         <div v-else class="form-grid form-grid--2">
-            <ReadonlyValue class="span-2" :label="t('field.domain')" :value="sendingDomain?.fqdn" mono />
+            <ReadonlyValue class="span-2" :label="t('field.domain')" :value="fqdn" mono />
             <ReadonlyValue :label="t('field.serverIpv4')" :value="sendingDomain?.serverIpv4" mono />
             <ReadonlyValue :label="t('field.serverIpv6')" :value="sendingDomain?.serverIpv6" mono />
         </div>
@@ -67,13 +61,13 @@
 </template>
 
 <script lang="ts" setup>
-    import { ref, useId, watch } from 'vue'
+    import { computed, ref, useId, watch } from 'vue'
+    import { useQuery } from '@tanstack/vue-query'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
-    import { parse } from 'tldts'
     import { useI18n } from 'vue-i18n'
-    import type { SendingDomainDto } from 'api'
+    import type { SendingDomainDto, SendingDomainProposalDto } from 'api'
     import InlineAlert from '@/components/InlineAlert.vue'
     import ReadonlyValue from '@/components/ReadonlyValue.vue'
     import SaveFooter from '@/components/SaveFooter.vue'
@@ -83,6 +77,7 @@
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useSendingDomainMutation } from '@/modules/settings/mutations/useSendingDomainMutation.ts'
+    import { useSendingDomainProposalQuery } from '@/modules/settings/queries/useSendingDomainProposalQuery.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = withDefaults(
@@ -104,64 +99,62 @@
     const { mutateAsync, isPending } = useSendingDomainMutation()
     const errorMessage = ref<string | null>(null)
 
-    function initialValues(sendingDomain: SendingDomainDto | null) {
+    const { queryKey: proposalKey, queryFn: proposalFn } = useSendingDomainProposalQuery()
+    const { data: proposal } = useQuery({
+        queryKey: proposalKey,
+        queryFn: proposalFn,
+        enabled: computed(() => !props.sendingDomain),
+    })
+
+    const fqdn = computed(() => props.sendingDomain?.fqdn ?? proposal.value?.fqdn ?? null)
+
+    function initialValues(sendingDomain: SendingDomainDto | null, fallback?: SendingDomainProposalDto) {
+        const source = sendingDomain ?? fallback
         return {
-            fqdn: sendingDomain?.fqdn ?? '',
-            serverIpv4: sendingDomain?.serverIpv4 ?? '',
-            serverIpv6: sendingDomain?.serverIpv6 ?? '',
+            serverIpv4: source?.serverIpv4 ?? '',
+            serverIpv6: source?.serverIpv6 ?? '',
         }
     }
 
     const { defineField, handleSubmit, errors, meta, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                fqdn: z
-                    .string()
-                    .trim()
-                    .min(1)
-                    .refine((value) => !!parse(value).isIcann, { error: () => t('validation.hostname') }),
                 serverIpv4: z.ipv4(),
                 serverIpv6: z.ipv6().optional().or(z.literal('')),
             }),
         ),
-        initialValues: initialValues(props.sendingDomain),
+        initialValues: initialValues(props.sendingDomain, proposal.value),
     })
 
-    const [fqdn] = defineField('fqdn')
     const [serverIpv4] = defineField('serverIpv4')
     const [serverIpv6] = defineField('serverIpv6')
 
     useDirtyGuard(() => props.mode === 'settings' && meta.value.dirty)
 
-    watch(
-        () => props.sendingDomain,
-        (sendingDomain) => {
-            if (!meta.value.dirty) {
-                resetForm({ values: initialValues(sendingDomain) })
-            }
-        },
-    )
+    watch([() => props.sendingDomain, proposal], ([sendingDomain, fallback]) => {
+        if (!meta.value.dirty) {
+            resetForm({ values: initialValues(sendingDomain, fallback) })
+        }
+    })
 
     function discard() {
         errorMessage.value = null
-        resetForm({ values: initialValues(props.sendingDomain) })
+        resetForm({ values: initialValues(props.sendingDomain, proposal.value) })
     }
 
-    async function confirmChange(values: { fqdn: string; serverIpv4: string; serverIpv6?: string }) {
+    async function confirmChange(values: { serverIpv4: string; serverIpv6?: string }) {
         const current = props.sendingDomain
         if (props.mode !== 'settings' || !current) {
             return true
         }
         const changed =
-            current.fqdn !== values.fqdn ||
-            current.serverIpv4 !== values.serverIpv4 ||
-            (current.serverIpv6 ?? '') !== (values.serverIpv6 ?? '')
+            current.serverIpv4 !== values.serverIpv4 || (current.serverIpv6 ?? '') !== (values.serverIpv6 ?? '')
         if (!changed) {
             return true
         }
         return confirm({
             title: t('module.settings.sendingDomain.confirm.title'),
-            body: t('module.settings.sendingDomain.confirm.body', { fqdn: values.fqdn }),
+            body: t('module.settings.sendingDomain.confirm.body', { fqdn: current.fqdn }),
             confirmLabel: t('module.settings.sendingDomain.confirm.action'),
         })
     }
@@ -173,7 +166,6 @@
         }
         try {
             const sendingDomain = await mutateAsync({
-                fqdn: values.fqdn,
                 serverIpv4: values.serverIpv4,
                 serverIpv6: values.serverIpv6 || undefined,
             })
@@ -187,3 +179,12 @@
         }
     })
 </script>
+
+<style scoped>
+    .sending-domain__hint {
+        margin: 0;
+        color: rgb(var(--v-theme-ink-muted));
+        font-size: 0.75rem;
+        line-height: 1rem;
+    }
+</style>

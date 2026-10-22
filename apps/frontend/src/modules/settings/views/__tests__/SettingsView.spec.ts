@@ -38,40 +38,54 @@ afterEach(() => {
 })
 
 describe('SettingsView', () => {
-    it('shows the form without records while unconfigured', async () => {
+    it('shows the proposed domain and prefills its addresses while unconfigured', async () => {
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+        vi.spyOn(SettingsApi, 'getSendingDomainProposal').mockResolvedValue({
+            fqdn: 'mail.acme-mailer.com',
+            serverIpv4: '203.0.113.20',
+            serverIpv6: '2001:db8::20',
+        })
         const wrapper = mountInApp(SettingsView)
 
-        await vi.waitFor(() => expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true))
+        await vi.waitFor(() =>
+            expect((wrapper.get('input[name="serverIpv4"]').element as HTMLInputElement).value).toBe('203.0.113.20'),
+        )
+        expect((wrapper.get('input[name="serverIpv6"]').element as HTMLInputElement).value).toBe('2001:db8::20')
+        expect(wrapper.text()).toContain('mail.acme-mailer.com')
+        expect(wrapper.find('input[name="fqdn"]').exists()).toBe(false)
         expect(findButton(wrapper, 'Check again')).toBeUndefined()
     })
 
-    it('prefills the form and shows a success state when every record is valid', async () => {
+    it('shows the configured values and a success state when every record is valid', async () => {
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: sendingDomain() })
+        const proposal = vi.spyOn(SettingsApi, 'getSendingDomainProposal')
         const wrapper = mountInApp(SettingsView)
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('All 2 records are valid'))
-        expect((wrapper.get('input[name="fqdn"]').element as HTMLInputElement).value).toBe('mail.acme-mailer.com')
+        expect(wrapper.text()).toContain('mail.acme-mailer.com')
+        expect((wrapper.get('input[name="serverIpv4"]').element as HTMLInputElement).value).toBe('203.0.113.10')
+        expect(proposal).not.toHaveBeenCalled()
     })
 
-    it('asks before changing the sending domain', async () => {
+    it('asks before changing the server addresses', async () => {
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: sendingDomain('invalid') })
         const configure = vi
             .spyOn(SettingsApi, 'configureSendingDomain')
-            .mockResolvedValue({ ...sendingDomain('invalid'), fqdn: 'mail.fabrikam.com' })
+            .mockResolvedValue({ ...sendingDomain('invalid'), serverIpv4: '203.0.113.11' })
         const wrapper = mountInApp(SettingsView)
-        await vi.waitFor(() => expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true))
+        await vi.waitFor(() => expect(wrapper.find('input[name="serverIpv4"]').exists()).toBe(true))
 
-        await wrapper.get('input[name="fqdn"]').setValue('mail.fabrikam.com')
+        await wrapper.get('input[name="serverIpv4"]').setValue('203.0.113.11')
         await wrapper.get('form').trigger('submit')
 
-        await vi.waitFor(() => expect(overlayText()).toContain('Change the sending domain?'))
+        await vi.waitFor(() => expect(overlayText()).toContain('Change the server addresses?'))
+        expect(overlayText()).toContain('mail.acme-mailer.com')
         expect(configure).not.toHaveBeenCalled()
-        overlayButton('Change domain').click()
+        overlayButton('Change addresses').click()
 
         await vi.waitFor(() =>
             expect(configure).toHaveBeenCalledWith({
-                body: { fqdn: 'mail.fabrikam.com', serverIpv4: '203.0.113.10', serverIpv6: undefined },
+                body: { serverIpv4: '203.0.113.11', serverIpv6: undefined },
             }),
         )
         await vi.waitFor(() => expect(notifications.current.value?.text).toBe('Sending domain saved'))
@@ -79,11 +93,15 @@ describe('SettingsView', () => {
 
     it('keeps the input and explains a failed save', async () => {
         vi.spyOn(SettingsApi, 'getSettings').mockResolvedValue({ sendingDomain: null })
+        vi.spyOn(SettingsApi, 'getSendingDomainProposal').mockResolvedValue({
+            fqdn: 'mail.acme-mailer.com',
+            serverIpv4: null,
+            serverIpv6: null,
+        })
         vi.spyOn(SettingsApi, 'configureSendingDomain').mockRejectedValue({ message: 'The IPv6 address was rejected' })
         const wrapper = mountInApp(SettingsView)
-        await vi.waitFor(() => expect(wrapper.find('input[name="fqdn"]').exists()).toBe(true))
+        await vi.waitFor(() => expect(wrapper.find('input[name="serverIpv4"]').exists()).toBe(true))
 
-        await wrapper.get('input[name="fqdn"]').setValue('mail.acme-mailer.com')
         await wrapper.get('input[name="serverIpv4"]').setValue('203.0.113.10')
         await wrapper.get('form').trigger('submit')
 

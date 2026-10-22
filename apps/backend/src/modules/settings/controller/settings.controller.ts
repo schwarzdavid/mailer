@@ -7,6 +7,7 @@ import { SettingsService } from '../services/settings.service.js'
 import { SettingsDto } from '../dtos/settings.dto.js'
 import { SendingDomainDto } from '../dtos/sending-domain.dto.js'
 import { SendingDomainConfigureDto } from '../dtos/sending-domain-configure.dto.js'
+import { SendingDomainProposalDto } from '../dtos/sending-domain-proposal.dto.js'
 
 @JwtAuth()
 @ApiTags('settings')
@@ -23,12 +24,18 @@ export class SettingsController {
         return { sendingDomain }
     }
 
+    @RequireAbility({ action: 'read', subject: 'Settings' })
+    @ResponseDto(SendingDomainProposalDto)
+    @Get('sending-domain/proposal')
+    getSendingDomainProposal(): Promise<SendingDomainProposalDto> {
+        return this.settingsService.getSendingDomainProposal()
+    }
+
     @RequireAbility({ action: 'update', subject: 'Settings' })
     @ResponseDto(SendingDomainDto)
     @Put('sending-domain')
     configureSendingDomain(@Body() config: SendingDomainConfigureDto): Promise<SendingDomainDto> {
         return this.settingsService.configureSendingDomain({
-            fqdn: config.fqdn,
             serverIpv4: config.serverIpv4,
             serverIpv6: config.serverIpv6 ?? null,
         })

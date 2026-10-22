@@ -8,7 +8,6 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
 }))
 
 const config: SendingDomainConfigureDto = {
-    fqdn: 'mail.sending-domain.org',
     serverIpv4: '203.0.113.10',
 }
 

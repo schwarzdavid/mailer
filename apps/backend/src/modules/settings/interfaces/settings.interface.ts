@@ -20,8 +20,8 @@ export interface SendingDomain {
     records: DomainDnsRecord[]
 }
 
-export interface SendingDomainConfigure {
+export interface SendingDomainProposal {
     fqdn: string
-    serverIpv4: string
+    serverIpv4: string | null
     serverIpv6: string | null
 }

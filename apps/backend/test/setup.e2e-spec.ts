@@ -72,7 +72,7 @@ describe('SetupController (e2e)', () => {
     })
 
     it('shows the records step once the sending domain is configured', async () => {
-        await configureSendingDomain(app, token, 'mail.setup-e2e.org')
+        await configureSendingDomain(app, token)
 
         const response = await http().get('/api/setup/status').expect(200)
 
