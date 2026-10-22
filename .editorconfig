@@ -20,10 +20,6 @@ ij_wrap_on_typing = false
 [*.sh]
 end_of_line = lf
 
-[Caddyfile]
-end_of_line = lf
-indent_style = tab
-
 [*.css]
 ij_css_align_closing_brace_with_properties = false
 ij_css_blank_lines_around_nested_selector = 1

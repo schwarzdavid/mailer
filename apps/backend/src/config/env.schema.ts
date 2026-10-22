@@ -20,6 +20,7 @@ const trustProxy = z
     })
 
 const envShape = {
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: port.default(8000),
     TRUST_PROXY: trustProxy,
 

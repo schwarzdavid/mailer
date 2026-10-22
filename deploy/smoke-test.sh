@@ -163,9 +163,40 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 2 -config "$tmp/pki/ca.cnf" \
     -keyout "$tmp/pki/ca.key" -out "$tmp/ca/ca.crt" 2>/dev/null
 issue_leaf "$tmp/tls"
 
+service_hash() {
+    docker compose -p mailer-smoke --project-directory "$tmp" -f "${3:-$tmp/compose.yml}" -f "$tmp/compose.smoke.yml" \
+        --env-file "$1" config --hash "$2" | tr -d '\r' | awk '{print $NF}'
+}
+
+sed 's/respond 404/respond 410/; s/localhost\.\$\$mydomain, localhost/localhost/' "$tmp/compose.yml" >"$tmp/compose.edited.yml"
+cmp -s "$tmp/compose.yml" "$tmp/compose.edited.yml" && fail "the edited compose copy equals the original"
+
+sed 's/^SITE_ADDRESS=.*/SITE_ADDRESS=hash-check.smoke.test/' "$tmp/.env" >"$tmp/hash-site.env"
+sed 's/^MAIL_HOSTNAME=.*/MAIL_HOSTNAME=hash-check-mail.smoke.test/' "$tmp/.env" >"$tmp/hash-mail.env"
+proxy_hash=$(service_hash "$tmp/.env" proxy)
+[ -n "$proxy_hash" ] || fail "no config hash for proxy"
+[ "$proxy_hash" != "$(service_hash "$tmp/hash-site.env" proxy)" ] || fail "proxy config hash ignores SITE_ADDRESS, so compose would keep the old Caddyfile"
+[ "$proxy_hash" != "$(service_hash "$tmp/hash-mail.env" proxy)" ] || fail "proxy config hash ignores MAIL_HOSTNAME, so compose would keep the old Caddyfile"
+mail_hash=$(service_hash "$tmp/.env" mail)
+[ -n "$mail_hash" ] || fail "no config hash for mail"
+[ "$mail_hash" != "$(service_hash "$tmp/hash-mail.env" mail)" ] || fail "mail config hash ignores MAIL_HOSTNAME"
+[ "$proxy_hash" != "$(service_hash "$tmp/.env" proxy "$tmp/compose.edited.yml")" ] || fail "proxy config hash ignores an edited Caddyfile"
+[ "$mail_hash" != "$(service_hash "$tmp/.env" mail "$tmp/compose.edited.yml")" ] || fail "mail config hash ignores an edited postfix-main.cf"
+pass "the proxy config hash follows SITE_ADDRESS, MAIL_HOSTNAME and the Caddyfile, the mail config hash follows MAIL_HOSTNAME and postfix-main.cf"
+
 mapfile -t app_services < <(dc config --services | tr -d '\r' | grep -vx mail)
 dc up -d --pull missing --wait "${app_services[@]}"
 pass "stack without mail is up and healthy"
+
+dc config --services | tr -d '\r' | grep -qx proxy || fail "the stack has no proxy service"
+proxy_id=$(dc ps -q proxy)
+[ -n "$proxy_id" ] || fail "the proxy service is not running"
+proxy_image=$(docker inspect --format '{{.Config.Image}}' "$proxy_id")
+[[ "$proxy_image" =~ ^caddy:2\.[0-9]+\.[0-9]+-alpine$ ]] || fail "proxy runs '$proxy_image', expected a pinned stock caddy:2.x.y-alpine image"
+if dc config --services | tr -d '\r' | grep -qx web; then
+    fail "the stack still has a web service"
+fi
+pass "the proxy is the stock $proxy_image and there is no web service"
 
 dc up -d --pull missing mail || fail "mail service did not start"
 dc exec -T mail setup email add "bounce@$mail_hostname" "$mail_password" || fail "creating the bounce account failed"
@@ -198,6 +229,11 @@ expect_status 200 "GET $asset"
 grep -i '^cache-control:.*immutable' "$tmp/headers" >/dev/null || fail "GET $asset lacks Cache-Control: immutable"
 pass "cache headers: no-cache for the shell, immutable for $asset"
 
+request GET "$asset" -H 'Accept-Encoding: gzip'
+expect_status 200 "GET $asset with Accept-Encoding: gzip"
+grep -qi '^content-encoding: *gzip' "$tmp/headers" || fail "GET $asset is not compressed by the proxy"
+pass "the proxy compresses $asset"
+
 request GET /assets/does-not-exist.js
 expect_status 404 "GET /assets/does-not-exist.js"
 if grep -qi '^cache-control:.*immutable' "$tmp/headers"; then
@@ -210,11 +246,21 @@ expect_status 200 "GET /api/setup/status"
 grep -qi '^content-type:.*application/json' "$tmp/headers" || fail "GET /api/setup/status is not JSON"
 pass "GET /api/setup/status returns JSON"
 
+request GET /api/does-not-exist
+expect_status 404 "GET /api/does-not-exist"
+grep -qi '^content-type:.*application/json' "$tmp/headers" || fail "GET /api/does-not-exist is not JSON"
+if grep -q '<div id="app">' "$tmp/body"; then
+    fail "GET /api/does-not-exist returns the SPA"
+fi
+pass "an unknown /api path returns a JSON 404, not the SPA"
+
 request GET /docs
+expect_status 200 "GET /docs"
 if grep -q 'swagger-ui' "$tmp/body"; then
     fail "GET /docs exposes swagger-ui"
 fi
-pass "GET /docs does not expose swagger-ui"
+grep -q '<div id="app">' "$tmp/body" || fail "GET /docs does not fall back to the SPA"
+pass "GET /docs falls back to the SPA and does not expose swagger-ui"
 
 pass "every response carried X-Robots-Tag: noindex, nofollow"
 
@@ -279,7 +325,9 @@ let spoofed
 try {
     spoofed = await send(`other@${domain}`)
 } catch (error) {
-    console.log(`foreign envelope rejected: ${error.response}`)
+    console.log(
+        `foreign envelope rejected: command=${error.command} responseCode=${error.responseCode} response=${error.response}`,
+    )
 }
 transport.close()
 if (spoofed) {
@@ -288,7 +336,7 @@ if (spoofed) {
 JS
 ) || fail "authenticated submission check failed: $submission"
 echo "$submission"
-grep -q '^foreign envelope rejected: 5' <<<"$submission" || fail "foreign envelope was not rejected with a 5xx"
+grep -q '^foreign envelope rejected: command=RCPT TO responseCode=5' <<<"$submission" || fail "foreign envelope was not rejected with a 5xx at RCPT TO"
 grep -q "^verify ok against $mail_hostname on mail:587" <<<"$submission" || fail "submission did not verify the certificate against $mail_hostname"
 pass "authenticated submission on mail:587 verifies the certificate against $mail_hostname and spoof protection rejects other@$mail_hostname"
 

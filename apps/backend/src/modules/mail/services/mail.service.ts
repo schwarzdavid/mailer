@@ -36,12 +36,20 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
+const DESTINATION_ADDRESS_STATUS_CODES: ReadonlySet<string> = new Set(['5.1.1', '5.1.2', '5.1.3', '5.1.6', '5.1.10'])
+const ENHANCED_STATUS_CODE = /^\d{3}[ -](\d\.\d{1,3}\.\d{1,3})\b/
+
 function permanentRecipientRejectionCode(error: unknown): number | undefined {
     if (!(error instanceof Error) || !('command' in error) || error.command !== 'RCPT TO') {
         return undefined
     }
     const responseCode = 'responseCode' in error ? error.responseCode : undefined
-    return typeof responseCode === 'number' && responseCode >= 500 ? responseCode : undefined
+    if (typeof responseCode !== 'number' || responseCode < 500) {
+        return undefined
+    }
+    const response = 'response' in error && typeof error.response === 'string' ? error.response : ''
+    const enhancedCode = ENHANCED_STATUS_CODE.exec(response)?.[1]
+    return enhancedCode !== undefined && DESTINATION_ADDRESS_STATUS_CODES.has(enhancedCode) ? responseCode : undefined
 }
 
 @Injectable()

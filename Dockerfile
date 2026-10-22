@@ -18,10 +18,7 @@ FROM node:${NODE_VERSION}-slim AS backend
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out /app
+COPY --from=build /repo/apps/frontend/dist /app/public
 USER node
 EXPOSE 8000
 CMD ["node", "dist/main.js"]
-
-FROM caddy:2-alpine AS web
-COPY --from=build /repo/apps/frontend/dist /srv
-COPY deploy/Caddyfile /etc/caddy/Caddyfile

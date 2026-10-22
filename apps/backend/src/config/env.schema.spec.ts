@@ -71,6 +71,22 @@ describe('envSchema', () => {
         ).toMatchObject({ SMTP_TLS_SERVERNAME: 'mx.example.com', IMAP_TLS_SERVERNAME: 'mx.example.com' })
     })
 
+    describe('NODE_ENV', () => {
+        it('defaults to development', () => {
+            expect(envSchema.parse(requiredEnv).NODE_ENV).toBe('development')
+        })
+
+        it.each(['development', 'test', 'production'])('accepts %s', (value) => {
+            expect(envSchema.parse({ ...requiredEnv, NODE_ENV: value }).NODE_ENV).toBe(value)
+        })
+
+        it.each(['staging', 'prod', ''])('rejects %j', (value) => {
+            const result = envSchema.safeParse({ ...requiredEnv, NODE_ENV: value })
+
+            expect(result.error?.issues.map((issue) => issue.path)).toContainEqual(['NODE_ENV'])
+        })
+    })
+
     describe('migrationEnvSchema', () => {
         it('accepts the encryption secret alone and defaults the database host', () => {
             const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x' })

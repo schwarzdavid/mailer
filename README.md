@@ -92,7 +92,7 @@ pnpm dev
 
 - Frontend: http://localhost:5173 (proxies `/api` to the backend)
 - Backend API: http://localhost:8000/api
-- Swagger UI: http://localhost:8000/docs
+- Swagger UI: http://localhost:8000/docs (mounted only when `NODE_ENV` is not `production`)
 
 On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user and configure the platform sending domain. Locally, the DNS records will stay "pending", which is expected.
 
@@ -111,7 +111,7 @@ pnpm check                        # lint + typecheck + test + format check
 
 ### Deploying with Docker Compose
 
-The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the static frontend and the `/api` proxy), the backend, PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). Caddy publishes ports 80 and 443; the backend is reachable only through it, and `/docs` (Swagger UI) is not exposed. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The images `ghcr.io/schwarzdavid/mailer-backend` and `ghcr.io/schwarzdavid/mailer-web` are tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. They are built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
+The production stack in `deploy/compose.yml` runs the backend, which serves the built frontend and the API from one image, a stock Caddy reverse proxy (service `proxy`, automatic HTTPS), PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). The Caddyfile is inline in `compose.yml`, so the VPS needs only `compose.yml` and `.env`. `proxy` terminates TLS for `SITE_ADDRESS` and `MAIL_HOSTNAME`, compresses responses, adds `X-Robots-Tag: noindex, nofollow` and forwards every request to the backend. It publishes ports 80 and 443; the backend is reachable only through it. The image sets `NODE_ENV=production`, and `compose.yml` pins it, so a value in `.env` does not override it. With it, the backend serves `/app/public` (the built frontend, copied in by the image) and refuses to start if `index.html` is missing: `/assets/*` with a one-year `immutable` cache, other files and the `index.html` fallback for client routes with `no-cache`. A missing `/assets/*` file and an unknown `/api/*` path return a 404, never the SPA. `NODE_ENV=production` also turns off Swagger UI: `/docs` exists only outside production, so in production it falls back to the SPA. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The single image `ghcr.io/schwarzdavid/mailer-backend` (used by `backend` and the one-shot `migrate`) is tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. `proxy` runs the stock `caddy:2.11.7-alpine`, pinned in `compose.yml`, and `IMAGE_TAG` does not touch it. The backend image is built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
 
 1. **Before the first start:**
     - Install Docker with Docker Compose 2.23.1 or newer on an `amd64` VPS.
@@ -137,7 +137,7 @@ The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the st
     The mail server uses the certificate that Caddy obtains for `MAIL_HOSTNAME`. Until Caddy has it, `mail` restarts and stays unhealthy; it comes up on its own once the certificate is there. Caddy renews it about every 60 days, and the mail server picks up the renewed certificate without a restart.
 
 5. **Verify the deployment** (after the first deploy and after every update):
-    - `docker compose ps` lists `postgres`, `redis`, `backend`, `web` and `mail` as `healthy`.
+    - `docker compose ps` lists `postgres`, `redis`, `backend` and `mail` as `healthy`, and `proxy` as `running` (it defines no healthcheck).
     - The mail server presents a Let's Encrypt certificate for `MAIL_HOSTNAME` on port 25 (the issuer names Let's Encrypt, the subject `MAIL_HOSTNAME`):
 
         ```bash
@@ -162,7 +162,7 @@ The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the st
         docker compose up -d backend
         ```
 
-8. **Update:** take `compose.yml` from the commit of the new image and diff `deploy/.env.example` from that commit against your `.env` for new or renamed keys. With a pinned tag, set `IMAGE_TAG` to the new `sha-<sha>`. First record the revision that is running now, which you need for a rollback:
+8. **Update:** take `compose.yml` from the commit of the new image and diff `deploy/.env.example` from that commit against your `.env` for new or renamed keys. With a pinned tag, set `IMAGE_TAG` to the new `sha-<7-char sha>`. First record the revision that is running now, which you need for a rollback:
 
     ```bash
     docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend)"
@@ -177,6 +177,8 @@ The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the st
     docker image prune -f
     ```
 
+    A host that ran the earlier stack with a separate `web` service needs `docker compose up -d --remove-orphans` for this one update, because the old `web` container otherwise keeps ports 80 and 443. A fresh VPS needs nothing extra.
+
     If `run --rm migrate` fails, do not run `docker compose up` in any form until you have rolled back (step 9) or fixed forward with a new image: any `up` replaces the still-serving backend with the pulled image.
 
 9. **Rollback:** migrations are not rolled back automatically. If the newer version applied migrations, first revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it:
@@ -186,13 +188,13 @@ The production stack in `deploy/compose.yml` runs Caddy (automatic HTTPS, the st
     docker compose run --rm migrate node dist/migrate.js down --to <name>
     ```
 
-    Then set `IMAGE_TAG=sha-<sha>` of the recorded revision in `.env`, put that commit's `compose.yml` back, and run the same commands as for an update.
+    Then set `IMAGE_TAG=sha-<first 7 characters of the recorded revision>` in `.env`, put that commit's `compose.yml` back, and run the same commands as for an update.
 
-10. **Updating docker-mailserver:** its tag is pinned in `compose.yml` (`ghcr.io/docker-mailserver/docker-mailserver:15.1.0`), and `IMAGE_TAG` does not touch it. To update it, bump the tag in `deploy/compose.yml`, re-run the local smoke test (step 11), then copy the file to the VPS and run `docker compose pull mail && docker compose up -d mail`.
-11. **Local smoke test:** build both images and run the stack from them. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks routing, caching and security headers, the login throttle and migrations. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. Caddy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
+10. **Updating docker-mailserver and Caddy:** their tags are pinned in `compose.yml` (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1` and `caddy:2.11.7-alpine`), and `IMAGE_TAG` does not touch them. To update one, bump the tag in `deploy/compose.yml`, re-run the local smoke test (step 11), then copy the file to the VPS and run `docker compose pull mail && docker compose up -d mail` (or `proxy`).
+11. **Local smoke test:** build the backend image and run the stack from it. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, the login throttle and migrations. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
 
     ```bash
-    SITE_ADDRESS=:80 DB_DATABASE=mailer DB_USERNAME=mailer DB_PASSWORD=x MAIL_HOSTNAME=x MAIL_PASSWORD=x IMAGE_TAG=local docker compose -f deploy/compose.yml -f deploy/compose.build.yml build
+    docker build -t ghcr.io/schwarzdavid/mailer-backend:local .
     IMAGE_TAG=local bash deploy/smoke-test.sh
     ```
 
@@ -202,7 +204,7 @@ The bounce mailbox grows over time: the backend only marks processed mails as `\
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` and `web` Docker targets and runs `deploy/smoke-test.sh` against them. Only `images` publishes: on a push to `main`, and nowhere else, it pushes both images to GHCR, each tagged `latest` and `sha-<7-char sha>`. Pull requests build and smoke-test the images but push nothing. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
+`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` Docker target, the only image, and runs `deploy/smoke-test.sh` against it (the stock Caddy and docker-mailserver images are pulled for the test). Only `images` publishes: on a push to `main`, and nowhere else, it pushes the image to GHCR, tagged `latest` and `sha-<7-char sha>`. Pull requests build and smoke-test the images but push nothing. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
 
 ### Without Docker
 
@@ -213,6 +215,8 @@ pnpm --filter backend build
 pnpm --filter backend migrate:prod up     # runs node dist/migrate.js up; needs the DB_* and BACKEND_ENCRYPTION_SECRET variables
 pnpm --filter backend start:prod
 ```
+
+`NODE_ENV` (`development`, `test` or `production`, default `development`) applies here. Set to `production`, it turns off Swagger UI at `/docs`, and the backend serves the built frontend from `apps/backend/public` (`/app/public` in the image) and refuses to start if `index.html` is missing there, so copy `apps/frontend/dist` to `apps/backend/public` first. It serves that directory at the root, falls back to its `index.html` for client routes and answers missing `/assets/*` files and unknown `/api/*` paths with a 404. Outside production it serves no static files. Put a TLS-terminating reverse proxy in front of it in production (see below).
 
 Before the first `migrate:prod up` against a database that an earlier version already migrated, run this one-off rename, because migration names are now stored without a file extension and otherwise every migration looks pending. Fresh databases don't need it.
 

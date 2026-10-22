@@ -62,6 +62,10 @@ function applyTrustProxy(app: INestApplication): void {
     app.get<HttpAdapterHost<ExpressAdapter>>(HttpAdapterHost).httpAdapter.set('trust proxy', trustProxy)
 }
 
+export function shouldServeApiDocs(configService: ConfigService<Env, true>): boolean {
+    return configService.get('NODE_ENV', { infer: true }) !== 'production'
+}
+
 function readPackageVersion(): string {
     const packageJson = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')) as {
         version: string

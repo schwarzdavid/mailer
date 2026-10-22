@@ -20,7 +20,7 @@ import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exc
 
 function smtpError(
     message: string,
-    fields: Pick<SMTPConnection.SMTPError, 'code' | 'responseCode' | 'command'>,
+    fields: Pick<SMTPConnection.SMTPError, 'code' | 'response' | 'responseCode' | 'command'>,
 ): SMTPConnection.SMTPError {
     return Object.assign(new Error(message), fields)
 }
@@ -202,23 +202,86 @@ describe('MailService', () => {
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ envelope: undefined }))
     })
 
-    it('records a permanent bounce when the server rejects the recipient at RCPT TO with a 5xx and rethrows', async () => {
-        const rejection = smtpError('550 5.1.1 User unknown', {
+    it('records a bounce for 550 5.1.1 at RCPT TO and rethrows', async () => {
+        const response =
+            '550 5.1.1 <owner@business.com>: Recipient address rejected: User unknown in virtual mailbox table'
+        const rejection = smtpError(response, {
             code: 'EENVELOPE',
+            response,
             responseCode: 550,
             command: 'RCPT TO',
         })
         sendMail.mockRejectedValue(rejection)
 
         await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
-        expect(recordBounce).toHaveBeenCalledWith({
+        expect(recordBounce).toHaveBeenCalledExactlyOnceWith({
             emailAddress: 'owner@business.com',
             type: BounceType.PERMANENT,
             statusCode: '550',
-            reason: '550 5.1.1 User unknown',
+            reason: response,
             messageId: null,
             receivedAt: expect.any(Date) as Date,
         })
+    })
+
+    it.each(['5.1.1', '5.1.2', '5.1.3', '5.1.6', '5.1.10'])(
+        'records a bounce for the destination-address code %s at RCPT TO',
+        async (enhancedCode) => {
+            const response = `550 ${enhancedCode} <owner@business.com>: Recipient address rejected`
+            sendMail.mockRejectedValue(
+                smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' }),
+            )
+
+            await expect(service.sendMail(mail, context)).rejects.toBeInstanceOf(MailSendError)
+            expect(recordBounce).toHaveBeenCalledOnce()
+        },
+    )
+
+    it('records a bounce when the enhanced code follows a continuation hyphen', async () => {
+        const response = '550-5.1.1 The email account that you tried to reach does not exist'
+        sendMail.mockRejectedValue(
+            smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' }),
+        )
+
+        await expect(service.sendMail(mail, context)).rejects.toBeInstanceOf(MailSendError)
+        expect(recordBounce).toHaveBeenCalledOnce()
+    })
+
+    it('does not record the spoof-protection rejection at RCPT TO and rethrows', async () => {
+        const response =
+            '553 5.7.1 <other@mail.smoke.test>: Sender address rejected: not owned by user bounce@mail.smoke.test'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 553, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, rejection.message)
+    })
+
+    it('does not record a sender-address code at RCPT TO', async () => {
+        const response = '553 5.1.8 <bounce@nowhere.invalid>: Sender address rejected: Domain not found'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 553, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a RCPT TO 5xx without an enhanced status code', async () => {
+        const response = '550 Mailbox unavailable'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a RCPT TO 5xx when the error carries no response text', async () => {
+        const rejection = smtpError('rejected', { code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
     })
 
     it('does not record a bounce when the server rejects the envelope sender at MAIL FROM and rethrows', async () => {
@@ -260,7 +323,8 @@ describe('MailService', () => {
     })
 
     it('still rejects with the transporter error when bounce recording itself fails', async () => {
-        const rejection = smtpError('550 rejected', { code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' })
+        const response = '550 5.1.1 rejected'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' })
         sendMail.mockRejectedValue(rejection)
         recordBounce.mockRejectedValue(new Error('db down'))
 

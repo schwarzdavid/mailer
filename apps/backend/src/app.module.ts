@@ -32,6 +32,8 @@ import {
 } from './modules/inbound-form/helpers/form-throttle.js'
 import { Env, envSchema } from './config/env.schema.js'
 import { createRedisClientOptions } from './factories/redis.options.js'
+import { createStaticFrontendOptions } from './factories/static-frontend.js'
+import { ServeStaticModule } from '@nestjs/serve-static'
 import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
 import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/fail-open-throttler-storage.service.js'
 
@@ -121,6 +123,10 @@ import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/f
             },
         }),
         ScheduleModule.forRoot(),
+        ServeStaticModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService<Env, true>) => createStaticFrontendOptions(configService),
+        }),
         AuthModule,
         UserModule,
         DomainModule,

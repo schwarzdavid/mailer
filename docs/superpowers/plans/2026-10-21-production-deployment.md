@@ -1,5 +1,7 @@
 # Production Deployment (Images, Compose on a VPS, Mail Server, CI) Implementation Plan
 
+> **Amended:** The `web` image (`mailer-web`), the `web` Dockerfile target and `deploy/Caddyfile` described below were replaced by a single backend image that serves the SPA, behind a stock Caddy service `proxy`. See [2026-10-22-backend-serves-frontend.md](2026-10-22-backend-serves-frontend.md). This plan is kept as history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One `docker compose up -d` on a VPS runs the whole product, including its own mail server, behind automatic TLS. It runs migrations as a one-shot step before the backend starts. GitHub Actions gates every change and publishes the images.
