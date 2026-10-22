@@ -19,6 +19,16 @@ describe('application bootstrap (shared configureApp)', () => {
         await request(app.getHttpServer()).get('/setup/status').expect(404)
     })
 
+    it('answers every request with an X-Request-Id', async () => {
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+        const first = await request(app.getHttpServer()).get('/api/setup/status').expect(200)
+        const second = await request(app.getHttpServer()).get('/api/setup/status').expect(200)
+
+        expect(first.headers['x-request-id']).toMatch(uuid)
+        expect(second.headers['x-request-id']).toMatch(uuid)
+        expect(second.headers['x-request-id']).not.toBe(first.headers['x-request-id'])
+    })
+
     it('gives no origin CORS headers on the admin API', async () => {
         const response = await request(app.getHttpServer())
             .get('/api/setup/status')

@@ -2,7 +2,7 @@ import { Logger, NotFoundException } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Op } from 'sequelize'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { EmailBlockService } from './email-block.service.js'
 import { EmailBlockModel } from '../models/email-block.model.js'
 import { EmailBlock } from '../interfaces/email-block.interface.js'
@@ -44,11 +44,12 @@ describe('EmailBlockService', () => {
     let findOne: Mock<(typeof EmailBlockModel)['findOne']>
     let findAll: Mock<(typeof EmailBlockModel)['findAll']>
     let findByPk: Mock<(typeof EmailBlockModel)['findByPk']>
+    let logSpy: MockInstance<Logger['log']>
 
     beforeEach(async () => {
         vi.useFakeTimers()
         vi.setSystemTime(now)
-        vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
 
         findOrCreate = vi.fn<typeof findOrCreate>()
         findOne = vi.fn<typeof findOne>().mockResolvedValue(null)
@@ -89,6 +90,16 @@ describe('EmailBlockService', () => {
                 blockedUntil: new Date(now.getTime() + 7 * DAY_MS),
             })
             expect(result.blockCount).toBe(1)
+        })
+
+        it('logs the block by its id, never by address', async () => {
+            findOrCreate.mockResolvedValue([blockRow() as unknown as EmailBlockModel, true])
+
+            await service.applyBlock('user@example.com')
+
+            expect(logSpy).toHaveBeenLastCalledWith(
+                `Blocked email block #5 until ${new Date(now.getTime() + 7 * DAY_MS).toISOString()} (block count 1)`,
+            )
         })
 
         it('escalates along the ladder for repeat offenders', async () => {
@@ -169,6 +180,14 @@ describe('EmailBlockService', () => {
             expect(row.update).toHaveBeenCalledWith({ blockedUntil: null })
             expect(result.blockCount).toBe(3)
             expect(result.blockedUntil).toBeNull()
+        })
+
+        it('logs the unblock by id, never by address', async () => {
+            findByPk.mockResolvedValue(blockRow({ blockCount: 1 }) as unknown as EmailBlockModel)
+
+            await service.unblock(5)
+
+            expect(logSpy).toHaveBeenLastCalledWith('Unblocked email block #5')
         })
 
         it('throws NotFound for an unknown id', async () => {

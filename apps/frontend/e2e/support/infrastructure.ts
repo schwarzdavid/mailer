@@ -16,6 +16,7 @@ export interface BackendEnv {
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
+    SMTP_REQUIRE_TLS: string
     SMTP_USER: string
     SMTP_PASSWORD: string
     IMAP_HOST: string
@@ -77,6 +78,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
             SMTP_HOST: mailhog.getHost(),
             SMTP_PORT: String(mailhog.getMappedPort(1025)),
             SMTP_SECURE: 'false',
+            SMTP_REQUIRE_TLS: 'false',
             SMTP_USER: '',
             SMTP_PASSWORD: '',
             IMAP_HOST: greenmail.getHost(),

@@ -195,6 +195,14 @@ mapfile -t app_services < <(dc config --services | tr -d '\r' | grep -vx mail)
 dc up -d --pull missing --wait "${app_services[@]}"
 pass "stack without mail is up and healthy"
 
+request GET /api/health
+expect_status 200 "GET /api/health without mail"
+request GET /api/health/ready
+expect_status 503 "GET /api/health/ready without mail"
+grep -Eq '"smtp":\{[^}]*"status":"down"' "$tmp/body" ||
+    fail "GET /api/health/ready without mail does not report the smtp check as down: $(cat "$tmp/body")"
+pass "readiness reports the missing mail server while liveness stays up"
+
 setup_token=$(dc logs --no-color backend 2>&1 | grep -oE 'Setup token: [0-9a-f]{32}' | tail -n 1 | sed 's/^Setup token: //' || true)
 [ -n "$setup_token" ] || fail "the backend log shows no 'Setup token: ' line with 32 hex characters"
 wrong_token=$(printf '%032d' 0)
@@ -220,6 +228,14 @@ dc exec -T mail setup email add "bounce@$mail_hostname" "$mail_password" || fail
 dc exec -T mail setup alias add "postmaster@$mail_hostname" "bounce@$mail_hostname" || fail "creating the postmaster alias failed"
 wait_healthy mail 120 || fail "mail did not become healthy within 120 s"
 pass "mail is up and healthy with the bounce account"
+
+for _ in $(seq 1 30); do
+    request GET /api/health/ready
+    [ "$status" = 200 ] && break
+    sleep 1
+done
+expect_status 200 "GET /api/health/ready with mail"
+pass "readiness is 200 once the mail server accepts connections"
 
 for _ in $(seq 1 30); do
     curl -sS -o /dev/null "$base/" 2>/dev/null && break
@@ -262,6 +278,18 @@ request GET /api/setup/status
 expect_status 200 "GET /api/setup/status"
 grep -qi '^content-type:.*application/json' "$tmp/headers" || fail "GET /api/setup/status is not JSON"
 pass "GET /api/setup/status returns JSON"
+
+request_id=$(grep -i '^x-request-id:' "$tmp/headers" | cut -d' ' -f2 || true)
+[[ "$request_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] ||
+    fail "GET /api/setup/status lacks a UUID X-Request-Id header (got '$request_id')"
+for _ in $(seq 1 10); do
+    dc logs --no-color --no-log-prefix backend >"$tmp/backend.log" 2>&1
+    grep -Eq "^\{\"level\":[0-9]+,.*\"reqId\":\"$request_id\".*\"url\":\"/api/setup/status\"" "$tmp/backend.log" && break
+    sleep 1
+done
+grep -Eq "^\{\"level\":[0-9]+,.*\"reqId\":\"$request_id\".*\"url\":\"/api/setup/status\"" "$tmp/backend.log" ||
+    fail "the backend wrote no json request log line with reqId $request_id for GET /api/setup/status"
+pass "the backend writes json request logs with request ids"
 
 request GET /api/does-not-exist
 expect_status 404 "GET /api/does-not-exist"

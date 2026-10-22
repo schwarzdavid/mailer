@@ -8,7 +8,7 @@ schwarzdavid Mailer is a self-hosted mail service. It lets websites send email r
 
 What works so far:
 
-- **Inbound forms.** You define a form with its fields, security checks (reCAPTCHA, CSRF, honeypot) and receivers. A static website can then POST its contact form straight to a public endpoint. Each accepted submission goes out to the receivers as a DKIM-signed email, rendered from a versioned Handlebars template. The template editor has a live preview.
+- **Inbound forms.** You define a form with its fields, security checks (reCAPTCHA, CSRF, honeypot) and receivers. A static website can then POST its contact form straight to a public endpoint. Each accepted submission goes out to the receivers as a DKIM-signed email, rendered from a versioned Handlebars template. The template editor has a live preview. The submission and one pending delivery per receiver are stored first, then each delivery is queued in Redis and sent in the background, so the form endpoint answers without waiting for the mail server. After a temporary error (a 4xx reply from the relay, a failed connection, or an internal error before the mail was handed over), a delivery gets up to 8 attempts in all, with exponentially growing pauses that add up to about two hours; a permanent rejection, a blocked recipient or a receiver or template deleted in the meantime fails it right away. A delivery that never reached the queue (Redis was down) or whose job was lost in a restart stays pending in the database and is queued again after two minutes, so Redis is required for deliveries but an outage only delays them. If the backend dies after the mail server accepted a mail but before the delivery was marked as sent, the delivery is sent a second time: a rare duplicate is accepted, because marking it sent before handing it over would lose mails instead.
 - **Domains & DNS.** You register sending domains, the service generates DKIM keys for them, and it lists the DNS records each domain needs (SPF, DKIM, DMARC, MX, A/AAAA, PTR). A scheduled job checks those records regularly and reports their health.
 - **Platform sending domain.** The service's own infrastructure domain is `MAIL_HOSTNAME` from the environment; there is exactly one. During first-start onboarding (or later in the settings) you only enter the server's IP addresses, pre-filled from the A/AAAA records of `MAIL_HOSTNAME` where those exist. It is used as the SPF include and as the bounce (return-path) domain. If `MAIL_HOSTNAME` changes, the backend switches the sending domain to the new name on its next start, keeping the stored IP addresses: it generates a new DKIM key and new records for it and rewrites the SPF include of every customer domain, whose owners then have to update their DNS. It refuses to start if the new name is already registered as a customer domain.
 - **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and recipients the SMTP server rejects with a 5xx at `RCPT TO` are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
@@ -49,18 +49,26 @@ cp .env.example .env
 
 Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values of at least 32 characters. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
 
+`DB_USERNAME`, `DB_PASSWORD` and `DB_DATABASE` are required and have no defaults, and `DB_PORT` defaults to 5432. `DB_POOL_MAX` (default 10) caps the connections the backend keeps open to Postgres, so keep it below the server's `max_connections` divided by the number of backend instances. `DB_SSL` (default `false`) makes the backend connect to Postgres over TLS, which the local Docker database does not need. `DB_SSL_REJECT_UNAUTHORIZED` (default `true`) only has an effect when `DB_SSL` is set.
+
+`REDIS_HOST` (default `127.0.0.1`) and `REDIS_PORT` (default 6379) locate Redis. The local Docker Redis needs no login or TLS, so `REDIS_USERNAME`, `REDIS_PASSWORD` and `REDIS_TLS_SERVERNAME` stay empty and `REDIS_TLS` stays `false`.
+
+`LOG_LEVEL` (default `info`; `.env.example` sets `debug` for local work) sets the backend's log level, see [Logging](#logging).
+
+`SMTP_REQUIRE_TLS` (default `true`) makes the backend refuse to hand mail to an SMTP server that does not offer STARTTLS, so credentials and mail never cross the network in clear text. It has no effect when `SMTP_SECURE=true`. The local MailHog has no STARTTLS, so `.env.example` sets it to `false`; the production compose file sets it to `true` for the bundled mail server.
+
 ### 3. Start the infrastructure
 
 ```bash
 docker compose -f dev/docker-compose.yml up -d
 ```
 
-| Service    | Purpose                   | Ports                                           |
-| ---------- | ------------------------- | ----------------------------------------------- |
-| PostgreSQL | Main database             | `5432`                                          |
-| Redis      | Cache                     | `6379`                                          |
-| MailHog    | Catches all outgoing mail | SMTP `1025`, web UI http://localhost:8025       |
-| GreenMail  | Bounce mailbox            | SMTP `3025` (inject DSNs), IMAP `3143` (polled) |
+| Service    | Purpose                            | Ports                                           |
+| ---------- | ---------------------------------- | ----------------------------------------------- |
+| PostgreSQL | Main database                      | `5432`                                          |
+| Redis      | Cache, rate limits, delivery queue | `6379`                                          |
+| MailHog    | Catches all outgoing mail          | SMTP `1025`, web UI http://localhost:8025       |
+| GreenMail  | Bounce mailbox                     | SMTP `3025` (inject DSNs), IMAP `3143` (polled) |
 
 ### 4. Database migrations
 
@@ -121,7 +129,7 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     - Set the PTR (reverse DNS) record of the VPS IP to `MAIL_HOSTNAME` in your provider's console.
     - Make sure your provider allows outbound connections to port 25. Many block it by default (Hetzner Cloud, for example), and the mail server cannot deliver anything until it is unblocked.
     - Open ports 25, 80 and 443 inbound.
-2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets (`BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` need at least 32 characters, e.g. `openssl rand -base64 48`), including `MAIL_PASSWORD`. For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own.
+2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets (`BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` need at least 32 characters, e.g. `openssl rand -base64 48`), including `MAIL_PASSWORD`. For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). The bundled Postgres container speaks plain TCP on the internal network, so leave `DB_SSL` unset. If you point the backend at a managed Postgres instead, set `DB_SSL=true` in `.env`; the backend then verifies the server certificate. When the provider's certificate comes from a private CA, put the CA file on the backend container and set `NODE_EXTRA_CA_CERTS` in `.env` to its path (the Node runtime reads that variable itself), and use `DB_SSL_REJECT_UNAUTHORIZED=false` only as a last resort, because it turns certificate verification off. Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own. The bundled Redis runs with append-only persistence (`--appendonly yes`) and `--maxmemory-policy noeviction`, because the delivery queue lives in it and Redis must never drop queued jobs to free memory. If you point the backend at a managed Redis instead, set `REDIS_HOST` and `REDIS_PORT`, add `REDIS_PASSWORD` (and `REDIS_USERNAME` for an ACL user) when it requires a login, and set `REDIS_TLS=true` when it speaks TLS; the backend then verifies the server certificate against `REDIS_HOST`, or against `REDIS_TLS_SERVERNAME` when the certificate names a different host. When that certificate comes from a private CA, `NODE_EXTRA_CA_CERTS` covers it as well, the same file as for Postgres or one bundle with both CAs. Configure that Redis with `maxmemory-policy noeviction` and persistence as well; an empty value for any of these keys counts as unset.
 3. Run `docker login ghcr.io` with a personal access token that has `read:packages`, because the packages are private.
 4. **First deploy:** start the stack and finish the first-time setup in the browser. Creating the first user needs the setup token that the backend logs while no user exists (see below). The backend creates the database schema itself when it starts:
 
@@ -188,6 +196,8 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
 
     `--remove-orphans` removes services that the new `compose.yml` no longer has, such as the `migrate` and `web` services of earlier versions.
 
+    Earlier versions sent form deliveries directly, without a queue, and a delivery cut short by a restart stayed `pending` in `inbound_form_delivery` for good. After the update to a version with the delivery queue, the recovery sweep sends these rows within about two minutes of the first start, possibly long after their submission.
+
     If a migration fails, the backend logs `Migration <name> (up) failed`, does not start and keeps restarting; the site is down until you act (`docker compose logs backend`). The failed migration run is rolled back as a whole, so the database is exactly as before the update. Either set `IMAGE_TAG` back to the recorded revision, put that commit's `compose.yml` back and run `docker compose up -d`, or fix forward with a new image.
 
 9. **Rollback after a successful update:** migrations that succeeded stay applied when you go back to an older image, and the older backend does not know them. If the newer version applied migrations and you want them reverted, stop the backend and revert them while `IMAGE_TAG` still names the current image, the only one that knows them. `executed` lists the applied migrations; `--to` names the oldest migration to revert and reverts it and everything after it, all in one transaction:
@@ -201,7 +211,7 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     Then set `IMAGE_TAG=sha-<first 7 characters of the recorded revision>` in `.env`, put that commit's `compose.yml` back, and run the same commands as for an update.
 
 10. **Updating docker-mailserver and Caddy:** their tags are pinned in `compose.yml` (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1` and `caddy:2.11.7-alpine`), and `IMAGE_TAG` does not touch them. To update one, bump the tag in `deploy/compose.yml`, re-run the local smoke test (step 11), then copy the file to the VPS and run `docker compose pull mail && docker compose up -d mail` (or `proxy`).
-11. **Local smoke test:** build the backend image and run the stack from it. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, the login throttle, that the backend migrates the database when it starts, that a failing migration keeps it from serving until the migrations can run, and that `up -d` replaces it. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
+11. **Local smoke test:** build the backend image and run the stack from it. It needs Docker, curl and openssl. The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, JSON request logs whose `reqId` matches the `X-Request-Id` header, the login throttle, that `/api/health/ready` reports the missing mail server while `/api/health` stays up and turns `200` once `mail` is healthy, that the backend migrates the database when it starts, that a failing migration keeps it from serving until the migrations can run, and that `up -d` replaces it. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
 
     ```bash
     docker build -t ghcr.io/schwarzdavid/mailer-backend:local .
@@ -210,7 +220,15 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
 
 Compose sets `TRUST_PROXY=1` for the backend itself, matching Caddy as the single proxy hop (see below).
 
+Several backend instances can share one database and one Redis. The background jobs then run on one instance at a time: the DNS check, the purge of trashed projects and the delivery recovery each hold a lease in the `locks` table, which the first instance takes and keeps renewing. When that instance stops, another one takes the job over at its next interval; after a crash, once the lease has gone 30 seconds without a renewal. The bounce poller takes a Postgres advisory lock for each round. A run that is still going when the next interval fires is skipped, never started twice.
+
 The bounce mailbox grows over time: the backend only marks processed mails as `\Seen` and never deletes them (see open todos).
+
+The app has no button to resend a `failed` form delivery. To resend one, set its `status` back to `pending` in the database; the recovery sweep queues it within about two minutes and it gets a fresh set of attempts:
+
+```bash
+(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "UPDATE inbound_form_delivery SET status = 'pending' WHERE \"inboundFormDeliveryId\" = <id> AND status = 'failed'")
+```
 
 ### CI and release pipeline
 
@@ -236,6 +254,25 @@ UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
 ```
 
 Each `up` or `down` run is a single transaction: if one migration fails, every migration of that run is rolled back as well, and the database is left exactly as it was before the run. Concurrent runs are safe: a Postgres advisory lock lets one runner apply the pending migrations while the others wait and then find nothing left to do.
+
+## Logging
+
+The backend logs through [pino](https://getpino.io/) (`nestjs-pino`). With `NODE_ENV=production`, as in the Docker image, it writes one JSON object per line to stdout, ready for `docker compose logs` or a log shipper. In every other environment the same entries are pretty-printed by `pino-pretty`, one line each. `LOG_LEVEL` (`fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`, default `info`) picks the lowest level that is written; set it in `.env` next to `compose.yml` to change it in production.
+
+Every request gets a random UUID as its request id. The backend returns it in the `X-Request-Id` response header, and every log entry written while handling that request carries it as `reqId`, so an error a user reports with that id leads straight to the matching log lines. After each request the backend logs one `request completed` entry with the method, the path, the client address, the status code and the response time. Health probes (`/api/health`, `/api/health/ready`) are not logged. Request entries never contain the query string, request or response headers, or bodies, so neither API keys passed as `?key=…` nor `Authorization` headers or cookies reach the log.
+
+Log messages name records by their id instead of by e-mail address: a sent mail is logged as `Sent mail message <id>`, bounces and address blocks by their bounce and block ids, and a failed login only as `Login failed`. Look up the address in the admin UI when you need it.
+
+## Health checks
+
+The backend has two health endpoints for container orchestrators and uptime monitors:
+
+| Endpoint                | Checks                                                                                                 | Use                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `GET /api/health`       | Liveness: the database answers `SELECT 1` within 3 s                                                   | Is the process up? The Docker healthcheck uses it |
+| `GET /api/health/ready` | Readiness: the database, Redis (`PING` within 3 s) and the SMTP server (a connection check within 5 s) | Can the backend do all of its work right now?     |
+
+Both answer `200` with `{"status":"ok", …}` when every check passes, and `503` with `{"status":"error", …}` when one fails. `details` lists every check (`database`, `redis`, `smtp`) as `up` or `down`, a failed one with the error type and code (never the error text); `info` repeats the passing checks and `error` the failing ones. Both are unauthenticated, exempt from rate limiting, not written to the request log and left out of the OpenAPI document. Readiness depends on the mail server, so it reports `503` while `mail` is down even though the site still serves; that is why the Docker healthcheck uses `/api/health`. Readiness answers from a cached result for 10 s after each run, and concurrent requests share one run, so a burst of probes opens at most one SMTP connection every 10 s; a change in a dependency can show up to 10 s late. Liveness works the same way with a 2 s cache, so a flood of `/api/health` requests costs at most one database query every 2 s.
 
 ## Running behind a reverse proxy
 
@@ -265,7 +302,7 @@ curl -X POST http://localhost:8000/api/v1/send \
   -d '{"from":"news@mail.example.com","to":"reader@example.org","subject":"Hello","html":"<p>Hi</p>"}'
 ```
 
-The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. The backend never logs request URLs, and the proxy writes no access logs by default. The one place Caddy logs a URL is the error entry for a failed upstream request, for example a 502 while the backend is down; the Caddyfile in `deploy/compose.yml` therefore replaces the `key` query parameter with `REDACTED` in every log entry. The smoke test enforces both: it checks that a key sent to the running stack reaches no container log and that a key sent while the backend is down shows up redacted. If you turn on Caddy access logs, add the same filter to them in the site block of that Caddyfile:
+The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. The backend logs request paths without their query string (see [Logging](#logging)), and the proxy writes no access logs by default. The one place Caddy logs a URL is the error entry for a failed upstream request, for example a 502 while the backend is down; the Caddyfile in `deploy/compose.yml` therefore replaces the `key` query parameter with `REDACTED` in every log entry. The smoke test enforces both: it checks that a key sent to the running stack reaches no container log and that a key sent while the backend is down shows up redacted. If you turn on Caddy access logs, add the same filter to them in the site block of that Caddyfile:
 
 ```
 log {
@@ -277,7 +314,7 @@ log {
 }
 ```
 
-Responses: `202 { mailMessageId, status }`. Domain errors (403, 422, 502) carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`); authentication (401), validation (400), rate limit (429) and payload size (413) errors use the standard Nest error shape without a `code`. `html` and `text` may each hold up to 1,000,000 characters, and the send endpoint accepts JSON bodies up to roughly 8 MB to fit them; every other endpoint keeps the default 100 kB JSON limit. Each key is limited to `PUBLIC_API_RATE_LIMIT` requests (default 60) per `PUBLIC_API_RATE_TTL` ms (default 60000). On top of that, each client IP is capped at 10 × `PUBLIC_API_RATE_LIMIT` requests per window across all keys. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page.
+Responses: `202 { mailMessageId, status }`. Domain errors (403, 422, 502) carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`); authentication (401), validation (400), rate limit (429) and payload size (413) errors use the standard Nest error shape without a `code`. `html` and `text` may each hold up to 1,000,000 characters, and the send endpoint accepts JSON bodies up to roughly 8 MB to fit them; every other endpoint keeps the default 100 kB JSON limit. Each key is limited to `PUBLIC_API_RATE_LIMIT` requests (default 60) per `PUBLIC_API_RATE_TTL` ms (default 60000). On top of that, each client IP is capped at 10 × `PUBLIC_API_RATE_LIMIT` requests per window across all keys. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page. `/api/v1/send` is synchronous: it waits for the SMTP relay (connection and greeting time out after 10 seconds, an idle connection after 120 seconds) and answers `502` with `DELIVERY_FAILED` when the relay does not accept the mail, so callers retry failed requests themselves.
 
 ## Open todos
 

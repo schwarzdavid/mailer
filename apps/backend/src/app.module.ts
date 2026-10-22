@@ -9,6 +9,7 @@ import { createKeyv } from '@keyv/redis'
 import { JwtModule } from '@nestjs/jwt'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
+import { BullModule } from '@nestjs/bullmq'
 import { DomainModule } from './modules/domain/domain.module.js'
 import { ProjectModule } from './modules/project/project.module.js'
 import { InboundFormModule } from './modules/inbound-form/inbound-form.module.js'
@@ -18,6 +19,8 @@ import { SettingsModule } from './modules/settings/settings.module.js'
 import { SetupModule } from './modules/setup/setup.module.js'
 import { PermissionModule } from './modules/permission/permission.module.js'
 import { ApiKeyModule } from './modules/api-key/api-key.module.js'
+import { HealthModule } from './modules/health/health.module.js'
+import { AppLocksModule } from './modules/locks/locks.module.js'
 import { isApiKeyRoute, publicApiThrottleTracker } from './modules/api-key/helpers/extract-api-key.js'
 import {
     PUBLIC_API_IP_LIMIT_FACTOR,
@@ -31,14 +34,20 @@ import {
     formThrottleTracker,
 } from './modules/inbound-form/helpers/form-throttle.js'
 import { Env, envSchema } from './config/env.schema.js'
-import { createRedisClientOptions } from './factories/redis.options.js'
+import { createIoRedisOptions, createRedisClientOptions } from './factories/redis.options.js'
 import { createStaticFrontendOptions } from './factories/static-frontend.js'
 import { ServeStaticModule } from '@nestjs/serve-static'
 import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
 import { ThrottlerStorageService } from './modules/throttler-storage/services/throttler-storage.service.js'
+import { LoggerModule } from 'nestjs-pino'
+import { createLoggerOptions } from './factories/logger.options.js'
 
 @Module({
     imports: [
+        LoggerModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: createLoggerOptions,
+        }),
         ConfigModule.forRoot({
             isGlobal: true,
             envFilePath,
@@ -123,6 +132,13 @@ import { ThrottlerStorageService } from './modules/throttler-storage/services/th
             },
         }),
         ScheduleModule.forRoot(),
+        AppLocksModule,
+        BullModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService<Env, true>) => ({
+                connection: { ...createIoRedisOptions(configService), maxRetriesPerRequest: null },
+            }),
+        }),
         ServeStaticModule.forRootAsync({
             inject: [ConfigService],
             useFactory: (configService: ConfigService<Env, true>) => createStaticFrontendOptions(configService),
@@ -138,6 +154,7 @@ import { ThrottlerStorageService } from './modules/throttler-storage/services/th
         SetupModule,
         PermissionModule,
         ApiKeyModule,
+        HealthModule,
     ],
 })
 export class AppModule {}

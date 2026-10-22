@@ -14,6 +14,9 @@ const requiredEnv = {
     MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',
+    DB_USERNAME: 'mailer',
+    DB_PASSWORD: 'secret',
+    DB_DATABASE: 'mailer',
 }
 
 function configFor(env: Record<string, string>): ConfigService<Env, true> {

@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     const app = await NestFactory.createApplicationContext(MigrationModule, {
         logger: ['error', 'warn'],
     })
+    app.useLogger(['error', 'warn', 'log'])
 
     try {
         const sequelize = app.get<Sequelize>(getConnectionToken())

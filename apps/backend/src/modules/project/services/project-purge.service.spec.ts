@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
+import { LocksModule } from '@nestjs/locks'
 import { Op } from 'sequelize'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ProjectPurgeService } from './project-purge.service.js'
@@ -8,6 +9,7 @@ import { ProjectModel } from '../models/project.model.js'
 import { PROJECT_PURGE_AFTER_MS } from '../project.constants.js'
 
 describe('ProjectPurgeService', () => {
+    let module: TestingModule
     let service: ProjectPurgeService
     let projectDestroy: Mock<(options: { where: object; force: boolean }) => Promise<number>>
 
@@ -19,17 +21,20 @@ describe('ProjectPurgeService', () => {
 
         projectDestroy = vi.fn<typeof projectDestroy>().mockResolvedValue(0)
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
+            imports: [LocksModule.forRoot()],
             providers: [
                 ProjectPurgeService,
                 { provide: getModelToken(ProjectModel), useValue: { destroy: projectDestroy } },
             ],
         }).compile()
+        await module.init()
 
         service = module.get(ProjectPurgeService)
     })
 
-    afterEach(() => {
+    afterEach(async () => {
+        await module.close()
         vi.useRealTimers()
         vi.restoreAllMocks()
     })

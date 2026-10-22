@@ -50,6 +50,7 @@ services:
 
     redis:
         image: redis:8-alpine
+        command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
         restart: unless-stopped
         logging: *logging
         healthcheck:
@@ -76,6 +77,7 @@ services:
             SMTP_HOST: mail
             SMTP_PORT: '587'
             SMTP_SECURE: 'false'
+            SMTP_REQUIRE_TLS: 'true'
             SMTP_TLS_SERVERNAME: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
             SMTP_USER: bounce@${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
             SMTP_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
@@ -94,7 +96,7 @@ services:
                 - CMD
                 - node
                 - -e
-                - fetch('http://127.0.0.1:8000/api/setup/status').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))
+                - fetch('http://127.0.0.1:8000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))
             interval: 10s
             timeout: 5s
             retries: 6

@@ -29,7 +29,9 @@ export class EmailBlockService {
         const blockedUntil = new Date(Date.now() + days * DAY_MS)
 
         await row.update({ blockCount, blockedUntil })
-        this.logger.log(`Blocked ${address} until ${blockedUntil.toISOString()} (block #${blockCount})`)
+        this.logger.log(
+            `Blocked email block #${block.emailBlockId} until ${blockedUntil.toISOString()} (block count ${blockCount})`,
+        )
 
         return row.get({ plain: true })
     }
@@ -61,7 +63,7 @@ export class EmailBlockService {
         }
 
         await row.update({ blockedUntil: null })
-        this.logger.log(`Unblocked ${row.emailAddress}`)
+        this.logger.log(`Unblocked email block #${row.emailBlockId}`)
 
         return row.get({ plain: true })
     }

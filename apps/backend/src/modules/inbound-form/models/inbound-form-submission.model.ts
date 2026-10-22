@@ -16,6 +16,7 @@ import {
     InboundFormSubmissionStatus,
 } from '../interfaces/inbound-form-submission.interface.js'
 import { InboundFormModel } from './inbound-form.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'inbound_form_submission',
@@ -51,5 +52,5 @@ export class InboundFormSubmissionModel
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     })
-    inboundForm: InboundFormModel | null = null
+    declare inboundForm?: Relation<InboundFormModel>
 }

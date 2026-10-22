@@ -77,7 +77,7 @@ export class MailService {
 
         let smtpMessageId: string
         try {
-            smtpMessageId = await this.deliver(mail)
+            smtpMessageId = await this.deliver(mail, mailMessageId)
         } catch (error) {
             const status = error instanceof EmailBlockedException ? MailMessageStatus.BLOCKED : MailMessageStatus.FAILED
             await this.updateLog(mailMessageId, () =>
@@ -91,7 +91,7 @@ export class MailService {
         return { mailMessageId, smtpMessageId }
     }
 
-    private async deliver(mail: SendMail): Promise<string> {
+    private async deliver(mail: SendMail, mailMessageId: number): Promise<string> {
         await this.emailBlockService.assertNotBlocked(mail.to)
 
         const [localPart, fqdn] = mail.from.split('@')
@@ -124,11 +124,11 @@ export class MailService {
                 },
             })
         } catch (error) {
-            await this.recordRejection(mail.to, error)
+            await this.recordRejection(mailMessageId, mail.to, error)
             throw error
         }
 
-        this.logger.log(`Sent mail from ${mail.from} to ${mail.to}`)
+        this.logger.log(`Sent mail message ${mailMessageId}`)
         return info.messageId
     }
 
@@ -140,7 +140,7 @@ export class MailService {
         }
     }
 
-    private async recordRejection(emailAddress: string, error: unknown): Promise<void> {
+    private async recordRejection(mailMessageId: number, emailAddress: string, error: unknown): Promise<void> {
         const responseCode = permanentRecipientRejectionCode(error)
         if (responseCode === undefined) {
             return
@@ -156,7 +156,9 @@ export class MailService {
                 receivedAt: new Date(),
             })
         } catch (recordError) {
-            this.logger.error(`Failed to record rejection bounce for ${emailAddress}: ${errorMessage(recordError)}`)
+            this.logger.error(
+                `Failed to record rejection bounce for mail message ${mailMessageId}: ${errorMessage(recordError)}`,
+            )
         }
     }
 }

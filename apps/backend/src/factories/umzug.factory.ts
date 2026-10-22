@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { Logger } from '@nestjs/common'
 import { Sequelize, type QueryInterface, type Transaction } from 'sequelize'
 import { SequelizeStorage, Umzug, type MigrateDownOptions, type MigrateUpOptions, type UmzugOptions } from 'umzug'
 
@@ -51,6 +52,22 @@ class TransactionalUmzug extends Umzug<QueryInterface> {
     }
 }
 
+function describeMigrationEvent(event: Record<string, unknown>): string {
+    const parts = [event.event, event.name ?? event.path ?? event.message].filter((part) => typeof part === 'string')
+    const duration = typeof event.durationSeconds === 'number' ? ` (${event.durationSeconds}s)` : ''
+    return `${parts.join(' ')}${duration}`
+}
+
+export function createMigrationLogger(): UmzugOptions['logger'] {
+    const logger = new Logger('Migrations')
+    return {
+        info: (event) => logger.log(describeMigrationEvent(event)),
+        warn: (event) => logger.warn(describeMigrationEvent(event)),
+        error: (event) => logger.error(describeMigrationEvent(event)),
+        debug: (event) => logger.debug(describeMigrationEvent(event)),
+    }
+}
+
 const sourceExtension = extname(import.meta.filename)
 const sourceRoot = join(import.meta.dirname, '..')
 
@@ -75,7 +92,7 @@ export function createUmzug(sequelize: Sequelize): Umzug<QueryInterface> {
         },
         context: sequelize.getQueryInterface(),
         storage: new SequelizeStorage({ sequelize }),
-        logger: console,
+        logger: createMigrationLogger(),
         create: {
             folder: join(sourceRoot, 'migrations'),
         },

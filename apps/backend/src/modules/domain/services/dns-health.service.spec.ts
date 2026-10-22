@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
+import { LocksModule } from '@nestjs/locks'
 import { getModelToken } from '@nestjs/sequelize'
 import { Logger } from '@nestjs/common'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -10,6 +11,7 @@ import { Domain } from '../interfaces/domain.interface.js'
 type DomainListRow = Pick<Domain, 'domainId' | 'fqdn'>
 
 describe('DnsHealthService', () => {
+    let module: TestingModule
     let service: DnsHealthService
     let findAll: Mock<() => Promise<DomainListRow[]>>
     let reloadDnsRecords: Mock<DomainDnsService['reloadDnsRecords']>
@@ -26,18 +28,21 @@ describe('DnsHealthService', () => {
         findAll = vi.fn<typeof findAll>().mockResolvedValue(domains)
         reloadDnsRecords = vi.fn<typeof reloadDnsRecords>().mockResolvedValue({} as Domain)
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
+            imports: [LocksModule.forRoot()],
             providers: [
                 DnsHealthService,
                 { provide: DomainDnsService, useValue: { reloadDnsRecords } },
                 { provide: getModelToken(DomainModel), useValue: { unscoped: () => ({ findAll }) } },
             ],
         }).compile()
+        await module.init()
 
         service = module.get(DnsHealthService)
     })
 
-    afterEach(() => {
+    afterEach(async () => {
+        await module.close()
         vi.restoreAllMocks()
     })
 

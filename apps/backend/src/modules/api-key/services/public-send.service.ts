@@ -5,6 +5,7 @@ import { MailService } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
 import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
 import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { describeError } from '../../../helpers/describe-error.js'
 import { ApiKey } from '../interfaces/api-key.interface.js'
 import { PublicSendDto } from '../dtos/public-send.dto.js'
 import { PublicSendErrorCode, PublicSendException } from '../exceptions/public-send.exception.js'
@@ -50,7 +51,7 @@ export class PublicSendService {
                     error.mailMessageId,
                 )
             }
-            this.logger.warn(`API key ${apiKey.prefix} delivery ${error.mailMessageId} failed: ${error.message}`)
+            this.logger.warn(`API key ${apiKey.prefix} delivery ${error.mailMessageId} failed: ${describeError(error)}`)
             throw new PublicSendException(
                 PublicSendErrorCode.DELIVERY_FAILED,
                 'The mail could not be delivered to the relay',

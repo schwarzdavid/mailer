@@ -11,6 +11,9 @@ const requiredEnv = {
     MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',
+    DB_USERNAME: 'mailer',
+    DB_PASSWORD: 'secret',
+    DB_DATABASE: 'mailer',
 }
 
 function configFor(env: Record<string, string>): ConfigService<Env, true> {
@@ -46,6 +49,8 @@ describe('database config', () => {
             database: 'mailer_prod',
             autoLoadModels: true,
             synchronize: false,
+            logging: false,
+            pool: { max: 10, min: 0, acquire: 30_000, idle: 10_000 },
         })
     })
 
@@ -55,5 +60,34 @@ describe('database config', () => {
 
     it('never lets Sequelize synchronize the schema over the migrations', () => {
         expect(createSequelizeOptions(configFor({})).synchronize).toBe(false)
+    })
+
+    it('never logs SQL statements', () => {
+        expect(createSequelizeOptions(configFor({})).logging).toBe(false)
+    })
+
+    it('enables TLS with certificate verification when DB_SSL is set', () => {
+        expect(createSequelizeOptions(configFor({ DB_SSL: 'true' })).dialectOptions).toEqual({
+            ssl: { rejectUnauthorized: true },
+        })
+    })
+
+    it('can skip certificate verification for self-signed database servers', () => {
+        expect(
+            createSequelizeOptions(configFor({ DB_SSL: 'true', DB_SSL_REJECT_UNAUTHORIZED: 'false' })).dialectOptions,
+        ).toEqual({ ssl: { rejectUnauthorized: false } })
+    })
+
+    it('sets no dialect options without DB_SSL', () => {
+        expect(createSequelizeOptions(configFor({}))).not.toHaveProperty('dialectOptions')
+    })
+
+    it('sizes the pool from DB_POOL_MAX', () => {
+        expect(createSequelizeOptions(configFor({ DB_POOL_MAX: '3' })).pool).toEqual({
+            max: 3,
+            min: 0,
+            acquire: 30_000,
+            idle: 10_000,
+        })
     })
 })

@@ -5,6 +5,7 @@ import {
     Column,
     CreatedAt,
     DataType,
+    Default,
     ForeignKey,
     Model,
     PrimaryKey,
@@ -20,6 +21,7 @@ import { InboundFormSubmissionModel } from './inbound-form-submission.model.js'
 import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
 import { InboundFormTemplateModel } from './inbound-form-template.model.js'
 import { MailMessageModel } from '../../mail/models/mail-message.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'inbound_form_delivery',
@@ -61,6 +63,11 @@ export class InboundFormDeliveryModel
     @Column(DataType.STRING(255))
     declare status: InboundFormDeliveryStatus
 
+    @Default(0)
+    @AllowNull(false)
+    @Column(DataType.INTEGER)
+    declare attempts: number
+
     @AllowNull
     @Column(DataType.TEXT)
     declare error: string | null
@@ -84,23 +91,23 @@ export class InboundFormDeliveryModel
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     })
-    submission: InboundFormSubmissionModel | null = null
+    declare submission?: Relation<InboundFormSubmissionModel>
 
     @BelongsTo(() => InboundFormReceiverModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    receiver: InboundFormReceiverModel | null = null
+    declare receiver?: Relation<InboundFormReceiverModel> | null
 
     @BelongsTo(() => InboundFormTemplateModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    template: InboundFormTemplateModel | null = null
+    declare template?: Relation<InboundFormTemplateModel> | null
 
     @BelongsTo(() => MailMessageModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    mailMessage: MailMessageModel | null = null
+    declare mailMessage?: Relation<MailMessageModel> | null
 }

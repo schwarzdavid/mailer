@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Interval } from '@nestjs/schedule'
+import { OnOneInstance, WithoutOverlapping } from '@nestjs/locks'
 import { Op } from 'sequelize'
 import { ProjectModel } from '../models/project.model.js'
 import { PROJECT_PURGE_AFTER_MS, PROJECT_PURGE_INTERVAL_MS } from '../project.constants.js'
@@ -12,6 +13,8 @@ export class ProjectPurgeService {
     constructor(@InjectModel(ProjectModel) private readonly projectModel: typeof ProjectModel) {}
 
     @Interval(PROJECT_PURGE_INTERVAL_MS)
+    @OnOneInstance({ key: 'project:purge' })
+    @WithoutOverlapping()
     async handlePurgeInterval(): Promise<void> {
         try {
             await this.purgeExpiredProjects()

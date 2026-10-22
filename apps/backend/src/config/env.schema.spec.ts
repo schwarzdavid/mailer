@@ -7,7 +7,12 @@ const requiredEnv: Record<string, string> = {
     MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '1025',
+    DB_USERNAME: 'mailer',
+    DB_PASSWORD: 'secret',
+    DB_DATABASE: 'mailer',
 }
+
+const databaseCredentials = { DB_USERNAME: 'mailer', DB_PASSWORD: 'secret', DB_DATABASE: 'mailer' }
 
 const shortSecret = 'x'.repeat(31)
 const minimalSecret = 'x'.repeat(32)
@@ -25,6 +30,23 @@ describe('envSchema', () => {
 
     it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET'])('accepts a %s of exactly 32 characters', (key) => {
         expect(envSchema.safeParse({ ...requiredEnv, [key]: minimalSecret }).success).toBe(true)
+    })
+
+    it.each(['DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE'])('requires %s', (key) => {
+        const env = Object.fromEntries(Object.entries(requiredEnv).filter(([name]) => name !== key))
+        const result = envSchema.safeParse(env)
+
+        expect(result.success).toBe(false)
+        expect(result.error?.issues).toContainEqual(expect.objectContaining({ path: [key] }))
+    })
+
+    it('defaults the database port, ssl and pool size', () => {
+        expect(envSchema.parse(requiredEnv)).toMatchObject({
+            DB_PORT: 5432,
+            DB_SSL: false,
+            DB_SSL_REJECT_UNAUTHORIZED: true,
+            DB_POOL_MAX: 10,
+        })
     })
 
     it('applies defaults and coerces ports and flags from their string form', () => {
@@ -45,6 +67,11 @@ describe('envSchema', () => {
             PUBLIC_API_RATE_LIMIT: 60,
             PUBLIC_API_RATE_TTL: 60000,
         })
+    })
+
+    it('requires STARTTLS for SMTP unless SMTP_REQUIRE_TLS is switched off', () => {
+        expect(envSchema.parse(requiredEnv).SMTP_REQUIRE_TLS).toBe(true)
+        expect(envSchema.parse({ ...requiredEnv, SMTP_REQUIRE_TLS: 'false' }).SMTP_REQUIRE_TLS).toBe(false)
     })
 
     it('coerces the public api rate limit settings', () => {
@@ -91,6 +118,42 @@ describe('envSchema', () => {
         expect(envSchema.safeParse(requiredEnv).success).toBe(true)
     })
 
+    it('defaults LOG_LEVEL to info and accepts the pino levels', () => {
+        expect(envSchema.parse(requiredEnv).LOG_LEVEL).toBe('info')
+        expect(envSchema.parse({ ...requiredEnv, LOG_LEVEL: 'debug' }).LOG_LEVEL).toBe('debug')
+    })
+
+    it('rejects an unknown LOG_LEVEL', () => {
+        expect(envSchema.safeParse({ ...requiredEnv, LOG_LEVEL: 'verbose' }).success).toBe(false)
+    })
+
+    it('treats an empty REDIS_PASSWORD as unset', () => {
+        expect(envSchema.parse({ ...requiredEnv, REDIS_PASSWORD: '' }).REDIS_PASSWORD).toBeUndefined()
+    })
+
+    it('defaults Redis authentication to unset and TLS to off', () => {
+        expect(envSchema.parse(requiredEnv)).toMatchObject({ REDIS_TLS: false })
+        expect(envSchema.parse(requiredEnv).REDIS_USERNAME).toBeUndefined()
+        expect(envSchema.parse(requiredEnv).REDIS_TLS_SERVERNAME).toBeUndefined()
+    })
+
+    it('passes the Redis credentials and TLS settings through when set', () => {
+        expect(
+            envSchema.parse({
+                ...requiredEnv,
+                REDIS_USERNAME: 'app',
+                REDIS_PASSWORD: 's3cret',
+                REDIS_TLS: 'true',
+                REDIS_TLS_SERVERNAME: 'redis.internal',
+            }),
+        ).toMatchObject({
+            REDIS_USERNAME: 'app',
+            REDIS_PASSWORD: 's3cret',
+            REDIS_TLS: true,
+            REDIS_TLS_SERVERNAME: 'redis.internal',
+        })
+    })
+
     it('keeps the TLS servernames optional and passes them through when set', () => {
         expect(envSchema.parse(requiredEnv)).not.toHaveProperty('SMTP_TLS_SERVERNAME')
         expect(
@@ -119,15 +182,19 @@ describe('envSchema', () => {
     })
 
     describe('migrationEnvSchema', () => {
-        it('accepts the encryption secret alone and defaults the database host', () => {
-            const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: minimalSecret })
+        it('accepts the encryption secret and database credentials and defaults the database host', () => {
+            const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: minimalSecret, ...databaseCredentials })
 
             expect(env.DB_HOST).toBe('localhost')
         })
 
         it('coerces the database port from its string form', () => {
             expect(
-                migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: minimalSecret, DB_PORT: '5432' }).DB_PORT,
+                migrationEnvSchema.parse({
+                    BACKEND_ENCRYPTION_SECRET: minimalSecret,
+                    ...databaseCredentials,
+                    DB_PORT: '5432',
+                }).DB_PORT,
             ).toBe(5432)
         })
 
@@ -139,11 +206,21 @@ describe('envSchema', () => {
         })
 
         it('does not require SMTP or JWT settings', () => {
-            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: minimalSecret }).success).toBe(true)
+            expect(
+                migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: minimalSecret, ...databaseCredentials })
+                    .success,
+            ).toBe(true)
+        })
+
+        it('requires the database credentials for migrations too', () => {
+            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: minimalSecret }).success).toBe(false)
         })
 
         it('rejects a short encryption secret', () => {
-            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: shortSecret }).success).toBe(false)
+            expect(
+                migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: shortSecret, ...databaseCredentials })
+                    .success,
+            ).toBe(false)
         })
     })
 

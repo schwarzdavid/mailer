@@ -215,9 +215,6 @@ export class DomainService {
             return null
         }
 
-        // The class-field initializer on DomainModel.activeDkim shadows the
-        // association accessor, so the eager-loaded value is only reliably
-        // present on the plain representation.
         const sendingDomain = domain.get({ plain: true }) as DomainWithActiveDkim
         if (!sendingDomain.activeDkim) {
             return null

@@ -16,6 +16,7 @@ export interface E2eEnv {
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
+    SMTP_REQUIRE_TLS: string
     MAILHOG_URL: string
     IMAP_HOST: string
     IMAP_PORT: string
@@ -24,6 +25,7 @@ export interface E2eEnv {
     IMAP_PASSWORD: string
     GREENMAIL_SMTP_HOST: string
     GREENMAIL_SMTP_PORT: string
+    LOG_LEVEL: string
 }
 
 export interface Infrastructure {
@@ -86,6 +88,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         SMTP_HOST: mailhog.getHost(),
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',
+        SMTP_REQUIRE_TLS: 'false',
         MAILHOG_URL: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
         IMAP_HOST: greenmail.getHost(),
         IMAP_PORT: String(greenmail.getMappedPort(3143)),
@@ -94,6 +97,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         IMAP_PASSWORD: 'e2e-imap-password',
         GREENMAIL_SMTP_HOST: greenmail.getHost(),
         GREENMAIL_SMTP_PORT: String(greenmail.getMappedPort(3025)),
+        LOG_LEVEL: 'warn',
     }
 
     return {

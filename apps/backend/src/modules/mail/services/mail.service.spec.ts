@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import type { Transporter } from 'nodemailer'
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
 import type SMTPConnection from 'nodemailer/lib/smtp-connection/index.js'
@@ -36,6 +36,8 @@ describe('MailService', () => {
     let recordPending: Mock<MailMessageService['recordPending']>
     let markSent: Mock<MailMessageService['markSent']>
     let markUnsent: Mock<MailMessageService['markUnsent']>
+    let logSpy: MockInstance<Logger['log']>
+    let errorSpy: MockInstance<Logger['error']>
 
     const sendingDomain: DomainWithActiveDkim = {
         domainId: 1,
@@ -89,8 +91,8 @@ describe('MailService', () => {
     }
 
     beforeEach(async () => {
-        vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
-        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+        logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
@@ -330,6 +332,15 @@ describe('MailService', () => {
 
         await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
         expect(recordBounce).toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+            'Failed to record rejection bounce for mail message 41: db down',
+        )
+    })
+
+    it('logs a sent mail by its message id, never by address', async () => {
+        await service.sendMail(mail, context)
+
+        expect(logSpy).toHaveBeenLastCalledWith('Sent mail message 41')
     })
 
     it('never sends unsigned mail when the DKIM key cannot be decrypted', async () => {
@@ -392,6 +403,7 @@ describe('MailService', () => {
         expect(error).toBeInstanceOf(MailSendError)
         expect((error as MailSendError).mailMessageId).toBe(41)
         expect((error as MailSendError).cause).toBe(blocked)
+        expect((error as MailSendError).transient).toBe(false)
         expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.BLOCKED, blocked.message)
         expect(sendMail).not.toHaveBeenCalled()
     })
@@ -401,6 +413,24 @@ describe('MailService', () => {
 
         await expect(service.sendMail(mail, context)).rejects.toThrow(MailSendError)
         expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, 'connect ECONNREFUSED')
+    })
+
+    it('flags a 4xx transporter failure as transient', async () => {
+        sendMail.mockRejectedValue(smtpError('421 4.3.2 shutting down', { code: 'ECONNECTION', responseCode: 421 }))
+
+        const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(MailSendError)
+        expect((error as MailSendError).transient).toBe(true)
+    })
+
+    it('flags a 5xx transporter failure as permanent', async () => {
+        sendMail.mockRejectedValue(smtpError('550 5.7.1 rejected', { code: 'EENVELOPE', responseCode: 550 }))
+
+        const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(MailSendError)
+        expect((error as MailSendError).transient).toBe(false)
     })
 
     it('marks a missing sending domain as failed', async () => {

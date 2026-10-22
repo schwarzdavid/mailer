@@ -15,5 +15,19 @@ export function createSequelizeOptions(configService: ConfigService<Env, true>):
         database: configService.get('DB_DATABASE', { infer: true }),
         autoLoadModels: true,
         synchronize: false,
+        logging: false,
+        pool: {
+            max: configService.get('DB_POOL_MAX', { infer: true }),
+            min: 0,
+            acquire: 30_000,
+            idle: 10_000,
+        },
+        ...(configService.get('DB_SSL', { infer: true })
+            ? {
+                  dialectOptions: {
+                      ssl: { rejectUnauthorized: configService.get('DB_SSL_REJECT_UNAUTHORIZED', { infer: true }) },
+                  },
+              }
+            : {}),
     }
 }

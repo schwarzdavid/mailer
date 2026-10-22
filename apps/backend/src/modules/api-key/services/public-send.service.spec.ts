@@ -166,6 +166,25 @@ describe('PublicSendService', () => {
         expect(error.getResponse()).toEqual(expect.objectContaining({ mailMessageId: 72 }))
     })
 
+    it('logs a delivery failure by its codes without the relay message', async () => {
+        const logWarn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        sendMail.mockRejectedValue(
+            new MailSendError(
+                73,
+                Object.assign(new Error('550 5.1.1 <reader@example.org>: unknown user'), {
+                    code: 'EENVELOPE',
+                    responseCode: 550,
+                }),
+            ),
+        )
+
+        await sendError()
+
+        expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+            `API key ${apiKey.prefix} delivery 73 failed: MailSendError caused by Error (code EENVELOPE, responseCode 550)`,
+        )
+    })
+
     it('rethrows errors that happen before a message was logged', async () => {
         sendMail.mockRejectedValue(new Error('db down'))
 

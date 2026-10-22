@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { Redis } from 'ioredis'
 import type { Env } from '../../config/env.schema.js'
+import { createIoRedisOptions } from '../../factories/redis.options.js'
 import { ThrottlerStorageService } from './services/throttler-storage.service.js'
 import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storage.constants.js'
 
@@ -15,9 +16,7 @@ import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storag
             useFactory(configService: ConfigService<Env, true>): Redis {
                 const logger = new Logger('ThrottlerStorage')
                 const client = new Redis({
-                    host: configService.get('REDIS_HOST', { infer: true }),
-                    port: configService.get('REDIS_PORT', { infer: true }),
-                    db: 0,
+                    ...createIoRedisOptions(configService),
                     keyPrefix: THROTTLER_KEY_PREFIX,
                     connectTimeout: 1000,
                     retryStrategy: (retries: number) => Math.min(retries * 200, 2000),

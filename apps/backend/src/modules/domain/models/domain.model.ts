@@ -17,6 +17,7 @@ import {
 import { Domain } from '../interfaces/domain.interface.js'
 import { DomainDkimModel } from './domain-dkim.model.js'
 import { DomainDnsModel } from './domain-dns.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @DefaultScope(() => ({
     include: [DomainDnsModel],
@@ -57,13 +58,13 @@ export class DomainModel
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    activeDkim: DomainDkimModel | null = null
+    declare activeDkim?: Relation<DomainDkimModel> | null
 
     @HasMany(() => DomainDkimModel)
-    dkims: DomainDkimModel[] = []
+    declare dkims: DomainDkimModel[]
 
     @HasMany(() => DomainDnsModel)
-    dnsRecords: DomainDnsModel[] = []
+    declare dnsRecords: DomainDnsModel[]
 
     @CreatedAt
     declare createdAt: Date

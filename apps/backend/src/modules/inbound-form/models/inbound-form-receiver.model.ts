@@ -13,6 +13,7 @@ import {
 } from 'sequelize-typescript'
 import { InboundFormReceiver, InboundFormReceiverCreate } from '../interfaces/inbound-form-receiver.interface.js'
 import { InboundFormModel } from './inbound-form.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'inbound_form_receiver',
@@ -58,5 +59,5 @@ export class InboundFormReceiverModel
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     })
-    inboundForm: InboundFormModel | null = null
+    declare inboundForm?: Relation<InboundFormModel>
 }

@@ -12,6 +12,7 @@ export interface InboundFormDelivery {
     emailFrom: string
     emailTo: string
     status: InboundFormDeliveryStatus
+    attempts: number
     error: string | null
     sentAt: Date | null
     mailMessageId: number | null
