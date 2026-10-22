@@ -19,19 +19,21 @@ describe('application bootstrap (shared configureApp)', () => {
         await request(app.getHttpServer()).get('/setup/status').expect(404)
     })
 
-    it('answers the site origin with CORS headers', async () => {
-        await request(app.getHttpServer())
-            .get('/api/setup/status')
-            .set('Origin', 'https://app.e2e.test')
-            .expect('Access-Control-Allow-Origin', 'https://app.e2e.test')
-            .expect(200)
-    })
-
-    it('gives foreign origins no CORS headers on the admin API', async () => {
+    it('gives no origin CORS headers on the admin API', async () => {
         const response = await request(app.getHttpServer())
             .get('/api/setup/status')
             .set('Origin', 'https://evil.example')
+            .expect(200)
         expect(response.headers['access-control-allow-origin']).toBeUndefined()
+    })
+
+    it('gives no origin CORS headers on the public send API', async () => {
+        const response = await request(app.getHttpServer())
+            .options('/api/v1/send')
+            .set('Origin', 'https://evil.example')
+            .set('Access-Control-Request-Method', 'POST')
+        expect(response.headers['access-control-allow-origin']).toBeUndefined()
+        expect(response.headers['access-control-allow-methods']).toBeUndefined()
     })
 
     it('answers a public form preflight from any origin and echoes the requested headers', async () => {
@@ -58,6 +60,7 @@ describe('application bootstrap (shared configureApp)', () => {
         expect(response.headers['strict-transport-security']).toBe('max-age=31536000')
         expect(response.headers['cross-origin-resource-policy']).toBe('same-origin')
         expect(response.headers['content-security-policy']).toContain("script-src 'self' 'unsafe-eval'")
+        expect(response.headers['content-security-policy']).not.toContain('upgrade-insecure-requests')
     })
 
     it('rejects invalid request bodies through the global ValidationPipe', async () => {

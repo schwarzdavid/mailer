@@ -42,9 +42,6 @@ describe('useRegisterMutation', () => {
         await result.mutateAsync(registration)
 
         expect(registerSpy).toHaveBeenCalledWith({ body: registration })
-        expect(registerSpy).toHaveBeenCalledWith({
-            body: expect.objectContaining({ setupToken: 'token-from-the-log-0123456789abcd' }),
-        })
         unmount()
     })
 

@@ -42,15 +42,16 @@ export const helmetOptions: HelmetOptions = {
         directives: {
             scriptSrc: ["'self'", "'unsafe-eval'"],
             imgSrc: ["'self'", 'data:', 'https:'],
+            upgradeInsecureRequests: null,
         },
     },
 }
 
-export function corsOptionsFor(path: string, siteOrigins: string[]): CorsOptions {
+export function corsOptionsFor(path: string): CorsOptions {
     if (path.startsWith(PUBLIC_FORM_PATH_PREFIX)) {
         return { origin: '*', credentials: false }
     }
-    return { origin: siteOrigins, credentials: false }
+    return { origin: false }
 }
 
 export function configureApp(app: INestApplication): void {
@@ -84,9 +85,8 @@ function applyTrustProxy(app: INestApplication): void {
 }
 
 function applyCors(app: INestApplication): void {
-    const siteOrigins = app.get<ConfigService<Env, true>>(ConfigService).get('SITE_ADDRESS', { infer: true })
     app.enableCors((request: Request, callback: (error: Error | null, options: CorsOptions) => void) => {
-        callback(null, corsOptionsFor(request.path, siteOrigins))
+        callback(null, corsOptionsFor(request.path))
     })
 }
 

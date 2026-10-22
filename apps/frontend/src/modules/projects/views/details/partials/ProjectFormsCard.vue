@@ -41,7 +41,7 @@
                 {{ t('module.inboundForms.receiverCount', { count: form.receivers.length }, form.receivers.length) }}
             </template>
             <template #meta>
-                <StatusBadge v-if="form.allowedHostnames.length === 0" tone="warning" :label="t('status.anyWebsite')" />
+                <StatusBadge v-if="acceptsAnyOrigin(form)" v-bind="openOriginBadge()" />
                 <StatusBadge v-if="form.receivers.some(needsTemplate)" tone="warning" :label="t('status.noTemplate')" />
                 <StatusBadge v-bind="activityBadge(form.isActive)" />
             </template>
@@ -63,14 +63,18 @@
     import StatusBadge from '@/components/StatusBadge.vue'
     import ListSkeleton from '@/components/skeletons/ListSkeleton.vue'
     import AddInboundFormDialog from '@/modules/inbound-forms/components/AddInboundFormDialog.vue'
-    import { needsTemplate, useReceiverStatus } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
+    import {
+        acceptsAnyOrigin,
+        needsTemplate,
+        useReceiverStatus,
+    } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
     import { useInboundFormsQuery } from '@/modules/inbound-forms/queries/useInboundFormsQuery.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 
     const props = defineProps<{ project: ProjectDetailDto; canUpdate: boolean }>()
 
     const { t } = useI18n()
-    const { activityBadge } = useReceiverStatus()
+    const { activityBadge, openOriginBadge } = useReceiverStatus()
     const createOpen = ref(false)
     const {
         data: forms,

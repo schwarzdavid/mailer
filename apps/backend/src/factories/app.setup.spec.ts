@@ -31,20 +31,16 @@ describe('shouldServeApiDocs', () => {
 
 describe('corsOptionsFor', () => {
     it('allows every origin on public form routes without credentials', () => {
-        expect(corsOptionsFor('/api/public/form/contact/token', ['https://app.example.com'])).toEqual(
-            expect.objectContaining({ origin: '*', credentials: false }),
-        )
+        expect(corsOptionsFor('/api/public/form/contact/token')).toEqual({ origin: '*', credentials: false })
     })
 
-    it('allows only the site origins everywhere else', () => {
-        expect(corsOptionsFor('/api/auth/login', ['https://app.example.com']).origin).toEqual([
-            'https://app.example.com',
-        ])
-        expect(corsOptionsFor('/api/v1/send', []).origin).toEqual([])
+    it('turns CORS off everywhere else', () => {
+        expect(corsOptionsFor('/api/auth/login')).toEqual({ origin: false })
+        expect(corsOptionsFor('/api/v1/send')).toEqual({ origin: false })
     })
 
     it('does not treat a path that merely starts like the public prefix as public', () => {
-        expect(corsOptionsFor('/api/public/formular', []).origin).toEqual([])
+        expect(corsOptionsFor('/api/public/formular')).toEqual({ origin: false })
     })
 })
 
@@ -54,6 +50,10 @@ describe('helmetOptions', () => {
         expect(directives).toMatchObject({
             directives: { scriptSrc: ["'self'", "'unsafe-eval'"], imgSrc: ["'self'", 'data:', 'https:'] },
         })
+    })
+
+    it('does not upgrade plain-HTTP requests, so the SPA also works on a site served without TLS', () => {
+        expect(helmetOptions.contentSecurityPolicy).toMatchObject({ directives: { upgradeInsecureRequests: null } })
     })
 
     it('pins HTTPS for a year without covering subdomains', () => {

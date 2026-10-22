@@ -1,12 +1,7 @@
 <template>
     <PageHeader :title="form?.name" :loading="isPending" :breadcrumbs="breadcrumbs">
         <template v-if="form" #status>
-            <StatusBadge
-                v-if="form.allowedHostnames.length === 0"
-                tone="warning"
-                :label="t('status.anyWebsite')"
-                large
-            />
+            <StatusBadge v-if="acceptsAnyOrigin(form)" v-bind="openOriginBadge()" large />
             <StatusBadge v-bind="activityBadge(form.isActive)" large />
         </template>
         <template v-if="form" #meta>
@@ -57,7 +52,7 @@
     import StatusBadge from '@/components/StatusBadge.vue'
     import PageSkeleton from '@/components/skeletons/PageSkeleton.vue'
     import { apiErrorStatus } from '@/helper/apiErrorStatus.ts'
-    import { useReceiverStatus } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
+    import { acceptsAnyOrigin, useReceiverStatus } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
     import { useInboundFormQuery } from '@/modules/inbound-forms/queries/useInboundFormQuery.ts'
     import EndpointCard from '@/modules/inbound-forms/views/details/partials/EndpointCard.vue'
     import FieldsCard from '@/modules/inbound-forms/views/details/partials/FieldsCard.vue'
@@ -72,7 +67,7 @@
     const route = useRoute()
     const { t } = useI18n()
     const userAbility = useAbility()
-    const { activityBadge } = useReceiverStatus()
+    const { activityBadge, openOriginBadge } = useReceiverStatus()
 
     const {
         data: form,

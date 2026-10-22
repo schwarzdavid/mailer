@@ -168,31 +168,4 @@ describe('envSchema', () => {
             expect(envSchema.parse({ ...requiredEnv, TRUST_PROXY: value }).TRUST_PROXY).toBe(expected)
         })
     })
-
-    describe('SITE_ADDRESS', () => {
-        it.each([
-            [undefined, []],
-            ['', []],
-            [':80', []],
-            ['http://', []],
-            ['http://:80', []],
-            ['http://, app.example.com', ['https://app.example.com']],
-            ['app.example.com', ['https://app.example.com']],
-            ['https://app.example.com', ['https://app.example.com']],
-            ['http://app.example.com', ['http://app.example.com']],
-            ['app.example.com:8443', ['https://app.example.com:8443']],
-            ['https://app.example.com:443', ['https://app.example.com']],
-            ['app.example.com, www.example.com', ['https://app.example.com', 'https://www.example.com']],
-        ])('maps SITE_ADDRESS %j to the origins %j', (value, origins) => {
-            expect(envSchema.parse({ ...requiredEnv, SITE_ADDRESS: value }).SITE_ADDRESS).toEqual(origins)
-        })
-
-        it('rejects a wildcard SITE_ADDRESS', () => {
-            expect(envSchema.safeParse({ ...requiredEnv, SITE_ADDRESS: '*.example.com' }).success).toBe(false)
-        })
-
-        it('rejects an entry with an opaque origin', () => {
-            expect(envSchema.safeParse({ ...requiredEnv, SITE_ADDRESS: 'file://x' }).success).toBe(false)
-        })
-    })
 })
