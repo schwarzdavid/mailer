@@ -28,7 +28,7 @@ import type { Relation } from '../../../types/relation.js'
 })
 export class DomainModel
     extends Model<Domain, Omit<Domain, 'domainId' | 'dnsRecords' | 'lastCheckedAt' | 'activeDkimId'>>
-    implements Domain
+    implements Omit<Domain, 'dnsRecords'>
 {
     @PrimaryKey
     @AutoIncrement
@@ -61,10 +61,10 @@ export class DomainModel
     declare activeDkim?: Relation<DomainDkimModel> | null
 
     @HasMany(() => DomainDkimModel)
-    declare dkims: DomainDkimModel[]
+    declare dkims?: DomainDkimModel[]
 
     @HasMany(() => DomainDnsModel)
-    declare dnsRecords: DomainDnsModel[]
+    declare dnsRecords?: DomainDnsModel[]
 
     @CreatedAt
     declare createdAt: Date

@@ -16,6 +16,8 @@ import { DomainModel } from '../models/domain.model.js'
 import { SettingsModel } from '../../settings/models/settings.model.js'
 import ErrnoException = NodeJS.ErrnoException
 
+type DomainName = Pick<Domain, 'domainId' | 'fqdn'>
+
 @Injectable()
 export class DomainDnsService {
     private static readonly DKIM_PUBLIC_KEY_PREFIX = '-----BEGIN PUBLIC KEY-----'
@@ -30,7 +32,7 @@ export class DomainDnsService {
         @InjectModel(SettingsModel) private readonly settingsModel: typeof SettingsModel,
     ) {}
 
-    async createDefaultDnsRecords(domain: Domain, dkim: DomainDkim): Promise<DomainDnsRecord[]> {
+    async createDefaultDnsRecords(domain: DomainName, dkim: DomainDkim): Promise<DomainDnsRecord[]> {
         if (domain.domainId !== dkim.domainId) {
             throw new Error('Domain and DKIM do not match')
         }
@@ -62,7 +64,7 @@ export class DomainDnsService {
     }
 
     async createSendingDomainDnsRecords(
-        domain: Domain,
+        domain: DomainName,
         dkim: DomainDkim,
         ips: SendingDomainIps,
     ): Promise<DomainDnsRecord[]> {
@@ -222,7 +224,7 @@ export class DomainDnsService {
         return record.get({ plain: true })
     }
 
-    private async createDefaultDkimRecord(domain: Domain, dkim: DomainDkim): Promise<DomainDnsRecord> {
+    private async createDefaultDkimRecord(domain: DomainName, dkim: DomainDkim): Promise<DomainDnsRecord> {
         const dkimKey = this.stripDkimPublicKey(dkim.publicKey)
 
         const host = `${dkim.selector}._domainkey.${domain.fqdn}`
@@ -239,7 +241,7 @@ export class DomainDnsService {
         })
     }
 
-    private async createDefaultDmarcRecord(domain: Domain): Promise<DomainDnsRecord> {
+    private async createDefaultDmarcRecord(domain: DomainName): Promise<DomainDnsRecord> {
         const host = `_dmarc.${domain.fqdn}`
         const value = 'v=DMARC1; p=none;'
 

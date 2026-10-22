@@ -2,13 +2,12 @@ import { Logger } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { LocksModule } from '@nestjs/locks'
-import { Op, type FindOptions } from 'sequelize'
+import { literal, Op, type FindOptions } from 'sequelize'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { InboundFormDeliveryRecoveryService } from './inbound-form-delivery-recovery.service.js'
 import { InboundFormDeliveryQueueService } from './inbound-form-delivery-queue.service.js'
 import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.js'
 import { InboundFormDelivery, InboundFormDeliveryStatus } from '../interfaces/inbound-form-delivery.interface.js'
-import { DELIVERY_STALLED_AFTER_MS } from '../inbound-form.constants.js'
 
 type StalledDelivery = Pick<InboundFormDelivery, 'inboundFormDeliveryId'>
 
@@ -46,7 +45,7 @@ describe('InboundFormDeliveryRecoveryService', () => {
         vi.restoreAllMocks()
     })
 
-    it('enqueues every delivery that stayed pending past the stall window and returns the count', async () => {
+    it('enqueues every pending delivery whose stall window plus retry backoff has passed and returns the count', async () => {
         findAll.mockResolvedValue([{ inboundFormDeliveryId: 3 }, { inboundFormDeliveryId: 8 }])
 
         await expect(service.recoverStalled()).resolves.toBe(2)
@@ -54,7 +53,11 @@ describe('InboundFormDeliveryRecoveryService', () => {
         expect(findAll).toHaveBeenCalledExactlyOnceWith({
             where: {
                 status: InboundFormDeliveryStatus.PENDING,
-                updatedAt: { [Op.lt]: new Date(Date.now() - DELIVERY_STALLED_AFTER_MS) },
+                [Op.and]: [
+                    literal(
+                        '"updatedAt" < NOW() - make_interval(secs => (120000 + 60000 * CASE WHEN "attempts" = 0 THEN 0 ELSE power(2, "attempts" - 1) END) / 1000.0)',
+                    ),
+                ],
             },
             attributes: ['inboundFormDeliveryId'],
         })
@@ -73,9 +76,7 @@ describe('InboundFormDeliveryRecoveryService', () => {
 
         await service.handleRecoveryInterval()
 
-        expect(debug).toHaveBeenCalledExactlyOnceWith(
-            'Queued 1 pending deliveries older than 120s (existing jobs are kept)',
-        )
+        expect(debug).toHaveBeenCalledExactlyOnceWith('Queued 1 stalled pending deliveries (existing jobs are kept)')
     })
 
     it('logs nothing when no delivery is pending for too long', async () => {

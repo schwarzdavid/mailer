@@ -2,12 +2,21 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Interval } from '@nestjs/schedule'
 import { OnOneInstance, WithoutOverlapping } from '@nestjs/locks'
-import { Op } from 'sequelize'
+import { literal, Op } from 'sequelize'
 import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.js'
 import { InboundFormDeliveryStatus } from '../interfaces/inbound-form-delivery.interface.js'
 import { InboundFormDeliveryQueueService } from './inbound-form-delivery-queue.service.js'
-import { DELIVERY_RECOVERY_INTERVAL_MS, DELIVERY_STALLED_AFTER_MS } from '../inbound-form.constants.js'
+import {
+    DELIVERY_BACKOFF_MS,
+    DELIVERY_RECOVERY_INTERVAL_MS,
+    DELIVERY_STALLED_AFTER_MS,
+} from '../inbound-form.constants.js'
 import { describeError } from '../../../helpers/describe-error.js'
+
+const RETRY_BACKOFF_SQL = `${DELIVERY_BACKOFF_MS} * CASE WHEN "attempts" = 0 THEN 0 ELSE power(2, "attempts" - 1) END`
+const STALLED_BEFORE_RETRY_DUE = literal(
+    `"updatedAt" < NOW() - make_interval(secs => (${DELIVERY_STALLED_AFTER_MS} + ${RETRY_BACKOFF_SQL}) / 1000.0)`,
+)
 
 @Injectable()
 export class InboundFormDeliveryRecoveryService {
@@ -26,9 +35,7 @@ export class InboundFormDeliveryRecoveryService {
         try {
             const recovered = await this.recoverStalled()
             if (recovered > 0) {
-                this.logger.debug(
-                    `Queued ${recovered} pending deliveries older than ${DELIVERY_STALLED_AFTER_MS / 1000}s (existing jobs are kept)`,
-                )
+                this.logger.debug(`Queued ${recovered} stalled pending deliveries (existing jobs are kept)`)
             }
         } catch (error) {
             this.logger.error(`Delivery recovery failed: ${describeError(error)}`)
@@ -39,7 +46,7 @@ export class InboundFormDeliveryRecoveryService {
         const stalled = await this.deliveryModel.findAll({
             where: {
                 status: InboundFormDeliveryStatus.PENDING,
-                updatedAt: { [Op.lt]: new Date(Date.now() - DELIVERY_STALLED_AFTER_MS) },
+                [Op.and]: [STALLED_BEFORE_RETRY_DUE],
             },
             attributes: ['inboundFormDeliveryId'],
         })
