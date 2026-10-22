@@ -64,6 +64,13 @@ wait_healthy() {
     return 1
 }
 
+# `docker compose port` prints `:0` for a port the image merely EXPOSEs when the
+# engine lists it, which depends on the engine version; `docker port` prints
+# only real host bindings.
+published_port() {
+    docker port "$(dc ps -q "$1")" "$2" 2>/dev/null | head -n 1 | tr -d '\r' || true
+}
+
 issue_leaf() {
     openssl req -new -newkey rsa:2048 -nodes -config "$tmp/pki/leaf.cnf" \
         -keyout "$1/$mail_hostname.key" -out "$tmp/pki/leaf.csr" 2>/dev/null
@@ -408,9 +415,9 @@ until [ "$(bounce_count)" -ge 1 ] 2>/dev/null; do
 done
 pass "the DSN delivered on port 25 is ingested over IMAP (mail:143, servername $mail_hostname) into the bounce table ($(bounce_count) row)"
 
-[ -z "$(dc port mail 587 2>/dev/null || true)" ] || fail "mail publishes port 587"
-[ -z "$(dc port mail 143 2>/dev/null || true)" ] || fail "mail publishes port 143"
-smtp_port=$(dc port mail 25 | tr -d '\r')
+[ -z "$(published_port mail 587)" ] || fail "mail publishes port 587"
+[ -z "$(published_port mail 143)" ] || fail "mail publishes port 143"
+smtp_port=$(published_port mail 25)
 [[ "$smtp_port" == *:18025 ]] || fail "mail port 25 is published as '$smtp_port', expected :18025"
 pass "mail publishes only port 25 ($smtp_port); 587 and 143 stay internal"
 
