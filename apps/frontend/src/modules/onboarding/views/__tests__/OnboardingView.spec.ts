@@ -40,6 +40,8 @@ const authentication: AuthenticationDto = {
     },
 }
 
+const setupToken = 'token-from-the-log-0123456789abcd'
+
 const sendingDomain: SendingDomainDto = {
     fqdn: 'mail.acme-mailer.com',
     serverIpv4: '203.0.113.10',
@@ -80,6 +82,7 @@ describe('OnboardingView', () => {
         const wrapper = mountInApp(OnboardingView)
         await vi.waitFor(() => expect(wrapper.find('input[name="firstName"]').exists()).toBe(true))
 
+        await wrapper.get('input[name="setupToken"]').setValue(setupToken)
         await wrapper.get('input[name="firstName"]').setValue('Ada')
         await wrapper.get('input[name="lastName"]').setValue('Lovelace')
         await wrapper.get('input[name="email"]').setValue('ada@example.com')
@@ -92,12 +95,56 @@ describe('OnboardingView', () => {
         expect(wrapper.text()).toContain('Signed in as Ada Lovelace')
     })
 
+    it('sends the setup token with the account', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        const register = vi.spyOn(SetupApi, 'registerUser').mockResolvedValue(authentication)
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="setupToken"]').exists()).toBe(true))
+
+        await wrapper.get('input[name="setupToken"]').setValue(setupToken)
+        await wrapper.get('input[name="firstName"]').setValue('Ada')
+        await wrapper.get('input[name="lastName"]').setValue('Lovelace')
+        await wrapper.get('input[name="email"]').setValue('ada@example.com')
+        await wrapper.get('input[name="password"]').setValue('correct-horse-battery-staple')
+        await wrapper.get('form').trigger('submit')
+
+        await vi.waitFor(() => expect(register).toHaveBeenCalledWith({ body: expect.objectContaining({ setupToken }) }))
+    })
+
+    it('requires the setup token', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        const register = vi.spyOn(SetupApi, 'registerUser').mockResolvedValue(authentication)
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="setupToken"]').exists()).toBe(true))
+
+        await wrapper.get('input[name="firstName"]').setValue('Ada')
+        await wrapper.get('input[name="lastName"]').setValue('Lovelace')
+        await wrapper.get('input[name="email"]').setValue('ada@example.com')
+        await wrapper.get('input[name="password"]').setValue('correct-horse-battery-staple')
+        await wrapper.get('form').trigger('submit')
+
+        const field = wrapper.get('input[name="setupToken"]').element.closest('.v-input')!
+        await vi.waitFor(() => expect(field.classList).toContain('v-input--error'))
+        expect(field.querySelector('.v-messages__message')?.textContent).not.toContain('docker compose')
+        expect(register).not.toHaveBeenCalled()
+    })
+
+    it('tells the admin where to find the setup token', async () => {
+        vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
+        const wrapper = mountInApp(OnboardingView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="setupToken"]').exists()).toBe(true))
+
+        expect(wrapper.text()).toContain('Setup token')
+        expect(wrapper.text()).toContain('docker compose logs backend | grep "Setup token"')
+    })
+
     it('shows a failed registration inside the card', async () => {
         vi.spyOn(SetupApi, 'getStatus').mockResolvedValue({ needsSetup: true, step: 'account' })
         vi.spyOn(SetupApi, 'registerUser').mockRejectedValue({ message: 'Setup already completed' })
         const wrapper = mountInApp(OnboardingView)
         await vi.waitFor(() => expect(wrapper.find('input[name="firstName"]').exists()).toBe(true))
 
+        await wrapper.get('input[name="setupToken"]').setValue(setupToken)
         await wrapper.get('input[name="firstName"]').setValue('Ada')
         await wrapper.get('input[name="lastName"]').setValue('Lovelace')
         await wrapper.get('input[name="email"]').setValue('ada@example.com')

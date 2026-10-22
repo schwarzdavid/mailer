@@ -10,14 +10,27 @@ async function violations(plain: object): Promise<string[]> {
 }
 
 describe('RegisterUserDto', () => {
-    const valid = { firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', password: 'correct-horse' }
+    const valid = {
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        email: 'ada@example.com',
+        password: 'correct-horse',
+        setupToken: 'the-token',
+    }
 
     it('accepts a complete registration', async () => {
         await expect(violations(valid)).resolves.toEqual([])
     })
 
     it('requires every field', async () => {
-        await expect(violations({})).resolves.toEqual(['firstName', 'lastName', 'email', 'password'])
+        await expect(violations({})).resolves.toEqual(['firstName', 'lastName', 'email', 'password', 'setupToken'])
+    })
+
+    it('requires a non-empty setup token of at most 256 characters', async () => {
+        await expect(violations({ ...valid, setupToken: undefined })).resolves.toEqual(['setupToken'])
+        await expect(violations({ ...valid, setupToken: '' })).resolves.toEqual(['setupToken'])
+        await expect(violations({ ...valid, setupToken: 'x'.repeat(257) })).resolves.toEqual(['setupToken'])
+        await expect(violations({ ...valid, setupToken: 'x'.repeat(256) })).resolves.toEqual([])
     })
 
     it('rejects empty names', async () => {

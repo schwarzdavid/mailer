@@ -1,7 +1,7 @@
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { startInfrastructure, type Infrastructure } from './infrastructure.ts'
-import { freePort, runCommand, startServer, type ServerProcess } from './processes.ts'
+import { freePort, runCommand, startServer, waitForLogLine, type ServerProcess } from './processes.ts'
 
 const frontendDir = resolve(import.meta.dirname, '..', '..')
 const repoRoot = resolve(frontendDir, '..', '..')
@@ -60,6 +60,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         const backendPort = await freePort()
         const apiUrl = `http://127.0.0.1:${backendPort}`
         log(`Starting the backend on ${apiUrl}`)
+        const backendLogFile = join(workDir, 'backend.log')
         const backend: ServerProcess = await startServer(
             [join(backendWorkDir, 'dist', 'main.js')],
             `${apiUrl}/api/setup/status`,
@@ -70,10 +71,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
                     NODE_ENV: 'test',
                     PORT: String(backendPort),
                 },
-                logFile: join(workDir, 'backend.log'),
+                logFile: backendLogFile,
             },
         )
         cleanups.push(backend.stop)
+        const [, setupToken] = await waitForLogLine(backendLogFile, /Setup token: ([A-Za-z0-9_-]{32})/)
 
         log('Generating the api client')
         await runCommand(`pnpm --filter api exec openapi-ts -i "${generatedSpecPath}"`, {
@@ -113,6 +115,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
         process.env.E2E_BASE_URL = baseUrl
         process.env.E2E_API_URL = apiUrl
+        process.env.E2E_SETUP_TOKEN = setupToken
         process.env.E2E_MAILHOG_URL = infrastructure.mailhogUrl
         log(`Stack ready in ${Math.round((Date.now() - startedAt) / 1000)}s (logs in ${workDir})`)
     } catch (error) {

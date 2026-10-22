@@ -2,14 +2,31 @@ import { describe, expect, it } from 'vitest'
 import { envSchema, migrationEnvSchema } from './env.schema.js'
 
 const requiredEnv: Record<string, string> = {
-    BACKEND_JWT_SECRET: 'jwt-secret',
-    BACKEND_ENCRYPTION_SECRET: 'encryption-secret',
+    BACKEND_JWT_SECRET: 'jwt-secret-for-unit-tests-0123456789',
+    BACKEND_ENCRYPTION_SECRET: 'encryption-secret-for-unit-tests-0123',
     MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '1025',
 }
 
+const shortSecret = 'x'.repeat(31)
+const minimalSecret = 'x'.repeat(32)
+const shortSecretMessage = 'Must be at least 32 characters; generate one with: openssl rand -base64 48'
+
 describe('envSchema', () => {
+    it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET'])('rejects a %s shorter than 32 characters', (key) => {
+        const result = envSchema.safeParse({ ...requiredEnv, [key]: shortSecret })
+
+        expect(result.success).toBe(false)
+        expect(result.error?.issues).toContainEqual(
+            expect.objectContaining({ path: [key], message: shortSecretMessage }),
+        )
+    })
+
+    it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET'])('accepts a %s of exactly 32 characters', (key) => {
+        expect(envSchema.safeParse({ ...requiredEnv, [key]: minimalSecret }).success).toBe(true)
+    })
+
     it('applies defaults and coerces ports and flags from their string form', () => {
         const env = envSchema.parse({ ...requiredEnv, DB_PORT: '5432', SMTP_SECURE: 'true' })
 
@@ -103,13 +120,15 @@ describe('envSchema', () => {
 
     describe('migrationEnvSchema', () => {
         it('accepts the encryption secret alone and defaults the database host', () => {
-            const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x' })
+            const env = migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: minimalSecret })
 
             expect(env.DB_HOST).toBe('localhost')
         })
 
         it('coerces the database port from its string form', () => {
-            expect(migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: 'x', DB_PORT: '5432' }).DB_PORT).toBe(5432)
+            expect(
+                migrationEnvSchema.parse({ BACKEND_ENCRYPTION_SECRET: minimalSecret, DB_PORT: '5432' }).DB_PORT,
+            ).toBe(5432)
         })
 
         it('requires the encryption secret', () => {
@@ -120,7 +139,11 @@ describe('envSchema', () => {
         })
 
         it('does not require SMTP or JWT settings', () => {
-            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: 'x' }).success).toBe(true)
+            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: minimalSecret }).success).toBe(true)
+        })
+
+        it('rejects a short encryption secret', () => {
+            expect(migrationEnvSchema.safeParse({ BACKEND_ENCRYPTION_SECRET: shortSecret }).success).toBe(false)
         })
     })
 
@@ -143,6 +166,33 @@ describe('envSchema', () => {
             [' 1 ', 1],
         ])('maps %j to %j', (value, expected) => {
             expect(envSchema.parse({ ...requiredEnv, TRUST_PROXY: value }).TRUST_PROXY).toBe(expected)
+        })
+    })
+
+    describe('SITE_ADDRESS', () => {
+        it.each([
+            [undefined, []],
+            ['', []],
+            [':80', []],
+            ['http://', []],
+            ['http://:80', []],
+            ['http://, app.example.com', ['https://app.example.com']],
+            ['app.example.com', ['https://app.example.com']],
+            ['https://app.example.com', ['https://app.example.com']],
+            ['http://app.example.com', ['http://app.example.com']],
+            ['app.example.com:8443', ['https://app.example.com:8443']],
+            ['https://app.example.com:443', ['https://app.example.com']],
+            ['app.example.com, www.example.com', ['https://app.example.com', 'https://www.example.com']],
+        ])('maps SITE_ADDRESS %j to the origins %j', (value, origins) => {
+            expect(envSchema.parse({ ...requiredEnv, SITE_ADDRESS: value }).SITE_ADDRESS).toEqual(origins)
+        })
+
+        it('rejects a wildcard SITE_ADDRESS', () => {
+            expect(envSchema.safeParse({ ...requiredEnv, SITE_ADDRESS: '*.example.com' }).success).toBe(false)
+        })
+
+        it('rejects an entry with an opaque origin', () => {
+            expect(envSchema.safeParse({ ...requiredEnv, SITE_ADDRESS: 'file://x' }).success).toBe(false)
         })
     })
 })

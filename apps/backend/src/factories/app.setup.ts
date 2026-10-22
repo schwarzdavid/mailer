@@ -9,7 +9,9 @@ import { join } from 'node:path'
 import { ConfigService } from '@nestjs/config'
 import { HttpAdapterHost, Reflector } from '@nestjs/core'
 import type { ExpressAdapter } from '@nestjs/platform-express'
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface.js'
 import express, { type NextFunction, type Request, type Response } from 'express'
+import helmet, { type HelmetOptions } from 'helmet'
 import type { Env } from '../config/env.schema.js'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { SequelizeExceptionFilter } from '../filters/sequelize-exception.filter.js'
@@ -18,6 +20,7 @@ import { MAX_BODY_LENGTH } from '../modules/api-key/dtos/public-send.dto.js'
 export const API_PREFIX = 'api'
 
 const PUBLIC_SEND_PATH = `/${API_PREFIX}/v1/send`
+const PUBLIC_FORM_PATH_PREFIX = `/${API_PREFIX}/public/form/`
 const PUBLIC_SEND_BODY_FIELDS = 2
 const MAX_UTF8_BYTES_PER_CHAR = 4
 const JSON_ENVELOPE_BYTES = 64 * 1024
@@ -33,11 +36,29 @@ export const validationPipeOptions: ValidationPipeOptions = {
     },
 }
 
+export const helmetOptions: HelmetOptions = {
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: false },
+    contentSecurityPolicy: {
+        directives: {
+            scriptSrc: ["'self'", "'unsafe-eval'"],
+            imgSrc: ["'self'", 'data:', 'https:'],
+        },
+    },
+}
+
+export function corsOptionsFor(path: string, siteOrigins: string[]): CorsOptions {
+    if (path.startsWith(PUBLIC_FORM_PATH_PREFIX)) {
+        return { origin: '*', credentials: false }
+    }
+    return { origin: siteOrigins, credentials: false }
+}
+
 export function configureApp(app: INestApplication): void {
     applyTrustProxy(app)
+    app.use(helmet(helmetOptions))
     applyPublicSendJsonLimit(app)
     app.enableShutdownHooks()
-    app.enableCors()
+    applyCors(app)
     app.setGlobalPrefix(API_PREFIX)
     app.useGlobalPipes(new ValidationPipe(validationPipeOptions))
     app.useGlobalFilters(new SequelizeExceptionFilter(app.get(HttpAdapterHost).httpAdapter))
@@ -62,6 +83,13 @@ function applyTrustProxy(app: INestApplication): void {
     app.get<HttpAdapterHost<ExpressAdapter>>(HttpAdapterHost).httpAdapter.set('trust proxy', trustProxy)
 }
 
+function applyCors(app: INestApplication): void {
+    const siteOrigins = app.get<ConfigService<Env, true>>(ConfigService).get('SITE_ADDRESS', { infer: true })
+    app.enableCors((request: Request, callback: (error: Error | null, options: CorsOptions) => void) => {
+        callback(null, corsOptionsFor(request.path, siteOrigins))
+    })
+}
+
 export function shouldServeApiDocs(configService: ConfigService<Env, true>): boolean {
     return configService.get('NODE_ENV', { infer: true }) !== 'production'
 }
@@ -80,9 +108,16 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
         .setVersion(readPackageVersion())
         .addBearerAuth()
         .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'sdm_…' }, 'api-key')
-        .addApiKey({ type: 'apiKey', name: 'key', in: 'query' }, 'api-key-query')
-        .addServer('http://localhost:8000', 'Dev Server')
-        .addServer('https://schwarzdavid.email', 'Production Server')
+        .addApiKey(
+            {
+                type: 'apiKey',
+                name: 'key',
+                in: 'query',
+                description:
+                    'Fallback for clients that cannot set headers. Prefer the Authorization header: query strings can end up in the logs of proxies between the client and this server.',
+            },
+            'api-key-query',
+        )
         .setContact('David Schwarz', 'https://schwarzdavid.at', 'hi@schwarzdavid.at')
         .build()
 

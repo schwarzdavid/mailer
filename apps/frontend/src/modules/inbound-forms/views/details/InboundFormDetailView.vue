@@ -1,6 +1,12 @@
 <template>
     <PageHeader :title="form?.name" :loading="isPending" :breadcrumbs="breadcrumbs">
         <template v-if="form" #status>
+            <StatusBadge
+                v-if="form.allowedHostnames.length === 0"
+                tone="warning"
+                :label="t('status.anyWebsite')"
+                large
+            />
             <StatusBadge v-bind="activityBadge(form.isActive)" large />
         </template>
         <template v-if="form" #meta>

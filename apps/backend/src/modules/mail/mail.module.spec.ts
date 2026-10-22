@@ -11,8 +11,8 @@ import { envSchema, type Env } from '../../config/env.schema.js'
 vi.mock('nodemailer', () => ({ createTransport: vi.fn() }))
 
 const requiredEnv = {
-    BACKEND_JWT_SECRET: 'jwt-secret',
-    BACKEND_ENCRYPTION_SECRET: 'encryption-secret',
+    BACKEND_JWT_SECRET: 'jwt-secret-for-unit-tests-0123456789',
+    BACKEND_ENCRYPTION_SECRET: 'encryption-secret-for-unit-tests-0123',
     MAIL_HOSTNAME: 'mail.example.com',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',

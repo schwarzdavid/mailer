@@ -13,6 +13,7 @@ import { UserWithRole } from '../../user/interfaces/user.interface.js'
 import { SETUP_LOCK_KEY } from '../setup.constants.js'
 import { SettingsService } from '../../settings/services/settings.service.js'
 import { Settings } from '../../settings/interfaces/settings.interface.js'
+import { SetupTokenService } from './setup-token.service.js'
 
 describe('SetupService', () => {
     let service: SetupService
@@ -23,6 +24,7 @@ describe('SetupService', () => {
     let transaction: Mock<Sequelize['transaction']>
     let getSettings: Mock<SettingsService['getSettings']>
     let finishSetup: Mock<SettingsService['finishSetup']>
+    let matches: Mock<SetupTokenService['matches']>
 
     const settings: Settings = {
         settingId: 1,
@@ -35,6 +37,8 @@ describe('SetupService', () => {
     }
 
     const transactionStub = {} as Transaction
+
+    const setupToken = 'the-token'
 
     const userCreate = {
         firstName: 'Ada',
@@ -71,6 +75,7 @@ describe('SetupService', () => {
         query = vi.fn<typeof query>().mockResolvedValue([[], 0])
         getSettings = vi.fn<typeof getSettings>().mockResolvedValue(null)
         finishSetup = vi.fn<typeof finishSetup>().mockResolvedValue(undefined)
+        matches = vi.fn<typeof matches>().mockReturnValue(true)
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation((callback) => (callback as (t: Transaction) => Promise<unknown>)(transactionStub))
@@ -82,6 +87,7 @@ describe('SetupService', () => {
                 { provide: UserService, useValue: { createUser } },
                 { provide: RoleService, useValue: { getRoleByType } },
                 { provide: SettingsService, useValue: { getSettings, finishSetup } },
+                { provide: SetupTokenService, useValue: { matches } },
                 { provide: getModelToken(UserModel), useValue: { count } },
             ],
         }).compile()
@@ -145,8 +151,19 @@ describe('SetupService', () => {
     })
 
     describe('registerFirstUser', () => {
+        it('rejects a wrong setup token with 403 before opening a transaction', async () => {
+            matches.mockReturnValue(false)
+
+            const attempt = service.registerFirstUser(userCreate, 'wrong-token')
+
+            await expect(attempt).rejects.toBeInstanceOf(ForbiddenException)
+            await expect(attempt).rejects.toThrow('Invalid setup token')
+            expect(matches).toHaveBeenCalledWith('wrong-token')
+            expect(transaction).not.toHaveBeenCalled()
+        })
+
         it('creates the user inside a locked transaction', async () => {
-            const result = await service.registerFirstUser(userCreate)
+            const result = await service.registerFirstUser(userCreate, setupToken)
 
             expect(query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(:key)', {
                 replacements: { key: SETUP_LOCK_KEY },
@@ -161,7 +178,7 @@ describe('SetupService', () => {
         it('refuses to register once a user exists', async () => {
             count.mockResolvedValue(1)
 
-            await expect(service.registerFirstUser(userCreate)).rejects.toBeInstanceOf(ForbiddenException)
+            await expect(service.registerFirstUser(userCreate, setupToken)).rejects.toBeInstanceOf(ForbiddenException)
             expect(createUser).not.toHaveBeenCalled()
         })
     })

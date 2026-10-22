@@ -152,6 +152,10 @@ describe('OpenAPI contract', () => {
         expect(await createPreviewOpenApiDocument()).toEqual(document)
     })
 
+    it('lists no servers, so every client resolves requests against its own origin', () => {
+        expect(document.servers ?? []).toEqual([])
+    })
+
     it('documents every controller route', () => {
         expect(routes.length).toBeGreaterThan(0)
         const documented = new Set(operations.map(({ method, path }) => `${method} ${path}`))

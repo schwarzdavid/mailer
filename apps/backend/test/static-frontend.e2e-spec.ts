@@ -49,6 +49,7 @@ describe('static frontend under NODE_ENV=production (e2e)', () => {
         expect(response.status).toBe(200)
         expect(response.text).toContain(SPA_MARKER)
         expect(response.headers['cache-control']).toBe('no-cache')
+        expect(response.headers['content-security-policy']).toContain("default-src 'self'")
     })
 
     it.each(['/projects/5', '/docs'])('falls back to index.html for the client route %s', async (path) => {

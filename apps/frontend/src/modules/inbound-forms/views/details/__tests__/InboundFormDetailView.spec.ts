@@ -207,7 +207,9 @@ describe('InboundFormDetailView', () => {
         const wrapper = mountInApp(InboundFormDetailView)
 
         await vi.waitFor(() =>
-            expect(wrapper.text()).toContain('No domains are allowed yet, so any website can submit this form.'),
+            expect(wrapper.text()).toContain(
+                "No allowed domains: any website can embed and submit this form. Add your website's domains to restrict it.",
+            ),
         )
     })
 
@@ -216,7 +218,22 @@ describe('InboundFormDetailView', () => {
         const wrapper = mountInApp(InboundFormDetailView)
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('kunde.at'))
-        expect(wrapper.text()).not.toContain('No domains are allowed yet')
+        expect(wrapper.text()).not.toContain('No allowed domains')
+    })
+
+    it('flags a form without allowed domains as open to any website', async () => {
+        mockApis(formDetail({ allowedHostnames: [] }))
+        const wrapper = mountInApp(InboundFormDetailView)
+
+        await vi.waitFor(() => expect(wrapper.get('.page-header').text()).toContain('Any website'))
+    })
+
+    it('shows no open-origin warning once domains are allowed', async () => {
+        mockApis(formDetail({ allowedHostnames: ['kunde.at'] }))
+        const wrapper = mountInApp(InboundFormDetailView)
+
+        await vi.waitFor(() => expect(wrapper.get('.page-header').text()).toContain('Active'))
+        expect(wrapper.get('.page-header').text()).not.toContain('Any website')
     })
 
     it('shows the not-found state', async () => {

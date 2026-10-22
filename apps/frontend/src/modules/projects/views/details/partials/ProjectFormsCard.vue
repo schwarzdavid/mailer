@@ -41,6 +41,7 @@
                 {{ t('module.inboundForms.receiverCount', { count: form.receivers.length }, form.receivers.length) }}
             </template>
             <template #meta>
+                <StatusBadge v-if="form.allowedHostnames.length === 0" tone="warning" :label="t('status.anyWebsite')" />
                 <StatusBadge v-if="form.receivers.some(needsTemplate)" tone="warning" :label="t('status.noTemplate')" />
                 <StatusBadge v-bind="activityBadge(form.isActive)" />
             </template>

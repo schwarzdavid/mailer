@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { ThrottlerGuard } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMongoAbility } from '@casl/ability'
 import { AuthController } from './auth.controller.js'
@@ -44,7 +44,7 @@ describe('AuthController', () => {
             controllers: [AuthController],
             providers: [{ provide: JwtHelperService, useValue: { createToken } }],
         })
-            .overrideGuard(ThrottlerGuard)
+            .overrideGuard(AppThrottlerGuard)
             .useValue({ canActivate: () => true })
             .overrideGuard(PoliciesGuard)
             .useValue({ canActivate: vi.fn().mockResolvedValue(true) })

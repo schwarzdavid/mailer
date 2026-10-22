@@ -100,11 +100,11 @@ function collectRoutes(): Record<string, RouteAccess> {
 }
 
 const jwt = ['JwtAuthGuard', 'PoliciesGuard']
-const throttled = ['ThrottlerGuard']
-const apiKeyAuth = ['ThrottlerGuard', 'ApiKeyAuthGuard']
+const throttled = ['AppThrottlerGuard']
+const apiKeyAuth = ['AppThrottlerGuard', 'ApiKeyAuthGuard']
 
 const expectedRoutes: Record<string, RouteAccess> = {
-    'POST /auth/login': { guards: ['ThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
+    'POST /auth/login': { guards: ['AppThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
     'GET /auth/user': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/ability': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/permissions': { guards: jwt, abilities: [], scopedByPrincipal: true },

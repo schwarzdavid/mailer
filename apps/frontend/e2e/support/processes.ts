@@ -31,6 +31,19 @@ async function logTail(logFile: string): Promise<string> {
     return content.split('\n').slice(-40).join('\n')
 }
 
+export async function waitForLogLine(logFile: string, pattern: RegExp, timeoutMs = 10_000): Promise<RegExpExecArray> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+        const content = await readFile(logFile, 'utf8').catch(() => '')
+        const match = pattern.exec(content)
+        if (match) {
+            return match
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    throw new Error(`${pattern} not found in ${logFile} after ${timeoutMs}ms. Log tail:\n${await logTail(logFile)}`)
+}
+
 function pipeToLog(child: ChildProcess, logFile: string): void {
     const log = createWriteStream(logFile)
     child.stdout?.pipe(log)

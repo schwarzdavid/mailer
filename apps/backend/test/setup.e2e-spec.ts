@@ -9,16 +9,18 @@ import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
 import { configureSendingDomain } from './support/sending-domain.js'
 import { login, seedUser } from './support/session.js'
+import { SetupTokenService } from '../src/modules/setup/services/setup-token.service.js'
 
 describe('SetupController (e2e)', () => {
     let app: INestApplication<App>
+    let userModel: typeof UserModel
     let token: string
-
-    const registration = {
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        email: 'setup.user@example.com',
-        password: 'correct-horse-battery-staple',
+    let registration: {
+        firstName: string
+        lastName: string
+        email: string
+        password: string
+        setupToken: string
     }
 
     const http = () => request(app.getHttpServer())
@@ -27,8 +29,15 @@ describe('SetupController (e2e)', () => {
         app = await createTestApp()
         await app.get<typeof SettingsModel>(getModelToken(SettingsModel)).destroy({ where: {} })
         await app.get<typeof DomainModel>(getModelToken(DomainModel)).destroy({ where: {} })
-        const userModel = app.get<typeof UserModel>(getModelToken(UserModel))
+        userModel = app.get<typeof UserModel>(getModelToken(UserModel))
         await userModel.destroy({ where: {} })
+        registration = {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            email: 'setup.user@example.com',
+            password: 'correct-horse-battery-staple',
+            setupToken: app.get(SetupTokenService).token,
+        }
     })
 
     afterAll(async () => {
@@ -45,6 +54,22 @@ describe('SetupController (e2e)', () => {
         const response = await http().post('/api/setup/finish')
 
         expect(response.status).toBe(401)
+    })
+
+    it('refuses registration with a wrong setup token and creates no user', async () => {
+        await http()
+            .post('/api/setup/user')
+            .send({ ...registration, setupToken: 'x'.repeat(32) })
+            .expect(403)
+        expect(await userModel.count()).toBe(0)
+    })
+
+    it('refuses registration without a setup token', async () => {
+        const withoutToken = { ...registration, setupToken: undefined }
+
+        const response = await http().post('/api/setup/user').send(withoutToken)
+
+        expect(response.status).toBe(400)
     })
 
     it('registers the first user and returns a usable token', async () => {
@@ -123,10 +148,10 @@ describe('SetupController (e2e)', () => {
     })
 
     it.each([
-        ['an empty first name', { ...registration, email: 'empty.name@example.com', firstName: '' }],
-        ['unknown properties', { ...registration, email: 'extra.prop@example.com', roleId: 1 }],
-    ])('rejects a registration with %s with 400', async (_case, body) => {
-        const response = await http().post('/api/setup/user').send(body)
+        ['an empty first name', () => ({ ...registration, email: 'empty.name@example.com', firstName: '' })],
+        ['unknown properties', () => ({ ...registration, email: 'extra.prop@example.com', roleId: 1 })],
+    ])('rejects a registration with %s with 400', async (_case, buildBody) => {
+        const response = await http().post('/api/setup/user').send(buildBody())
 
         expect(response.status).toBe(400)
     })

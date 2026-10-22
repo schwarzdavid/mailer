@@ -26,7 +26,7 @@ export const formName = 'Contact Request'
 export const formSlug = 'contact-request'
 export const receiverAddress = 'inbox@acme-e2e.com'
 
-export function requireEnv(key: 'E2E_API_URL' | 'E2E_MAILHOG_URL'): string {
+export function requireEnv(key: 'E2E_API_URL' | 'E2E_MAILHOG_URL' | 'E2E_SETUP_TOKEN'): string {
     const value = process.env[key]
     if (!value) {
         throw new Error(`${key} is not set; run the suite through playwright.config.ts so the global setup runs`)

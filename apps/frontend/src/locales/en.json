@@ -158,6 +158,7 @@
         "published": "Published v{version}",
         "draft": "Draft v{version}",
         "noTemplate": "No template",
+        "anyWebsite": "Any website",
         "permanent": "Permanent",
         "transient": "Transient"
     },
@@ -546,6 +547,8 @@
                 "title": "Create the admin account",
                 "description": "This becomes the first Super admin. You can add more users once setup is done.",
                 "submit": "Create account",
+                "setupTokenLabel": "Setup token",
+                "setupTokenHint": "The backend writes it to its log on startup while no account exists. On the server: docker compose logs backend {'|'} grep \"Setup token\"",
                 "error": "Couldn't create the account"
             },
             "domain": {
@@ -913,7 +916,7 @@
                     "hostnames": {
                         "title": "Allowed domains",
                         "editLabel": "Edit allowed domains",
-                        "emptyWarning": "No domains are allowed yet, so any website can submit this form.",
+                        "emptyWarning": "No allowed domains: any website can embed and submit this form. Add your website's domains to restrict it.",
                         "label": "Allowed domains",
                         "hint": "Only requests from these domains are accepted. Press Enter or comma after each one. Matching is exact: kunde.at does not include www.kunde.at. Enter international domains in punycode (xn--...).",
                         "saved": "Allowed domains saved",

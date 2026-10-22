@@ -9,6 +9,17 @@
                 :text="errorMessage"
             />
             <VTextField
+                v-model="setupToken"
+                class="span-2 mono-field"
+                name="setupToken"
+                :label="requiredLabel(t('module.setup.account.setupTokenLabel'))"
+                :hint="t('module.setup.account.setupTokenHint')"
+                persistent-hint
+                :error-messages="errors.setupToken"
+                autocomplete="off"
+                aria-required="true"
+            />
+            <VTextField
                 v-model="firstName"
                 name="firstName"
                 :label="requiredLabel(t('field.firstName'))"
@@ -83,12 +94,14 @@
     const { handleSubmit, defineField, errors } = useForm({
         validationSchema: toTypedSchema(
             zRegisterUserDto.extend({
+                setupToken: z.string().trim().min(1),
                 firstName: z.string().trim().min(1),
                 lastName: z.string().trim().min(1),
             }),
         ),
     })
 
+    const [setupToken] = defineField('setupToken')
     const [firstName] = defineField('firstName')
     const [lastName] = defineField('lastName')
     const [email] = defineField('email')

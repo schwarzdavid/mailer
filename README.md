@@ -47,7 +47,7 @@ Copy the template to a root `.env`. The defaults already match the local Docker 
 cp .env.example .env
 ```
 
-Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
+Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values of at least 32 characters. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
 
 ### 3. Start the infrastructure
 
@@ -96,7 +96,7 @@ pnpm dev
 - Backend API: http://localhost:8000/api
 - Swagger UI: http://localhost:8000/docs (mounted only when `NODE_ENV` is not `production`)
 
-On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user and enter the server addresses for the platform sending domain, which is `MAIL_HOSTNAME` from `.env` (`mail.example.com` in the template). Locally, the DNS records will stay "pending", which is expected.
+On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user, which needs the setup token that the backend prints to its log on start while no user exists (`Setup token: …`), and enter the server addresses for the platform sending domain, which is `MAIL_HOSTNAME` from `.env` (`mail.example.com` in the template). Locally, the DNS records will stay "pending", which is expected.
 
 ### Useful commands
 
@@ -113,7 +113,7 @@ pnpm check                        # lint + typecheck + test + format check
 
 ### Deploying with Docker Compose
 
-The production stack in `deploy/compose.yml` runs the backend, which serves the built frontend and the API from one image, a stock Caddy reverse proxy (service `proxy`, automatic HTTPS), PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). The Caddyfile is inline in `compose.yml`, so the VPS needs only `compose.yml` and `.env`. `proxy` terminates TLS for `SITE_ADDRESS` and `MAIL_HOSTNAME`, compresses responses, adds `X-Robots-Tag: noindex, nofollow` and forwards every request to the backend. It publishes ports 80 and 443; the backend is reachable only through it. The image sets `NODE_ENV=production`, and `compose.yml` pins it, so a value in `.env` does not override it. With it, the backend serves `/app/public` (the built frontend, copied in by the image) and refuses to start if `index.html` is missing: `/assets/*` with a one-year `immutable` cache, other files and the `index.html` fallback for client routes with `no-cache`. A missing `/assets/*` file and an unknown `/api/*` path return a 404, never the SPA. `NODE_ENV=production` also turns off Swagger UI: `/docs` exists only outside production, so in production it falls back to the SPA. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The single image `ghcr.io/schwarzdavid/mailer-backend` (the `backend` service, which applies pending database migrations itself whenever it starts) is tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. `proxy` runs the stock `caddy:2.11.7-alpine`, pinned in `compose.yml`, and `IMAGE_TAG` does not touch it. The backend image is built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
+The production stack in `deploy/compose.yml` runs the backend, which serves the built frontend and the API from one image, a stock Caddy reverse proxy (service `proxy`, automatic HTTPS), PostgreSQL, Redis and a mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/), service `mail`). The Caddyfile is inline in `compose.yml`, so the VPS needs only `compose.yml` and `.env`. `proxy` terminates TLS for `SITE_ADDRESS` and `MAIL_HOSTNAME`, compresses responses, adds `X-Robots-Tag: noindex, nofollow` and forwards every request to the backend. It publishes ports 80 and 443; the backend is reachable only through it. The image sets `NODE_ENV=production`, and `compose.yml` pins it, so a value in `.env` does not override it. With it, the backend serves `/app/public` (the built frontend, copied in by the image) and refuses to start if `index.html` is missing: `/assets/*` with a one-year `immutable` cache, other files and the `index.html` fallback for client routes with `no-cache`. A missing `/assets/*` file and an unknown `/api/*` path return a 404, never the SPA. `NODE_ENV=production` also turns off Swagger UI: `/docs` exists only outside production, so in production it falls back to the SPA. The backend sets the usual security headers through [helmet](https://helmetjs.github.io/) (`Content-Security-Policy`, `Strict-Transport-Security` for one year without `includeSubDomains`, so an apex `SITE_ADDRESS` does not pin HTTPS on its subdomains, `X-Content-Type-Options`, `Cross-Origin-Resource-Policy: same-origin` and the rest of helmet's defaults); the Content Security Policy additionally allows `'unsafe-eval'` scripts, because the template editor compiles Handlebars in the browser, and images from any `https:` source, so the preview can show remote images. The backend reads `SITE_ADDRESS` from `.env` as well and answers CORS requests only from its origins (`app.example.com` becomes `https://app.example.com`; a list such as `app.example.com, www.example.com` allows each; a wildcard is rejected at startup). The public form routes under `/api/public/form/` answer every origin, so forms can be embedded on any website, and `client.js` carries `Cross-Origin-Resource-Policy: cross-origin`. Every other endpoint, including the public send API `/api/v1/send`, gets no CORS headers for foreign origins, so it is not callable from browsers on other sites; call it from a server. The mail server publishes only port 25, which accepts mail for its own addresses (bounces) and refuses to relay anywhere else. The backend submits outgoing mail on port 587 and polls the bounce mailbox on port 143; both ports are reachable only on the internal `mail` network, require STARTTLS, and authenticate as `bounce@MAIL_HOSTNAME`. Compose derives the backend's `SMTP_*` and `IMAP_*` settings from `MAIL_HOSTNAME` and `MAIL_PASSWORD`: the backend connects to the service name `mail` and verifies the certificate against `MAIL_HOSTNAME` (`SMTP_TLS_SERVERNAME`, `IMAP_TLS_SERVERNAME`), so inside the stack `MAIL_HOSTNAME` still resolves through public DNS and the app's DNS checks see the real records. The single image `ghcr.io/schwarzdavid/mailer-backend` (the `backend` service, which applies pending database migrations itself whenever it starts) is tagged `latest` and `sha-<7-char sha>`, and `IMAGE_TAG` selects the tag. `proxy` runs the stock `caddy:2.11.7-alpine`, pinned in `compose.yml`, and `IMAGE_TAG` does not touch it. The backend image is built for `linux/amd64` only, so ARM hosts are not supported as built. The stack needs Docker Compose 2.23.1 or newer, because `compose.yml` uses inline `configs.content`.
 
 1. **Before the first start:**
     - Install Docker with Docker Compose 2.23.1 or newer on an `amd64` VPS.
@@ -121,9 +121,9 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     - Set the PTR (reverse DNS) record of the VPS IP to `MAIL_HOSTNAME` in your provider's console.
     - Make sure your provider allows outbound connections to port 25. Many block it by default (Hetzner Cloud, for example), and the mail server cannot deliver anything until it is unblocked.
     - Open ports 25, 80 and 443 inbound.
-2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets, including `MAIL_PASSWORD` (`openssl rand -base64 48`). For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own.
+2. Copy `deploy/compose.yml` to `/opt/mailer` and `deploy/.env.example` to `/opt/mailer/.env`, both from the commit of the image you deploy. Set `SITE_ADDRESS` to your domain (e.g. `app.example.com`) and `MAIL_HOSTNAME` to the mail server's name (e.g. `mx.example.com`); the template leaves both empty, and compose refuses to start until they are set. They must be two different names, because Caddy refuses to start with duplicate site addresses. Fill in the secrets (`BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` need at least 32 characters, e.g. `openssl rand -base64 48`), including `MAIL_PASSWORD`. For production, pin `IMAGE_TAG=sha-<7-char sha>` instead of `latest`, so the running images always match the `compose.yml` next to them. Back up `BACKEND_ENCRYPTION_SECRET` separately: without it the stored DKIM keys and reCAPTCHA secrets cannot be decrypted. `DB_PASSWORD` only takes effect when the Postgres volume is first initialised (see step 7). Caddy registers with Let's Encrypt without a contact address, so no expiry e-mails are sent; Caddy renews the certificates on its own.
 3. Run `docker login ghcr.io` with a personal access token that has `read:packages`, because the packages are private.
-4. **First deploy:** start the stack, and finish the first-time setup in the browser immediately, because the setup endpoints are public until the first user exists. The backend creates the database schema itself when it starts:
+4. **First deploy:** start the stack and finish the first-time setup in the browser. Creating the first user needs the setup token that the backend logs while no user exists (see below). The backend creates the database schema itself when it starts:
 
     ```bash
     docker compose pull && docker compose up -d
@@ -135,6 +135,14 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
     (set -a; . ./.env; docker compose exec mail setup email add "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
     (set -a; . ./.env; docker compose exec mail setup alias add "postmaster@$MAIL_HOSTNAME" "bounce@$MAIL_HOSTNAME")
     ```
+
+    Read the setup token from the backend log and enter it in the setup wizard when it asks for it:
+
+    ```bash
+    docker compose logs backend | grep "Setup token"
+    ```
+
+    The token exists only in memory and is logged on every start while no user exists, so a restart before the first user is created issues a new token. Use the one from the latest start. Each backend instance issues its own token, so run a single backend instance until the first user exists.
 
     The mail server uses the certificate that Caddy obtains for `MAIL_HOSTNAME`. Until Caddy has it, `mail` restarts and stays unhealthy; it comes up on its own once the certificate is there. Caddy renews it about every 60 days, and the mail server picks up the renewed certificate without a restart.
 
@@ -244,7 +252,7 @@ Don't set `TRUST_PROXY=true` unless the backend can only be reached through the 
 
 In the Docker Compose deployment, `TRUST_PROXY` is fixed to `1` in `compose.yml` (Caddy is the single hop), and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, edit the value in `compose.yml`.
 
-Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, requests are let through without rate limiting and a warning is logged.
+Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, `POST /api/auth/login` and `POST /api/setup/user` answer 503 so that nobody can brute-force them while the limit is down; every other rate-limited route is let through without rate limiting and a warning is logged.
 
 ## Public send API
 
@@ -257,7 +265,19 @@ curl -X POST http://localhost:8000/api/v1/send \
   -d '{"from":"news@mail.example.com","to":"reader@example.org","subject":"Hello","html":"<p>Hi</p>"}'
 ```
 
-The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. Responses: `202 { mailMessageId, status }`. Domain errors (403, 422, 502) carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`); authentication (401), validation (400), rate limit (429) and payload size (413) errors use the standard Nest error shape without a `code`. `html` and `text` may each hold up to 1,000,000 characters, and the send endpoint accepts JSON bodies up to roughly 8 MB to fit them; every other endpoint keeps the default 100 kB JSON limit. Each key is limited to `PUBLIC_API_RATE_LIMIT` requests (default 60) per `PUBLIC_API_RATE_TTL` ms (default 60000). On top of that, each client IP is capped at 10 × `PUBLIC_API_RATE_LIMIT` requests per window across all keys. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page.
+The key may also be passed as `?key=…`, but query strings tend to end up in logs, so prefer the header. The backend never logs request URLs, and the proxy writes no access logs by default. The one place Caddy logs a URL is the error entry for a failed upstream request, for example a 502 while the backend is down; the Caddyfile in `deploy/compose.yml` therefore replaces the `key` query parameter with `REDACTED` in every log entry. The smoke test enforces both: it checks that a key sent to the running stack reaches no container log and that a key sent while the backend is down shows up redacted. If you turn on Caddy access logs, add the same filter to them in the site block of that Caddyfile:
+
+```
+log {
+    format filter {
+        request>uri query {
+            replace key REDACTED
+        }
+    }
+}
+```
+
+Responses: `202 { mailMessageId, status }`. Domain errors (403, 422, 502) carry a `code` (`FROM_DOMAIN_NOT_ALLOWED`, `FROM_DOMAIN_NOT_READY`, `RECIPIENT_BLOCKED`, `DELIVERY_FAILED`); authentication (401), validation (400), rate limit (429) and payload size (413) errors use the standard Nest error shape without a `code`. `html` and `text` may each hold up to 1,000,000 characters, and the send endpoint accepts JSON bodies up to roughly 8 MB to fit them; every other endpoint keeps the default 100 kB JSON limit. Each key is limited to `PUBLIC_API_RATE_LIMIT` requests (default 60) per `PUBLIC_API_RATE_TTL` ms (default 60000). On top of that, each client IP is capped at 10 × `PUBLIC_API_RATE_LIMIT` requests per window across all keys. Every sent mail (API and inbound forms) is listed on the project's "Sent mail" page.
 
 ## Open todos
 

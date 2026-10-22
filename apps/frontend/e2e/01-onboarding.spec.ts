@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { admin, input, sendingDomain } from './support/fixtures.ts'
+import { admin, input, requireEnv, sendingDomain } from './support/fixtures.ts'
 
 test('a fresh installation sets up the first administrator and the sending domain', async ({ page }) => {
     await page.goto('/')
@@ -10,6 +10,7 @@ test('a fresh installation sets up the first administrator and the sending domai
     await page.getByRole('button', { name: 'Create account' }).click()
     await expect(page.getByText('Fill in this field.').first()).toBeVisible()
 
+    await input(page, 'setupToken').fill(requireEnv('E2E_SETUP_TOKEN'))
     await input(page, 'firstName').fill(admin.firstName)
     await input(page, 'lastName').fill(admin.lastName)
     await input(page, 'email').fill(admin.email)

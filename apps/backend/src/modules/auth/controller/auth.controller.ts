@@ -13,7 +13,9 @@ import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { AbilityRuleDto } from '../dtos/ability-rule.dto.js'
 import { AuthPermissionsDto } from '../dtos/auth-permissions.dto.js'
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
+import { Throttle } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
+import { FailClosedThrottle } from '../../throttler-storage/decorators/FailClosedThrottle.js'
 import {
     LOGIN_THROTTLE_BLOCK_MS,
     LOGIN_THROTTLE_LIMIT,
@@ -36,7 +38,8 @@ export class AuthController {
             getTracker: loginThrottleTracker,
         },
     })
-    @UseGuards(ThrottlerGuard, LocalAuthGuard)
+    @FailClosedThrottle()
+    @UseGuards(AppThrottlerGuard, LocalAuthGuard)
     @ResponseDto(AuthenticationDto)
     @Post('login')
     async login(@Principal() principal: UserWithRole): Promise<AuthenticationDto> {

@@ -188,6 +188,16 @@ mapfile -t app_services < <(dc config --services | tr -d '\r' | grep -vx mail)
 dc up -d --pull missing --wait "${app_services[@]}"
 pass "stack without mail is up and healthy"
 
+setup_token=$(dc logs --no-color backend 2>&1 | grep -oE 'Setup token: [0-9a-f]{32}' | tail -n 1 | sed 's/^Setup token: //' || true)
+[ -n "$setup_token" ] || fail "the backend log shows no 'Setup token: ' line with 32 hex characters"
+wrong_token=$(printf '%032d' 0)
+[ "$wrong_token" != "$setup_token" ] || fail "the generated wrong token equals the real setup token"
+request POST /api/setup/user \
+    -H 'Content-Type: application/json' \
+    --data "{\"firstName\":\"Smoke\",\"lastName\":\"Test\",\"email\":\"smoke@example.com\",\"password\":\"smoke-password-123\",\"setupToken\":\"$wrong_token\"}"
+expect_status 403 "POST /api/setup/user with a wrong setup token"
+pass "the backend logs a setup token on first start and refuses a wrong one"
+
 dc config --services | tr -d '\r' | grep -qx proxy || fail "the stack has no proxy service"
 proxy_id=$(dc ps -q proxy)
 [ -n "$proxy_id" ] || fail "the proxy service is not running"
@@ -276,6 +286,19 @@ for i in $(seq 1 11); do
     fi
 done
 pass "forged X-Forwarded-For does not evade the login throttle"
+
+marker="sdm_smokelog_$(secret | tr -dc 'a-zA-Z0-9' | head -c 24)"
+request POST "/api/v1/send?key=$marker" \
+    -H 'Content-Type: application/json' \
+    --data '{"from":"smoke@example.org","to":"reader@example.org","subject":"log check","text":"log check"}'
+expect_status 401 "POST /api/v1/send?key=…"
+request GET "/api/setup/status?key=$marker"
+expect_status 200 "GET /api/setup/status?key=…"
+dc logs --no-color >"$tmp/container.log" 2>&1
+if grep -qF "$marker" "$tmp/container.log"; then
+    fail "an API key from the query string reached a container log"
+fi
+pass "query-string API keys never reach the container logs"
 
 submission=$(backend_node <<'JS'
 import { createTransport } from 'nodemailer'
@@ -434,6 +457,15 @@ until dc logs backend 2>&1 | grep -q "Migration $failing_migration (up) failed";
 done
 failed_status=$(curl -sS -o /dev/null -w "%{http_code}" "$base/api/setup/status" || true)
 [ "$failed_status" != 200 ] || fail "the backend serves although its migration failed"
+down_marker="sdm_smokedown_$(secret | tr -dc 'a-zA-Z0-9' | head -c 24)"
+down_key_status=$(curl -sS -o /dev/null -w "%{http_code}" "$base/api/setup/status?key=$down_marker" || true)
+[ "$down_key_status" = 502 ] || fail "GET /api/setup/status?key=… while the backend is down: expected HTTP 502, got $down_key_status"
+dc logs --no-color proxy >"$tmp/proxy-down.log" 2>&1
+grep -qF 'key=REDACTED' "$tmp/proxy-down.log" || fail "the proxy did not log the failed upstream request with a redacted key"
+if grep -qF "$down_marker" "$tmp/proxy-down.log"; then
+    fail "an API key from the query string reached the proxy's error log while the backend was down"
+fi
+pass "a failed upstream request is logged with the key query parameter redacted"
 dc exec -T postgres psql -U mailer -d mailer -qc "INSERT INTO \"SequelizeMeta\" (name) VALUES ('$failing_migration')"
 dc restart backend >/dev/null
 wait_healthy backend 120 || fail "the backend did not recover within 120 s once its migrations could run"

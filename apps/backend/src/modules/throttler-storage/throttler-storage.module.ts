@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { Redis } from 'ioredis'
 import type { Env } from '../../config/env.schema.js'
-import { FailOpenThrottlerStorage } from './services/fail-open-throttler-storage.service.js'
+import { ThrottlerStorageService } from './services/throttler-storage.service.js'
 import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storage.constants.js'
 
 @Module({
@@ -22,7 +22,7 @@ import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storag
                     connectTimeout: 1000,
                     retryStrategy: (retries: number) => Math.min(retries * 200, 2000),
                     // Reject commands immediately while disconnected instead of queueing
-                    // them, so a Redis outage fails open rather than hanging requests.
+                    // them, so a Redis outage fails fast rather than hanging requests.
                     enableOfflineQueue: false,
                     maxRetriesPerRequest: 0,
                 })
@@ -35,8 +35,8 @@ import { THROTTLER_KEY_PREFIX, THROTTLER_REDIS_CLIENT } from './throttler-storag
             inject: [THROTTLER_REDIS_CLIENT],
             useFactory: (client: Redis) => new ThrottlerStorageRedisService(client),
         },
-        FailOpenThrottlerStorage,
+        ThrottlerStorageService,
     ],
-    exports: [FailOpenThrottlerStorage, THROTTLER_REDIS_CLIENT],
+    exports: [ThrottlerStorageService, THROTTLER_REDIS_CLIENT],
 })
 export class ThrottlerStorageModule {}

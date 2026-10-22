@@ -2,6 +2,10 @@ import { z } from 'zod'
 
 const port = z.coerce.number().int().min(1).max(65535)
 
+const secret = z
+    .string()
+    .min(32, { message: 'Must be at least 32 characters; generate one with: openssl rand -base64 48' })
+
 const trustProxy = z
     .string()
     .trim()
@@ -26,10 +30,44 @@ const mailHostname = z
     .pipe(z.hostname())
     .refine((value) => value.includes('.'), { message: 'Must be a fully qualified domain name' })
 
+function siteAddressEntryToOrigin(entry: string): string | undefined {
+    if (entry.includes('*')) {
+        return undefined
+    }
+    const origin = URL.parse(entry.includes('://') ? entry : `https://${entry}`)?.origin
+    return origin === 'null' ? undefined : origin
+}
+
+const HTTP_ENTRY_WITHOUT_HOST = /^https?:\/\/(?::\d+)?(?:[/?#]|$)/i
+
+function hasEmptyHost(entry: string): boolean {
+    return HTTP_ENTRY_WITHOUT_HOST.test(entry)
+}
+
+const siteAddress = z
+    .string()
+    .optional()
+    .transform((value, ctx): string[] => {
+        const entries = (value ?? '')
+            .split(/[\s,]+/)
+            .filter((entry) => entry && !entry.startsWith(':') && !hasEmptyHost(entry))
+        const origins: string[] = []
+        for (const entry of entries) {
+            const origin = siteAddressEntryToOrigin(entry)
+            if (origin) {
+                origins.push(origin)
+            } else {
+                ctx.addIssue({ code: 'custom', message: `Unsupported SITE_ADDRESS entry "${entry}"` })
+            }
+        }
+        return origins
+    })
+
 const envShape = {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: port.default(8000),
     TRUST_PROXY: trustProxy,
+    SITE_ADDRESS: siteAddress,
 
     DB_HOST: z.string().default('localhost'),
     DB_PORT: port.optional(),
@@ -40,8 +78,8 @@ const envShape = {
     REDIS_HOST: z.string().default('127.0.0.1'),
     REDIS_PORT: port.default(6379),
 
-    BACKEND_JWT_SECRET: z.string().min(1),
-    BACKEND_ENCRYPTION_SECRET: z.string().min(1),
+    BACKEND_JWT_SECRET: secret,
+    BACKEND_ENCRYPTION_SECRET: secret,
 
     MAIL_HOSTNAME: mailHostname,
 

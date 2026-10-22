@@ -9,6 +9,13 @@ x-logging: &logging
 x-proxy-caddyfile: &proxy-caddyfile |
     {
         acme_ca https://acme-v02.api.letsencrypt.org/directory
+        log default {
+            format filter {
+                request>uri query {
+                    replace key REDACTED
+                }
+            }
+        }
     }
 
     ${SITE_ADDRESS:?SITE_ADDRESS is required} {

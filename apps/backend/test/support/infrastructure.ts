@@ -13,6 +13,7 @@ export interface E2eEnv {
     BACKEND_JWT_SECRET: string
     BACKEND_ENCRYPTION_SECRET: string
     MAIL_HOSTNAME: string
+    SITE_ADDRESS: string
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
@@ -80,9 +81,10 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         DB_DATABASE: postgres.getDatabase(),
         REDIS_HOST: redis.getHost(),
         REDIS_PORT: String(redis.getMappedPort(6379)),
-        BACKEND_JWT_SECRET: 'e2e-jwt-secret',
-        BACKEND_ENCRYPTION_SECRET: 'e2e-encryption-secret',
+        BACKEND_JWT_SECRET: 'e2e-jwt-secret-0123456789abcdef0',
+        BACKEND_ENCRYPTION_SECRET: 'e2e-encryption-secret-0123456789ab',
         MAIL_HOSTNAME: E2E_MAIL_HOSTNAME,
+        SITE_ADDRESS: 'app.e2e.test',
         SMTP_HOST: mailhog.getHost(),
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',

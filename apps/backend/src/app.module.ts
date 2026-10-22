@@ -35,7 +35,7 @@ import { createRedisClientOptions } from './factories/redis.options.js'
 import { createStaticFrontendOptions } from './factories/static-frontend.js'
 import { ServeStaticModule } from '@nestjs/serve-static'
 import { ThrottlerStorageModule } from './modules/throttler-storage/throttler-storage.module.js'
-import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/fail-open-throttler-storage.service.js'
+import { ThrottlerStorageService } from './modules/throttler-storage/services/throttler-storage.service.js'
 
 @Module({
     imports: [
@@ -79,8 +79,8 @@ import { FailOpenThrottlerStorage } from './modules/throttler-storage/services/f
         }),
         ThrottlerModule.forRootAsync({
             imports: [ThrottlerStorageModule],
-            inject: [FailOpenThrottlerStorage, ConfigService],
-            useFactory(storage: FailOpenThrottlerStorage, configService: ConfigService<Env, true>) {
+            inject: [ThrottlerStorageService, ConfigService],
+            useFactory(storage: ThrottlerStorageService, configService: ConfigService<Env, true>) {
                 return {
                     throttlers: [
                         {
