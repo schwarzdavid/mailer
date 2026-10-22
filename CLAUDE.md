@@ -20,7 +20,7 @@ pnpm + Turborepo monorepo. Three workspaces (`apps/*`, `packages/*`):
 - `apps/frontend` — Vue 3 SPA (Vuetify, Vue Router, TanStack Query, vue-i18n, vee-validate + Zod).
 - `packages/api` — Typed client + Zod schemas generated from the backend's OpenAPI spec by `@hey-api/openapi-ts`. Consumed by the frontend as `api` (`workspace:*`).
 
-`.github/workflows/ci.yml` is the CI pipeline (`pnpm check`, both e2e suites, then image build, smoke test and GHCR publish on `main`).
+`.github/workflows/release.yml` runs only on a published GitHub release (`pnpm check`, both e2e suites, then image build, smoke test and GHCR publish, tagged with the semver release version, `sha-<7>` and, for non-pre-releases, `latest`).
 
 `dev/docker-compose.yml` provides local Postgres, Redis, MailHog (outbound SMTP sink), and GreenMail (SMTP :3025 / IMAP :3143 — the bounce mailbox: inject DSN mails via its SMTP port and the backend's IMAP poller ingests them). Runtime config comes from a root `.env` (gitignored, template in `.env.example`) — see keys referenced in `apps/backend/src/app.module.ts`, `apps/backend/src/modules/mail/mail.module.ts`, and the bounce module (`DB_*`, `REDIS_*`, `BACKEND_JWT_SECRET`, `BACKEND_ENCRYPTION_SECRET`, `SMTP_*`, `IMAP_*`).
 

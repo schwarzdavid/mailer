@@ -162,7 +162,7 @@ The production stack in `deploy/compose.yml` runs the backend, which serves the 
         docker compose up -d backend
         ```
 
-8. **Update:** take `compose.yml` from the commit of the new image and diff `deploy/.env.example` from that commit against your `.env` for new or renamed keys. With a pinned tag, set `IMAGE_TAG` to the new `sha-<7-char sha>`. First record the revision that is running now, which you need for a rollback:
+8. **Update:** take `compose.yml` from the commit of the new image and diff `deploy/.env.example` from that commit against your `.env` for new or renamed keys. With a pinned tag, set `IMAGE_TAG` to the new release version (e.g. `1.4.0`) or its `sha-<7-char sha>`. First record the revision that is running now, which you need for a rollback:
 
     ```bash
     docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend)"
@@ -202,9 +202,9 @@ Compose sets `TRUST_PROXY=1` for the backend itself, matching Caddy as the singl
 
 The bounce mailbox grows over time: the backend only marks processed mails as `\Seen` and never deletes them (see open todos).
 
-### Continuous integration
+### Release pipeline
 
-`.github/workflows/ci.yml` runs on every pull request and on every push to `main`, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` Docker target, the only image, and runs `deploy/smoke-test.sh` against it (the stock Caddy and docker-mailserver images are pulled for the test). Only `images` publishes: on a push to `main`, and nowhere else, it pushes the image to GHCR, tagged `latest` and `sha-<7-char sha>`. Pull requests build and smoke-test the images but push nothing. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
+`.github/workflows/release.yml` runs only when a GitHub release is published, in four jobs, not on pushes or pull requests. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The `images` job starts only after all three have passed. It builds the `backend` Docker target, the only image, and runs `deploy/smoke-test.sh` against it (the stock Caddy and docker-mailserver images are pulled for the test). Only after the smoke test passes does it push the image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`. New GHCR packages are private by default, which matches the `docker login ghcr.io` step in the runbook above.
 
 ### Without Docker
 
@@ -270,4 +270,4 @@ The key may also be passed as `?key=…`, but query strings tend to end up in lo
 - [ ] **Transactional domain creation** Creating a domain or the sending domain takes several steps that do not yet run in a single transaction.
 - [ ] **Branding settings** Customization options such as colors and a logo on the settings screen and in onboarding.
 - [x] **Production deployment** Dockerfiles, a production compose/deployment setup and deployment documentation.
-- [x] **CI pipeline** Run `pnpm check` and the e2e suite automatically on every push.
+- [x] **Release pipeline** Run `pnpm check`, the e2e suites and the smoke test, then publish the image, for every published GitHub release.
