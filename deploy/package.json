@@ -1,0 +1,24 @@
+{
+  "name": "deploy",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint smoke",
+    "lint:fix": "eslint smoke --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:smoke": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/nodemailer": "^8.0.1",
+    "@vitest/eslint-plugin": "^1.6.20",
+    "eslint": "^10.6.0",
+    "execa": "^10.2.0",
+    "globals": "^17.7.0",
+    "nodemailer": "^9.0.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0",
+    "vitest": "^4.1.9"
+  }
+}

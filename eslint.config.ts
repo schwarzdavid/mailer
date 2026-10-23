@@ -60,6 +60,6 @@ export function defineBaseConfig({ tsconfigRootDir }: BaseConfigOptions) {
 // Root-level lint only. Workspace packages own their own flat config (they
 // extend the base via `defineBaseConfig`), so they're excluded here.
 export default tseslint.config(
-    { ignores: ['apps/**', 'packages/**'] },
+    { ignores: ['apps/**', 'packages/**', 'deploy/**'] },
     ...defineBaseConfig({ tsconfigRootDir: import.meta.dirname }),
 )
