@@ -19,6 +19,7 @@ apps/frontend/test-results
 apps/frontend/playwright-report
 docs
 deploy
+e2e
 dev
 .github
 **/*.md

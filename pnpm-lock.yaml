@@ -640,7 +640,7 @@ importers:
         specifier: ^3.3.5
         version: 3.3.5(typescript@6.0.3)
 
-  deploy:
+  e2e:
     devDependencies:
       '@types/node':
         specifier: ^26.1.0

@@ -1,7 +1,7 @@
 packages:
     - 'apps/*'
     - 'packages/*'
-    - 'deploy'
+    - 'e2e'
 allowBuilds:
     '@parcel/watcher': true
     '@scarf/scarf': false

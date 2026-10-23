@@ -28,7 +28,7 @@ export interface SmokeStack {
     tlsAwayDir: string
 }
 
-const sourceComposeFile = fileURLToPath(new URL('../../compose.yml', import.meta.url))
+const sourceComposeFile = fileURLToPath(new URL('../../../deploy/compose.yml', import.meta.url))
 
 const smokeOverride = `services:
     mail:
