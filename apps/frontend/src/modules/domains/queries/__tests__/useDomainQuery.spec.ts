@@ -6,6 +6,7 @@ import { useDomainQuery } from '../useDomainQuery.ts'
 
 const record: DomainDnsRecordDto = {
     current: null,
+    issue: null,
     host: 'mail.example.org',
     status: 'valid',
     type: 'txt',

@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" width="1000" height="520" role="img" aria-labelledby="stack-title stack-desc">
+    <title id="stack-title">The mailer stack</title>
+    <desc id="stack-desc">Browsers and websites reach the Caddy proxy over HTTPS on ports 80 and 443. Caddy forwards every request to the backend on port 8000. The backend stores data in PostgreSQL, queues form deliveries in Redis, submits mail to the docker-mailserver container on port 587 and reads the bounce mailbox from it over IMAP on port 143. The mail server delivers to recipients' mail servers on port 25 and receives bounces on port 25. Caddy shares the TLS certificate for MAIL_HOSTNAME with the mail server.</desc>
+    <style>
+        svg { color: #1f2328; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        .bg { fill: #ffffff; }
+        .box { fill: #f3f4f6; stroke: currentColor; stroke-width: 1.5; }
+        .ext { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 6 4; }
+        .line { fill: none; stroke: currentColor; stroke-width: 1.5; }
+        .dashed { stroke-dasharray: 6 4; }
+        .title { fill: currentColor; font-size: 16px; font-weight: 600; }
+        .sub { fill: currentColor; font-size: 12px; opacity: 0.8; }
+        .label { fill: currentColor; font-size: 12px; }
+        .group { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.6; }
+        .group-label { fill: currentColor; font-size: 12px; opacity: 0.7; }
+        @media (prefers-color-scheme: dark) {
+            svg { color: #e6e6e6; }
+            .bg { fill: #1b1b1f; }
+            .box { fill: #2a2a30; }
+        }
+    </style>
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor" />
+        </marker>
+    </defs>
+
+    <rect class="bg" x="0" y="0" width="1000" height="520" rx="12" />
+
+    <rect class="group" x="230" y="130" width="750" height="370" rx="10" />
+    <text class="group-label" x="245" y="152">Your server: docker compose project "mailer"</text>
+
+    <rect class="ext" x="20" y="190" width="170" height="90" rx="8" />
+    <text class="title" x="105" y="225" text-anchor="middle">Browsers and</text>
+    <text class="title" x="105" y="245" text-anchor="middle">your websites</text>
+    <text class="sub" x="105" y="266" text-anchor="middle">admin UI, forms, API</text>
+
+    <rect class="box" x="260" y="190" width="160" height="90" rx="8" />
+    <text class="title" x="340" y="225" text-anchor="middle">proxy</text>
+    <text class="sub" x="340" y="246" text-anchor="middle">Caddy: HTTPS,</text>
+    <text class="sub" x="340" y="262" text-anchor="middle">certificates</text>
+
+    <rect class="box" x="500" y="190" width="170" height="90" rx="8" />
+    <text class="title" x="585" y="225" text-anchor="middle">backend</text>
+    <text class="sub" x="585" y="246" text-anchor="middle">admin UI, API,</text>
+    <text class="sub" x="585" y="262" text-anchor="middle">queue worker, jobs</text>
+
+    <rect class="box" x="790" y="190" width="170" height="90" rx="8" />
+    <text class="title" x="875" y="225" text-anchor="middle">mail</text>
+    <text class="sub" x="875" y="246" text-anchor="middle">docker-mailserver,</text>
+    <text class="sub" x="875" y="262" text-anchor="middle">bounce mailbox</text>
+
+    <rect class="box" x="430" y="370" width="140" height="64" rx="8" />
+    <text class="title" x="500" y="398" text-anchor="middle">postgres</text>
+    <text class="sub" x="500" y="418" text-anchor="middle">all data</text>
+
+    <rect class="box" x="600" y="370" width="140" height="64" rx="8" />
+    <text class="title" x="670" y="398" text-anchor="middle">redis</text>
+    <text class="sub" x="670" y="418" text-anchor="middle">delivery queue</text>
+
+    <rect class="ext" x="790" y="20" width="170" height="70" rx="8" />
+    <text class="title" x="875" y="50" text-anchor="middle">Recipients'</text>
+    <text class="title" x="875" y="70" text-anchor="middle">mail servers</text>
+
+    <line class="line" x1="190" y1="235" x2="256" y2="235" marker-end="url(#arrow)" />
+    <text class="label" x="223" y="226" text-anchor="middle">HTTPS</text>
+    <text class="label" x="223" y="252" text-anchor="middle">80, 443</text>
+
+    <line class="line" x1="420" y1="235" x2="496" y2="235" marker-end="url(#arrow)" />
+    <text class="label" x="458" y="226" text-anchor="middle">HTTP</text>
+    <text class="label" x="458" y="252" text-anchor="middle">8000</text>
+
+    <line class="line" x1="670" y1="215" x2="786" y2="215" marker-end="url(#arrow)" />
+    <text class="label" x="728" y="207" text-anchor="middle">send: SMTP 587</text>
+
+    <line class="line" x1="786" y1="258" x2="674" y2="258" marker-end="url(#arrow)" />
+    <text class="label" x="728" y="276" text-anchor="middle">bounces: IMAP 143</text>
+
+    <line class="line" x1="560" y1="280" x2="510" y2="366" marker-end="url(#arrow)" />
+    <line class="line" x1="610" y1="280" x2="660" y2="366" marker-end="url(#arrow)" />
+
+    <line class="line" x1="850" y1="190" x2="850" y2="94" marker-end="url(#arrow)" />
+    <text class="label" x="842" y="135" text-anchor="end">deliveries</text>
+    <text class="label" x="842" y="151" text-anchor="end">port 25</text>
+
+    <line class="line" x1="900" y1="94" x2="900" y2="186" marker-end="url(#arrow)" />
+    <text class="label" x="908" y="135">bounces</text>
+    <text class="label" x="908" y="151">port 25</text>
+
+    <polyline class="line dashed" points="340,280 340,470 875,470 875,284" marker-end="url(#arrow)" />
+    <text class="label" x="608" y="462" text-anchor="middle">TLS certificate for MAIL_HOSTNAME (shared volume)</text>
+</svg>

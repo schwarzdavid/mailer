@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import type { Transporter } from 'nodemailer'
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
@@ -17,6 +18,7 @@ import { EmailBlockService } from '../../bounce/services/email-block.service.js'
 import { BounceService } from '../../bounce/services/bounce.service.js'
 import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
 import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { DomainNotReadyError } from '../../domain/exceptions/domain-not-ready.error.js'
 
 function smtpError(
     message: string,
@@ -30,6 +32,9 @@ describe('MailService', () => {
     let sendMail: Mock<Transporter<SMTPTransport.SentMessageInfo>['sendMail']>
     let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
     let getConfiguredSendingDomain: Mock<DomainService['getConfiguredSendingDomain']>
+    let getDomainByFqdn: Mock<DomainService['getDomainByFqdn']>
+    let assertReadyToSend: Mock<DomainService['assertReadyToSend']>
+    let sendRequireValidDns: boolean
     let decrypt: Mock<SecretEncryptionService['decrypt']>
     let assertNotBlocked: Mock<EmailBlockService['assertNotBlocked']>
     let recordBounce: Mock<BounceService['recordBounce']>
@@ -97,6 +102,12 @@ describe('MailService', () => {
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
         getConfiguredSendingDomain = vi.fn<typeof getConfiguredSendingDomain>().mockResolvedValue(null)
+        getDomainByFqdn = vi.fn<typeof getDomainByFqdn>().mockResolvedValue(sendingDomain)
+        assertReadyToSend = vi.fn<typeof assertReadyToSend>().mockResolvedValue(undefined)
+        sendRequireValidDns = false
+        const configGet = vi
+            .fn<(key: 'SEND_REQUIRE_VALID_DNS') => boolean>()
+            .mockImplementation(() => sendRequireValidDns)
         decrypt = vi.fn<typeof decrypt>().mockResolvedValue('-----BEGIN PRIVATE KEY-----')
         assertNotBlocked = vi.fn<typeof assertNotBlocked>().mockResolvedValue(undefined)
         recordBounce = vi.fn<typeof recordBounce>().mockResolvedValue(undefined)
@@ -108,7 +119,16 @@ describe('MailService', () => {
             providers: [
                 MailService,
                 { provide: MAIL_TRANSPORTER, useValue: { sendMail } },
-                { provide: DomainService, useValue: { getSendingDomainByFqdn, getConfiguredSendingDomain } },
+                {
+                    provide: DomainService,
+                    useValue: {
+                        getSendingDomainByFqdn,
+                        getConfiguredSendingDomain,
+                        getDomainByFqdn,
+                        assertReadyToSend,
+                    },
+                },
+                { provide: ConfigService, useValue: { get: configGet } },
                 { provide: SecretEncryptionService, useValue: { decrypt } },
                 { provide: EmailBlockService, useValue: { assertNotBlocked } },
                 { provide: BounceService, useValue: { recordBounce } },
@@ -148,6 +168,56 @@ describe('MailService', () => {
         await service.sendMail({ ...mail, replyTo: 'visitor@example.org' }, context)
 
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ replyTo: 'visitor@example.org' }))
+    })
+
+    describe('with SEND_REQUIRE_VALID_DNS on', () => {
+        beforeEach(() => {
+            sendRequireValidDns = true
+        })
+
+        it('refuses a from domain whose dns records are not valid before logging a message', async () => {
+            const notReady = new DomainNotReadyError(1, 'mail.example.com')
+            assertReadyToSend.mockRejectedValue(notReady)
+
+            await expect(service.sendMail(mail, context)).rejects.toBe(notReady)
+
+            expect(getDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+            expect(assertReadyToSend).toHaveBeenCalledWith(sendingDomain)
+            expect(recordPending).not.toHaveBeenCalled()
+            expect(sendMail).not.toHaveBeenCalled()
+        })
+
+        it('sends from a domain that is ready', async () => {
+            await expect(service.sendMail(mail, context)).resolves.toEqual({
+                mailMessageId: 41,
+                smtpMessageId: '<m1@mail.example.com>',
+            })
+
+            expect(assertReadyToSend).toHaveBeenCalledWith(sendingDomain)
+            expect(sendMail).toHaveBeenCalledTimes(1)
+        })
+
+        it('leaves an unknown from domain to the delivery, which fails as before', async () => {
+            getDomainByFqdn.mockResolvedValue(null)
+            getSendingDomainByFqdn.mockResolvedValue(null)
+
+            await expect(service.sendMail(mail, context)).rejects.toThrow(
+                'No sending domain configured for mail.example.com',
+            )
+
+            expect(assertReadyToSend).not.toHaveBeenCalled()
+            expect(recordPending).toHaveBeenCalled()
+        })
+    })
+
+    it('skips the dns check while SEND_REQUIRE_VALID_DNS is off', async () => {
+        assertReadyToSend.mockRejectedValue(new DomainNotReadyError(1, 'mail.example.com'))
+
+        await service.sendMail(mail, context)
+
+        expect(getDomainByFqdn).not.toHaveBeenCalled()
+        expect(assertReadyToSend).not.toHaveBeenCalled()
+        expect(sendMail).toHaveBeenCalledTimes(1)
     })
 
     it('rejects when no sending domain is configured for the from address', async () => {

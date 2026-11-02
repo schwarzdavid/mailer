@@ -80,6 +80,12 @@ describe('DnsHealthService', () => {
         expect(findAll).toHaveBeenCalledTimes(1)
     })
 
+    it('reloads every domain when the scheduled check runs', async () => {
+        await service.handleCheckInterval()
+
+        expect(reloadDnsRecords).toHaveBeenCalledTimes(2)
+    })
+
     it('logs instead of throwing when the domain listing fails', async () => {
         findAll.mockRejectedValue(new Error('db unavailable'))
 

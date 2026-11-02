@@ -14,12 +14,14 @@
 .playwright-mcp
 .run
 apps/backend/openapi.json
+apps/backend/env-keys.json
 apps/backend/public
 apps/frontend/test-results
 apps/frontend/playwright-report
 docs
 deploy
 e2e
+apps/docs
 dev
 .github
 **/*.md

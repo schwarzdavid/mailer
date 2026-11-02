@@ -5,6 +5,7 @@ import { DomainDkim } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
     DomainDnsRecordCreate,
+    DomainDnsRecordIssue,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
@@ -14,6 +15,7 @@ import { DomainDnsModel } from '../models/domain-dns.model.js'
 import { resolve, resolve4, resolve6, resolveMx, reverse } from 'node:dns/promises'
 import { DomainModel } from '../models/domain.model.js'
 import { SettingsModel } from '../../settings/models/settings.model.js'
+import { evaluateRecord } from '../helpers/txt-record-check.js'
 import ErrnoException = NodeJS.ErrnoException
 
 type DomainName = Pick<Domain, 'domainId' | 'fqdn'>
@@ -47,6 +49,7 @@ export class DomainDnsService {
                 use: DomainDnsRecordUse.SPF,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
+                issue: DomainDnsRecordIssue.MISSING,
                 type: DomainDnsRecordType.TXT,
             }),
             this.createDefaultDkimRecord(domain, dkim),
@@ -85,6 +88,7 @@ export class DomainDnsService {
                 use: DomainDnsRecordUse.A,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
+                issue: DomainDnsRecordIssue.MISSING,
                 type: DomainDnsRecordType.A,
             },
             {
@@ -94,6 +98,7 @@ export class DomainDnsService {
                 use: DomainDnsRecordUse.MX,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
+                issue: DomainDnsRecordIssue.MISSING,
                 type: DomainDnsRecordType.MX,
             },
             {
@@ -103,6 +108,7 @@ export class DomainDnsService {
                 use: DomainDnsRecordUse.SPF,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
+                issue: DomainDnsRecordIssue.MISSING,
                 type: DomainDnsRecordType.TXT,
             },
             {
@@ -112,6 +118,7 @@ export class DomainDnsService {
                 use: DomainDnsRecordUse.PTR,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
+                issue: DomainDnsRecordIssue.MISSING,
                 type: DomainDnsRecordType.PTR,
             },
         ]
@@ -125,6 +132,7 @@ export class DomainDnsService {
                     use: DomainDnsRecordUse.AAAA,
                     current: null,
                     status: DomainDnsRecordStatus.INVALID,
+                    issue: DomainDnsRecordIssue.MISSING,
                     type: DomainDnsRecordType.AAAA,
                 },
                 {
@@ -134,6 +142,7 @@ export class DomainDnsService {
                     use: DomainDnsRecordUse.PTR,
                     current: null,
                     status: DomainDnsRecordStatus.INVALID,
+                    issue: DomainDnsRecordIssue.MISSING,
                     type: DomainDnsRecordType.PTR,
                 },
             )
@@ -154,6 +163,8 @@ export class DomainDnsService {
             {
                 value: `v=spf1 include:${sendingDomain.fqdn} ~all`,
                 status: DomainDnsRecordStatus.INVALID,
+                current: null,
+                issue: DomainDnsRecordIssue.MISSING,
             },
             {
                 where: {
@@ -162,6 +173,12 @@ export class DomainDnsService {
                 },
             },
         )
+    }
+
+    async allRecordsValid(domainId: number): Promise<boolean> {
+        const records = await this.domainDnsModel.findAll({ where: { domainId } })
+
+        return records.length > 0 && records.every((record) => record.status === DomainDnsRecordStatus.VALID)
     }
 
     async deleteRecordsForDomain(domainId: number): Promise<void> {
@@ -176,14 +193,15 @@ export class DomainDnsService {
 
         for (const record of dnsRecords) {
             const currentValues = await this.resolveCurrentValues(record)
-            const matchedValue = currentValues.find((value) => value === record.value)
+            const evaluation = evaluateRecord(record.use, record.value, currentValues)
 
             this.logger.log(
                 `Got ${record.type.toUpperCase()} values for ${record.host}: ${currentValues.join(', ') || '---'}`,
             )
 
-            record.current = matchedValue ?? currentValues[0] ?? null
-            record.status = matchedValue ? DomainDnsRecordStatus.VALID : DomainDnsRecordStatus.INVALID
+            record.current = evaluation.current
+            record.status = evaluation.status
+            record.issue = evaluation.issue
 
             await record.save()
         }
@@ -237,6 +255,7 @@ export class DomainDnsService {
             use: DomainDnsRecordUse.DKIM,
             current: null,
             status: DomainDnsRecordStatus.INVALID,
+            issue: DomainDnsRecordIssue.MISSING,
             type: DomainDnsRecordType.TXT,
         })
     }
@@ -252,6 +271,7 @@ export class DomainDnsService {
             use: DomainDnsRecordUse.DMARC,
             current: null,
             status: DomainDnsRecordStatus.INVALID,
+            issue: DomainDnsRecordIssue.MISSING,
             type: DomainDnsRecordType.TXT,
         })
     }

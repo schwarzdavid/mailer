@@ -5,6 +5,7 @@ import { MailService } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
 import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
 import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { DomainNotReadyError } from '../../domain/exceptions/domain-not-ready.error.js'
 import { describeError } from '../../../helpers/describe-error.js'
 import { ApiKey } from '../interfaces/api-key.interface.js'
 import { PublicSendDto } from '../dtos/public-send.dto.js'
@@ -41,6 +42,9 @@ export class PublicSendService {
             )
             return { mailMessageId }
         } catch (error) {
+            if (error instanceof DomainNotReadyError) {
+                throw this.domainNotReadyException()
+            }
             if (!(error instanceof MailSendError)) {
                 throw error
             }
@@ -75,5 +79,21 @@ export class PublicSendService {
                 'The from domain has no active DKIM key',
             )
         }
+
+        try {
+            await this.mailService.assertFromDomainReady(fqdn)
+        } catch (error) {
+            if (error instanceof DomainNotReadyError) {
+                throw this.domainNotReadyException()
+            }
+            throw error
+        }
+    }
+
+    private domainNotReadyException(): PublicSendException {
+        return new PublicSendException(
+            PublicSendErrorCode.FROM_DOMAIN_NOT_READY,
+            'The from domain has DNS records that are not valid yet',
+        )
     }
 }

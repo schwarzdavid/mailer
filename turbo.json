@@ -12,6 +12,15 @@
             "cache": false,
             "persistent": true
         },
+        "docs#build": {
+            "dependsOn": ["^build", "backend#generate"],
+            "outputs": [".vitepress/dist/**"]
+        },
+        "docs#dev": {
+            "dependsOn": ["^build", "backend#generate"],
+            "cache": false,
+            "persistent": true
+        },
         "api#dev": {
             "dependsOn": ["build"],
             "cache": false,
@@ -27,7 +36,7 @@
         },
         "generate": {
             "dependsOn": ["build"],
-            "outputs": ["openapi.json"]
+            "outputs": ["openapi.json", "env-keys.json"]
         },
         "lint": {
             "dependsOn": ["^build"],

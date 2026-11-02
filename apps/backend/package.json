@@ -12,7 +12,7 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
-    "generate": "node dist/openapi.js openapi.json",
+    "generate": "node dist/openapi.js openapi.json && node dist/env-keys.js env-keys.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

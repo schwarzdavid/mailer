@@ -29,6 +29,6 @@ import { ProjectDomainModel } from '../project/models/project-domain.model.js'
     ],
     controllers: [DomainController],
     providers: [DomainService, DomainDkimService, DomainDnsService, DnsHealthService],
-    exports: [DomainService, DomainDnsService],
+    exports: [DomainService, DomainDnsService, DnsHealthService],
 })
 export class DomainModule {}

@@ -47,6 +47,7 @@ const validSpf: DomainDnsRecord = {
     host: 'mail.example.com',
     value: 'v=spf1 include:mail.sending.example ~all',
     current: 'v=spf1 include:mail.sending.example ~all',
+    issue: null,
     createdAt: new Date(),
     updatedAt: new Date(),
 }

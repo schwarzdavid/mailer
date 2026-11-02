@@ -35,7 +35,7 @@ const optionalString = z
     .optional()
     .transform((value) => value || undefined)
 
-const envShape = {
+export const envShape = {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: port.default(8000),
     TRUST_PROXY: trustProxy,
@@ -66,6 +66,7 @@ const envShape = {
     SMTP_PORT: port,
     SMTP_SECURE: z.stringbool().default(false),
     SMTP_REQUIRE_TLS: z.stringbool().default(true),
+    SEND_REQUIRE_VALID_DNS: z.stringbool().default(true),
     SMTP_USER: z.string().default(''),
     SMTP_PASSWORD: z.string().default(''),
     SMTP_TLS_SERVERNAME: z.string().optional(),

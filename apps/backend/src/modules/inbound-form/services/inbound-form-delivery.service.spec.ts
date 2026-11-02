@@ -13,6 +13,7 @@ import { TemplateRendererService } from '../../mail/services/template-renderer.s
 import { MailService } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
 import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
+import { DomainNotReadyError } from '../../domain/exceptions/domain-not-ready.error.js'
 import { InboundForm } from '../interfaces/inbound-form.interface.js'
 import { InboundFormReceiver } from '../interfaces/inbound-form-receiver.interface.js'
 import { InboundFormTemplate, InboundFormTemplateStatus } from '../interfaces/inbound-form-template.interface.js'
@@ -342,6 +343,27 @@ describe('InboundFormDeliveryService', () => {
             expect(row.update).toHaveBeenCalledExactlyOnceWith({
                 status,
                 error: 'Connection terminated unexpectedly',
+                attempts: 1,
+                mailMessageId: null,
+            })
+        },
+    )
+
+    it.each<[boolean, InboundFormDeliveryStatus]>([
+        [false, InboundFormDeliveryStatus.PENDING],
+        [true, InboundFormDeliveryStatus.FAILED],
+    ])(
+        'records a from domain without valid dns records and rethrows so the queue retries (last attempt: %s)',
+        async (isLastAttempt, status) => {
+            const row = mockDelivery()
+            const error = new DomainNotReadyError(3, 'example.com')
+            sendMail.mockRejectedValue(error)
+
+            await expect(service.deliver(7, isLastAttempt)).rejects.toBe(error)
+
+            expect(row.update).toHaveBeenCalledExactlyOnceWith({
+                status,
+                error: 'Domain 3 (example.com) has DNS records that are not valid yet',
                 attempts: 1,
                 mailMessageId: null,
             })

@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /openapi.json
+/env-keys.json
 /public
 /node_modules
 /build

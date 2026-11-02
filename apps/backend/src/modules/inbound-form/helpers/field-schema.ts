@@ -63,7 +63,7 @@ function buildFieldSchema(field: InboundFormField): z.ZodType {
 }
 
 function compilePattern(pattern: string): RegExp | null {
-    return findPatternProblem(pattern) === null ? new RegExp(pattern) : null
+    return findPatternProblem(pattern) === null ? new RegExp(`^(?:${pattern})$`) : null
 }
 
 function castDefaultValue(field: InboundFormField): unknown {

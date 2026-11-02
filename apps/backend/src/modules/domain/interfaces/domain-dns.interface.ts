@@ -21,6 +21,13 @@ export enum DomainDnsRecordStatus {
     INVALID = 'invalid',
 }
 
+export enum DomainDnsRecordIssue {
+    MISSING = 'missing',
+    MISMATCH = 'mismatch',
+    INCOMPLETE = 'incomplete',
+    MULTIPLE = 'multiple',
+}
+
 export interface DomainDnsRecord {
     dnsId: number
     domainId: number
@@ -30,6 +37,7 @@ export interface DomainDnsRecord {
     host: string
     value: string
     current: string | null
+    issue: DomainDnsRecordIssue | null
     updatedAt: Date
     createdAt: Date
 }

@@ -1,6 +1,5 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers'
-import { sendingDomain } from './fixtures.ts'
 
 export interface BackendEnv {
     DB_HOST: string
@@ -17,6 +16,7 @@ export interface BackendEnv {
     SMTP_PORT: string
     SMTP_SECURE: string
     SMTP_REQUIRE_TLS: string
+    SEND_REQUIRE_VALID_DNS: string
     SMTP_USER: string
     SMTP_PASSWORD: string
     IMAP_HOST: string
@@ -29,10 +29,17 @@ export interface BackendEnv {
 export interface Infrastructure {
     backendEnv: BackendEnv
     mailhogUrl: string
+    greenmailSmtpPort: number
     stop: () => Promise<void>
 }
 
-export async function startInfrastructure(): Promise<Infrastructure> {
+export interface InfrastructureOptions {
+    mailHostname: string
+    imapUser: string
+    imapPassword: string
+}
+
+export async function startInfrastructure(options: InfrastructureOptions): Promise<Infrastructure> {
     const [postgres, redis, mailhog, greenmail] = await Promise.all([
         new PostgreSqlContainer('postgres:17-alpine')
             .withDatabase('mailservice')
@@ -74,20 +81,22 @@ export async function startInfrastructure(): Promise<Infrastructure> {
             REDIS_PORT: String(redis.getMappedPort(6379)),
             BACKEND_JWT_SECRET: 'playwright-jwt-secret-0123456789ab',
             BACKEND_ENCRYPTION_SECRET: 'playwright-encryption-secret-012345',
-            MAIL_HOSTNAME: sendingDomain,
+            MAIL_HOSTNAME: options.mailHostname,
             SMTP_HOST: mailhog.getHost(),
             SMTP_PORT: String(mailhog.getMappedPort(1025)),
             SMTP_SECURE: 'false',
             SMTP_REQUIRE_TLS: 'false',
+            SEND_REQUIRE_VALID_DNS: 'false',
             SMTP_USER: '',
             SMTP_PASSWORD: '',
             IMAP_HOST: greenmail.getHost(),
             IMAP_PORT: String(greenmail.getMappedPort(3143)),
             IMAP_SECURE: 'false',
-            IMAP_USER: 'bounce@example.com',
-            IMAP_PASSWORD: 'bounce',
+            IMAP_USER: options.imapUser,
+            IMAP_PASSWORD: options.imapPassword,
         },
         mailhogUrl: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
+        greenmailSmtpPort: greenmail.getMappedPort(3025),
         async stop() {
             await Promise.all(containers.map((container) => container.stop()))
         },
