@@ -30,7 +30,7 @@ chmod 600 .env
 
 `chmod 600` makes `.env` readable only by `root`, because it is about to hold your secrets.
 
-The image itself, `ghcr.io/schwarzdavid/mailer-backend`, is public; you do not need to log in to any registry.
+The image itself, `ghcr.io/schwarzdavid/mailer`, is public; you do not need to log in to any registry.
 
 ## Fill in `.env`
 

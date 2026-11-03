@@ -67,7 +67,7 @@ jobs:
             - id: meta
               uses: docker/metadata-action@v6
               with:
-                  images: ghcr.io/schwarzdavid/mailer-backend
+                  images: ghcr.io/schwarzdavid/mailer
                   flavor: latest=false
                   tags: |
                       type=semver,pattern={{version}}
@@ -79,7 +79,7 @@ jobs:
                   target: backend
                   load: true
                   tags: |
-                      ghcr.io/schwarzdavid/mailer-backend:ci
+                      ghcr.io/schwarzdavid/mailer:ci
                       ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
                   cache-from: type=gha,scope=backend

@@ -62,7 +62,7 @@ services:
             - redis-data:/data
 
     backend:
-        image: ghcr.io/schwarzdavid/mailer-backend:${IMAGE_TAG:-latest}
+        image: ghcr.io/schwarzdavid/mailer:${IMAGE_TAG:-latest}
         restart: unless-stopped
         logging: *logging
         env_file: .env
