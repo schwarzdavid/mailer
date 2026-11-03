@@ -14,6 +14,7 @@ import {
 import {
     DomainDnsRecord,
     DomainDnsRecordCreate,
+    DomainDnsRecordIssue,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
@@ -66,6 +67,10 @@ export class DomainDnsModel extends Model<DomainDnsRecord, DomainDnsRecordCreate
     @AllowNull
     @Column(DataType.TEXT)
     declare current: string | null
+
+    @AllowNull
+    @Column(DataType.STRING(32))
+    declare issue: DomainDnsRecordIssue | null
 
     @BelongsTo(() => DomainModel, {
         onUpdate: 'CASCADE',

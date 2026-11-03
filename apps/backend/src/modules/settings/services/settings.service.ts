@@ -3,13 +3,16 @@ import { ConfigService } from '@nestjs/config'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
 import { resolve4, resolve6 } from 'node:dns/promises'
+import { parse } from 'tldts'
 import { SettingsModel } from '../models/settings.model.js'
 import { SendingDomain, SendingDomainProposal, Settings } from '../interfaces/settings.interface.js'
 import { DomainService } from '../../domain/services/domain.service.js'
 import { DomainDnsService } from '../../domain/services/domain-dns.service.js'
+import { DnsHealthService } from '../../domain/services/dns-health.service.js'
 import { Domain, SendingDomainIps } from '../../domain/interfaces/domain.interface.js'
 import { Env } from '../../../config/env.schema.js'
 import { SENDING_DOMAIN_LOCK_KEY } from '../settings.constants.js'
+import { describeError } from '../../../helpers/describe-error.js'
 
 async function firstAddress(lookup: Promise<string[]>): Promise<string | null> {
     try {
@@ -23,19 +26,28 @@ async function firstAddress(lookup: Promise<string[]>): Promise<string | null> {
 export class SettingsService implements OnApplicationBootstrap {
     private readonly logger = new Logger(SettingsService.name)
     private readonly mailHostname: string
+    private readonly sendRequireValidDns: boolean
 
     constructor(
         private readonly sequelize: Sequelize,
         private readonly domainService: DomainService,
         private readonly domainDnsService: DomainDnsService,
+        private readonly dnsHealthService: DnsHealthService,
         @InjectModel(SettingsModel) private readonly settingsModel: typeof SettingsModel,
         configService: ConfigService<Env, true>,
     ) {
         this.mailHostname = configService.get('MAIL_HOSTNAME', { infer: true })
+        this.sendRequireValidDns = configService.get('SEND_REQUIRE_VALID_DNS', { infer: true })
     }
 
     async onApplicationBootstrap(): Promise<void> {
         await this.reconcileSendingDomain()
+
+        if (this.sendRequireValidDns) {
+            this.dnsHealthService.handleCheckInterval().catch((error: unknown) => {
+                this.logger.error(`Startup DNS check failed: ${describeError(error)}`)
+            })
+        }
     }
 
     async getSettings(): Promise<Settings | null> {
@@ -98,6 +110,16 @@ export class SettingsService implements OnApplicationBootstrap {
                 )
             }
 
+            const { domain: rootDomain } = parse(this.mailHostname)
+            const conflictingDomain = rootDomain
+                ? await this.domainService.getDomainByRootDomain(rootDomain, current.domainId)
+                : null
+            if (conflictingDomain) {
+                throw new Error(
+                    `MAIL_HOSTNAME ${this.mailHostname} shares the registrable domain ${rootDomain} with the customer domain ${conflictingDomain.fqdn}. Rename MAIL_HOSTNAME or delete that domain before switching.`,
+                )
+            }
+
             this.logger.warn(
                 `Sending domain ${current.fqdn} does not match MAIL_HOSTNAME ${this.mailHostname}, reconfiguring it`,
             )
@@ -137,10 +159,10 @@ export class SettingsService implements OnApplicationBootstrap {
             await this.domainService.deleteDomain(currentDomain.domainId)
         }
 
-        const domain =
-            currentDomain?.fqdn === fqdn
-                ? await this.domainService.recreateSendingDomainRecords(fqdn, ips)
-                : await this.domainService.createSendingDomain(fqdn, ips)
+        const isNewSendingDomain = currentDomain?.fqdn !== fqdn
+        const domain = isNewSendingDomain
+            ? await this.domainService.createSendingDomain(fqdn, ips)
+            : await this.domainService.recreateSendingDomainRecords(fqdn, ips)
 
         let updatedSettings: Settings
         if (settings) {
@@ -156,7 +178,9 @@ export class SettingsService implements OnApplicationBootstrap {
             )
         }
 
-        await this.domainDnsService.regenerateCustomerSpfRecords(domain)
+        if (isNewSendingDomain) {
+            await this.domainDnsService.regenerateCustomerSpfRecords(domain)
+        }
 
         this.logger.log(`Configured sending domain ${domain.fqdn}`)
         return this.toSendingDomain(await this.reloadRecords(domain), updatedSettings)
@@ -166,8 +190,7 @@ export class SettingsService implements OnApplicationBootstrap {
         try {
             return await this.domainDnsService.reloadDnsRecords(domain.domainId)
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            this.logger.error(`Initial DNS check for ${domain.fqdn} failed: ${message}`)
+            this.logger.error(`Initial DNS check for ${domain.fqdn} failed: ${describeError(error)}`)
             return domain
         }
     }

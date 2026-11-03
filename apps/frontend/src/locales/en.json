@@ -175,13 +175,16 @@
         "hostFor": "host for {name}",
         "valueFor": "value for {name}",
         "currentFor": "current value for {name}",
+        "mergedFor": "merged value for {name}",
         "different": "Found a different value",
         "reason": {
             "missing": "No record found at this host yet.",
-            "ptr": "Reverse DNS doesn't point here yet. Your hosting provider sets it."
+            "ptr": "Reverse DNS doesn't point here yet. Your hosting provider sets it.",
+            "multiple": "Several {name} records were found. A name may have only one; merge them into one record."
         },
         "advice": {
-            "spf": "Add the include from the value above to your existing SPF record instead of creating a second one.",
+            "spfMerge": "This domain already has an SPF record. Keep it and add the mailer include; this is the merged value:",
+            "dmarc": "Keep your DMARC record and make sure it has a policy tag: p=none, p=quarantine or p=reject.",
             "replace": "Replace the existing record with the value above.",
             "ptr": "Ask your hosting provider to set the reverse DNS of {host} to {value}."
         },
@@ -1169,7 +1172,6 @@
             "projects_create": "Create projects",
             "projects_all": "Access all projects",
             "bounces_read": "View bounces",
-            "bounces_block": "Block addresses",
             "bounces_unblock": "Unblock addresses",
             "settings_read": "View settings",
             "settings_update": "Update settings",

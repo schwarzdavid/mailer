@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import type { Transporter } from 'nodemailer'
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
 import { MAIL_TRANSPORTER } from '../mail.constants.js'
@@ -11,6 +12,7 @@ import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exc
 import { MailMessageService } from './mail-message.service.js'
 import { MailMessageSource, MailMessageStatus } from '../interfaces/mail-message.interface.js'
 import { MailSendError } from '../exceptions/mail-send.error.js'
+import type { Env } from '../../../config/env.schema.js'
 
 export interface SendMail {
     from: string
@@ -63,9 +65,26 @@ export class MailService {
         private readonly emailBlockService: EmailBlockService,
         private readonly bounceService: BounceService,
         private readonly mailMessageService: MailMessageService,
+        private readonly configService: ConfigService<Env, true>,
     ) {}
 
+    async assertFromDomainReady(fqdn: string): Promise<void> {
+        if (!this.configService.get('SEND_REQUIRE_VALID_DNS', { infer: true })) {
+            return
+        }
+
+        const domain = await this.domainService.getDomainByFqdn(fqdn)
+        if (domain) {
+            await this.domainService.assertReadyToSend(domain)
+        }
+    }
+
     async sendMail(mail: SendMail, context: SendMailContext): Promise<SentMail> {
+        const fromFqdn = mail.from.split('@')[1]
+        if (fromFqdn) {
+            await this.assertFromDomainReady(fromFqdn)
+        }
+
         const { mailMessageId } = await this.mailMessageService.recordPending({
             projectId: context.projectId,
             source: context.source,

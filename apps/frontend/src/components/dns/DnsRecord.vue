@@ -23,18 +23,28 @@
                 <dd>
                     <CopyField :value="record.value" :label="t('dns.valueFor', { name })" :clamp="isLong" />
                     <template v-if="!valid && !checking">
-                        <DisclosureBox v-if="record.current" class="dns-record__current" :summary="t('dns.different')">
+                        <p v-if="reason" class="dns-record__reason">
+                            <VIcon :icon="mdiAlertOutline" size="14" aria-hidden="true" />
+                            {{ reason }}
+                        </p>
+                        <DisclosureBox
+                            v-else-if="record.current"
+                            class="dns-record__current"
+                            :summary="t('dns.different')"
+                        >
                             <CopyField
                                 class="dns-record__found"
                                 :value="record.current"
                                 :label="t('dns.currentFor', { name })"
                             />
                             <p v-if="advice" class="dns-record__advice">{{ advice }}</p>
+                            <CopyField
+                                v-if="spfMerge"
+                                class="dns-record__merged"
+                                :value="spfMerge"
+                                :label="t('dns.mergedFor', { name })"
+                            />
                         </DisclosureBox>
-                        <p v-else class="dns-record__reason">
-                            <VIcon :icon="mdiAlertOutline" size="14" aria-hidden="true" />
-                            {{ record.use === 'ptr' ? t('dns.reason.ptr') : t('dns.reason.missing') }}
-                        </p>
                     </template>
                 </dd>
             </div>
@@ -51,6 +61,7 @@
     import DisclosureBox from '@/components/DisclosureBox.vue'
     import StatusBadge from '@/components/StatusBadge.vue'
     import TagLabel from '@/components/TagLabel.vue'
+    import { suggestSpfMerge } from '@/modules/domains/helpers/spfMerge.ts'
 
     const props = withDefaults(defineProps<{ record: DomainDnsRecordDto; checking?: boolean }>(), {
         checking: false,
@@ -66,12 +77,35 @@
     })
     const valid = computed(() => props.record.status === 'valid')
     const isLong = computed(() => props.record.value.length > 120)
+    const reason = computed(() => {
+        if (props.record.use === 'ptr') {
+            return props.record.current ? null : t('dns.reason.ptr')
+        }
+        if (props.record.issue === 'multiple') {
+            return t('dns.reason.multiple', { name: name.value })
+        }
+        if (props.record.issue === 'missing' || !props.record.current) {
+            return t('dns.reason.missing')
+        }
+        return null
+    })
+    const spfMerge = computed(() => {
+        if (props.record.use !== 'spf' || props.record.issue !== 'incomplete' || !props.record.current) {
+            return null
+        }
+        return suggestSpfMerge(props.record.value, props.record.current)
+    })
     const advice = computed(() => {
         if (props.record.use === 'ptr') {
             return t('dns.advice.ptr', { host: props.record.host, value: props.record.value })
         }
-        if (props.record.use === 'spf' && props.record.current?.startsWith('v=spf1')) {
-            return t('dns.advice.spf')
+        if (props.record.issue === 'incomplete') {
+            if (props.record.use === 'spf') {
+                return t('dns.advice.spfMerge')
+            }
+            if (props.record.use === 'dmarc') {
+                return t('dns.advice.dmarc')
+            }
         }
         return t('dns.advice.replace')
     })
@@ -149,6 +183,10 @@
     .dns-record__found {
         background: transparent;
         border: 1px dashed rgb(var(--v-theme-border-strong));
+    }
+
+    .dns-record__merged {
+        margin-top: 8px;
     }
 
     .dns-record__advice {

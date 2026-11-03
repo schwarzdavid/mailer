@@ -7,10 +7,11 @@ import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
 import { E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
+import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
 import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
 import { SettingsService } from '../src/modules/settings/services/settings.service.js'
 import { DomainDnsRecordDto } from '../src/modules/domain/dtos/domain-dns-record.dto.js'
-import { DomainDnsRecordUse } from '../src/modules/domain/interfaces/domain-dns.interface.js'
+import { DomainDnsRecordStatus, DomainDnsRecordUse } from '../src/modules/domain/interfaces/domain-dns.interface.js'
 
 describe('SettingsController (e2e)', () => {
     let app: INestApplication<App>
@@ -24,13 +25,14 @@ describe('SettingsController (e2e)', () => {
     const http = () => request(app.getHttpServer())
     const domainModel = () => app.get<typeof DomainModel>(getModelToken(DomainModel))
     const settingsModel = () => app.get<typeof SettingsModel>(getModelToken(SettingsModel))
+    const dnsModel = () => app.get<typeof DomainDnsModel>(getModelToken(DomainDnsModel))
 
-    async function markSendingDomainStale(): Promise<void> {
+    async function markSendingDomainStale(
+        fqdn = 'mail.stale-sending.org',
+        rootDomain = 'stale-sending.org',
+    ): Promise<void> {
         const settings = await settingsModel().findOne({ rejectOnEmpty: true })
-        await domainModel().update(
-            { fqdn: 'mail.stale-sending.org', rootDomain: 'stale-sending.org' },
-            { where: { domainId: settings.sendingDomainId! } },
-        )
+        await domainModel().update({ fqdn, rootDomain }, { where: { domainId: settings.sendingDomainId! } })
     }
 
     beforeAll(async () => {
@@ -124,8 +126,14 @@ describe('SettingsController (e2e)', () => {
         expect(fqdns).not.toContain(E2E_MAIL_HOSTNAME)
     })
 
-    it('changes the server addresses while keeping the domain', async () => {
+    it('changes the server addresses while keeping the domain and the customer SPF status', async () => {
         const before = await domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME }, rejectOnEmpty: true })
+        const customer = await domainModel().findOne({ where: { fqdn: 'customer-e2e.org' }, rejectOnEmpty: true })
+        const publishedSpf = `v=spf1 include:${E2E_MAIL_HOSTNAME} ~all`
+        await dnsModel().update(
+            { status: DomainDnsRecordStatus.VALID, current: publishedSpf, issue: null },
+            { where: { domainId: customer.domainId, use: DomainDnsRecordUse.SPF } },
+        )
 
         const response = await http()
             .put('/api/settings/sending-domain')
@@ -140,6 +148,11 @@ describe('SettingsController (e2e)', () => {
         expect(spf?.value).toBe('v=spf1 ip4:203.0.113.11 ip6:2001:db8::11 -all')
         const after = await domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME }, rejectOnEmpty: true })
         expect(after.domainId).toBe(before.domainId)
+        const customerSpf = await dnsModel().findOne({
+            where: { domainId: customer.domainId, use: DomainDnsRecordUse.SPF },
+            rejectOnEmpty: true,
+        })
+        expect(customerSpf).toMatchObject({ status: DomainDnsRecordStatus.VALID, current: publishedSpf, issue: null })
     })
 
     it('refreshes the sending domain records on demand', async () => {
@@ -180,5 +193,30 @@ describe('SettingsController (e2e)', () => {
         )
 
         await expect(domainModel().findOne({ where: { fqdn: 'mail.stale-sending.org' } })).resolves.not.toBeNull()
+    })
+
+    it('refuses to switch while a customer domain shares the registrable domain of MAIL_HOSTNAME', async () => {
+        await domainModel().destroy({ where: { fqdn: E2E_MAIL_HOSTNAME } })
+        await markSendingDomainStale()
+        await domainModel().create({ fqdn: 'shop.sending-e2e.org', rootDomain: 'sending-e2e.org' })
+
+        await expect(app.get(SettingsService).reconcileSendingDomain()).rejects.toThrow(
+            /shares the registrable domain sending-e2e\.org with the customer domain shop\.sending-e2e\.org/,
+        )
+
+        await expect(domainModel().findOne({ where: { fqdn: 'mail.stale-sending.org' } })).resolves.not.toBeNull()
+        await expect(domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME } })).resolves.toBeNull()
+    })
+
+    it('switches to MAIL_HOSTNAME from a stale sending domain under the same registrable domain', async () => {
+        await domainModel().destroy({ where: { fqdn: 'shop.sending-e2e.org' } })
+        await markSendingDomainStale('old.sending-e2e.org', 'sending-e2e.org')
+
+        await expect(app.get(SettingsService).reconcileSendingDomain()).resolves.toBeUndefined()
+
+        const settings = await settingsModel().findOne({ rejectOnEmpty: true })
+        const sendingDomain = await domainModel().findByPk(settings.sendingDomainId!, { rejectOnEmpty: true })
+        expect(sendingDomain).toMatchObject({ fqdn: E2E_MAIL_HOSTNAME, rootDomain: 'sending-e2e.org' })
+        await expect(domainModel().findOne({ where: { fqdn: 'old.sending-e2e.org' } })).resolves.toBeNull()
     })
 })

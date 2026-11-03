@@ -12,6 +12,7 @@ import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.inter
 import {
     DomainDnsRecord,
     DomainDnsRecordCreate,
+    DomainDnsRecordIssue,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
@@ -163,8 +164,21 @@ describe('DomainDnsService', () => {
             use: DomainDnsRecordUse.SPF,
             current: null,
             status: DomainDnsRecordStatus.INVALID,
+            issue: DomainDnsRecordIssue.MISSING,
             type: DomainDnsRecordType.TXT,
         })
+    })
+
+    it('starts every created record with a missing issue', async () => {
+        await service.createDefaultDnsRecords(domain, dkim)
+        await service.createSendingDomainDnsRecords(
+            sendingDomain,
+            { ...dkim, dkimId: 77, domainId: 10 },
+            { serverIpv4: '203.0.113.10', serverIpv6: '2001:db8::1' },
+        )
+
+        expect(create).toHaveBeenCalledTimes(11)
+        create.mock.calls.forEach(([values]) => expect(values.issue).toBe(DomainDnsRecordIssue.MISSING))
     })
 
     it('builds the DKIM record from the selector and the stripped public key', async () => {
@@ -279,6 +293,8 @@ describe('DomainDnsService', () => {
                 {
                     value: 'v=spf1 include:mail.sending-domain.org ~all',
                     status: DomainDnsRecordStatus.INVALID,
+                    current: null,
+                    issue: DomainDnsRecordIssue.MISSING,
                 },
                 {
                     where: {
@@ -287,6 +303,48 @@ describe('DomainDnsService', () => {
                     },
                 },
             )
+        })
+    })
+
+    describe('allRecordsValid', () => {
+        const recordWithStatus = (dnsId: number, status: DomainDnsRecordStatus): ReloadDnsRow =>
+            reloadDnsRow({
+                dnsId,
+                domainId: 3,
+                type: DomainDnsRecordType.TXT,
+                use: DomainDnsRecordUse.SPF,
+                status,
+                host: 'example.com',
+                value: 'v=spf1 include:mail.sending-domain.org ~all',
+                current: null,
+                issue: status === DomainDnsRecordStatus.VALID ? null : DomainDnsRecordIssue.MISSING,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })
+
+        it('is true when the domain has records and every one is valid', async () => {
+            findAll.mockResolvedValue([
+                recordWithStatus(1, DomainDnsRecordStatus.VALID),
+                recordWithStatus(2, DomainDnsRecordStatus.VALID),
+            ])
+
+            await expect(service.allRecordsValid(3)).resolves.toBe(true)
+            expect(findAll).toHaveBeenCalledWith({ where: { domainId: 3 } })
+        })
+
+        it('is false when one record is invalid', async () => {
+            findAll.mockResolvedValue([
+                recordWithStatus(1, DomainDnsRecordStatus.VALID),
+                recordWithStatus(2, DomainDnsRecordStatus.INVALID),
+            ])
+
+            await expect(service.allRecordsValid(3)).resolves.toBe(false)
+        })
+
+        it('is false when the domain has no records', async () => {
+            findAll.mockResolvedValue([])
+
+            await expect(service.allRecordsValid(3)).resolves.toBe(false)
         })
     })
 
@@ -308,6 +366,7 @@ describe('DomainDnsService', () => {
             host: 's1._domainkey.example.com',
             value: '',
             current: null,
+            issue: DomainDnsRecordIssue.MISSING,
             createdAt: new Date(),
             updatedAt: new Date(),
             ...overrides,
@@ -329,16 +388,40 @@ describe('DomainDnsService', () => {
             expect(record.current).toBe(dkimValue)
             expect(record.current).not.toContain(',')
             expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+            expect(record.issue).toBeNull()
             expect(record.save).toHaveBeenCalledOnce()
         })
 
-        it('marks a record invalid when the resolved TXT value does not match', async () => {
+        it('marks a DKIM record invalid with a mismatch when the resolved TXT value differs', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    use: DomainDnsRecordUse.DKIM,
+                    status: DomainDnsRecordStatus.VALID,
+                    issue: null,
+                    value: 'v=DKIM1; k=rsa; p=abc',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockResolvedValue([['v=DKIM1; k=rsa; p=xyz']])
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
+            expect(record.current).toBe('v=DKIM1; k=rsa; p=xyz')
+            expect(record.issue).toBe(DomainDnsRecordIssue.MISMATCH)
+            expect(record.save).toHaveBeenCalledOnce()
+        })
+
+        it('marks an SPF record that lacks the include as incomplete', async () => {
             const record = reloadDnsRow(
                 dnsRecord({
                     use: DomainDnsRecordUse.SPF,
                     status: DomainDnsRecordStatus.VALID,
+                    issue: null,
                     host: 'example.com',
-                    value: 'v=spf1 include:spf.schwarzdavid.email ~all',
+                    value: 'v=spf1 include:mail.sending-domain.org ~all',
                 }),
             )
 
@@ -350,6 +433,70 @@ describe('DomainDnsService', () => {
 
             expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
             expect(record.current).toBe('v=spf1 include:someone-else.example ~all')
+            expect(record.issue).toBe(DomainDnsRecordIssue.INCOMPLETE)
+        })
+
+        it('accepts a merged customer SPF record that contains the sending domain include', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    use: DomainDnsRecordUse.SPF,
+                    host: 'example.com',
+                    value: 'v=spf1 include:mail.sending-domain.org ~all',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockResolvedValue([['v=spf1 ip4:192.0.2.1 include:mail.sending-domain.org -all']])
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+            expect(record.current).toBe('v=spf1 ip4:192.0.2.1 include:mail.sending-domain.org -all')
+            expect(record.issue).toBeNull()
+            expect(record.save).toHaveBeenCalledOnce()
+        })
+
+        it('marks a customer SPF record invalid when several SPF records exist', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    use: DomainDnsRecordUse.SPF,
+                    host: 'example.com',
+                    value: 'v=spf1 include:mail.sending-domain.org ~all',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockResolvedValue([
+                ['v=spf1 include:mail.sending-domain.org ~all'],
+                ['v=spf1 ip4:192.0.2.1 -all'],
+            ])
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
+            expect(record.current).toBe('v=spf1 include:mail.sending-domain.org ~all')
+            expect(record.issue).toBe(DomainDnsRecordIssue.MULTIPLE)
+        })
+
+        it('accepts a DMARC record with a stricter policy', async () => {
+            const record = reloadDnsRow(
+                dnsRecord({
+                    use: DomainDnsRecordUse.DMARC,
+                    host: '_dmarc.example.com',
+                    value: 'v=DMARC1; p=none;',
+                }),
+            )
+
+            findByPk.mockResolvedValue(domainRow(domain))
+            findAll.mockResolvedValue([record])
+            resolveTxt.mockResolvedValue([['v=DMARC1; p=reject; rua=mailto:dmarc@example.org']])
+
+            await service.reloadDnsRecords(3)
+
+            expect(record.status).toBe(DomainDnsRecordStatus.VALID)
+            expect(record.issue).toBeNull()
         })
 
         it('records a missing TXT record as a null current value', async () => {
@@ -364,6 +511,7 @@ describe('DomainDnsService', () => {
 
             expect(record.current).toBeNull()
             expect(record.status).toBe(DomainDnsRecordStatus.INVALID)
+            expect(record.issue).toBe(DomainDnsRecordIssue.MISSING)
         })
 
         it('rethrows a DNS lookup error that is not a missing record', async () => {

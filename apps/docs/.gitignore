@@ -1,0 +1,4 @@
+.vitepress/dist
+.vitepress/cache
+test-results
+playwright-report

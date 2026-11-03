@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { Op, UniqueConstraintError } from 'sequelize'
 import { DomainService } from './domain.service.js'
 import { DomainDkimService } from './domain-dkim.service.js'
+import { DomainNotReadyError } from '../exceptions/domain-not-ready.error.js'
 import { DomainDnsService } from './domain-dns.service.js'
 import { DomainModel } from '../models/domain.model.js'
 import { DomainDkimModel } from '../models/domain-dkim.model.js'
@@ -12,6 +13,7 @@ import { Domain, DomainWithActiveDkim, SendingDomainIps } from '../interfaces/do
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
+    DomainDnsRecordIssue,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
@@ -40,6 +42,7 @@ describe('DomainService', () => {
     let createDefaultDnsRecords: Mock<DomainDnsService['createDefaultDnsRecords']>
     let createSendingDomainDnsRecords: Mock<DomainDnsService['createSendingDomainDnsRecords']>
     let deleteRecordsForDomain: Mock<DomainDnsService['deleteRecordsForDomain']>
+    let allRecordsValid: Mock<DomainDnsService['allRecordsValid']>
     let settingsFindOne: Mock<() => Promise<Settings | null>>
     let formCount: Mock<(options: { where: { domainId: number } }) => Promise<number>>
     let projectDomainFindAll: Mock<(options: object) => Promise<Pick<ProjectDomain, 'projectId'>[]>>
@@ -75,6 +78,7 @@ describe('DomainService', () => {
             host: 'example.com',
             value: 'v=spf1 include:spf.schwarzdavid.email ~all',
             current: null,
+            issue: DomainDnsRecordIssue.MISSING,
             createdAt: new Date(),
             updatedAt: new Date(),
         },
@@ -104,6 +108,7 @@ describe('DomainService', () => {
         createDefaultDnsRecords = vi.fn<typeof createDefaultDnsRecords>().mockResolvedValue(dnsRecords)
         createSendingDomainDnsRecords = vi.fn<typeof createSendingDomainDnsRecords>().mockResolvedValue(dnsRecords)
         deleteRecordsForDomain = vi.fn<typeof deleteRecordsForDomain>().mockResolvedValue(undefined)
+        allRecordsValid = vi.fn<typeof allRecordsValid>().mockResolvedValue(true)
         settingsFindOne = vi.fn<typeof settingsFindOne>().mockResolvedValue(null)
         formCount = vi.fn<typeof formCount>().mockResolvedValue(0)
         projectDomainFindAll = vi.fn<typeof projectDomainFindAll>().mockResolvedValue([])
@@ -115,7 +120,12 @@ describe('DomainService', () => {
                 { provide: DomainDkimService, useValue: { createDkimForDomain } },
                 {
                     provide: DomainDnsService,
-                    useValue: { createDefaultDnsRecords, createSendingDomainDnsRecords, deleteRecordsForDomain },
+                    useValue: {
+                        createDefaultDnsRecords,
+                        createSendingDomainDnsRecords,
+                        deleteRecordsForDomain,
+                        allRecordsValid,
+                    },
                 },
                 { provide: getModelToken(DomainModel), useValue: { create, findAll, findByPk, findOne, destroy } },
                 { provide: getModelToken(SettingsModel), useValue: { findOne: settingsFindOne } },
@@ -501,6 +511,45 @@ describe('DomainService', () => {
             findOne.mockResolvedValue(null)
 
             await expect(service.getDomainByFqdn('nope.example.com')).resolves.toBeNull()
+        })
+    })
+
+    describe('getDomainByRootDomain', () => {
+        it('returns the plain domain registered under the root domain', async () => {
+            findOne.mockResolvedValue(domainRow(persistedDomain) as unknown as DomainModel)
+
+            await expect(service.getDomainByRootDomain('example.com')).resolves.toEqual(persistedDomain)
+            expect(findOne).toHaveBeenCalledWith({ where: { rootDomain: 'example.com' } })
+        })
+
+        it('skips the excluded domain', async () => {
+            findOne.mockResolvedValue(null)
+
+            await expect(service.getDomainByRootDomain('example.com', 7)).resolves.toBeNull()
+            expect(findOne).toHaveBeenCalledWith({ where: { rootDomain: 'example.com', domainId: { [Op.ne]: 7 } } })
+        })
+    })
+
+    describe('assertReadyToSend', () => {
+        it('resolves when every dns record of the domain is valid', async () => {
+            allRecordsValid.mockResolvedValue(true)
+
+            await expect(service.assertReadyToSend(persistedDomain)).resolves.toBeUndefined()
+            expect(allRecordsValid).toHaveBeenCalledWith(3)
+        })
+
+        it('rejects with a domain-not-ready error naming the domain otherwise', async () => {
+            allRecordsValid.mockResolvedValue(false)
+
+            const error = await service.assertReadyToSend(persistedDomain).catch((caught: unknown) => caught)
+
+            expect(error).toBeInstanceOf(DomainNotReadyError)
+            expect(error).toMatchObject({
+                name: 'DomainNotReadyError',
+                domainId: 3,
+                fqdn: 'example.com',
+                message: 'Domain 3 (example.com) has DNS records that are not valid yet',
+            })
         })
     })
 

@@ -7,6 +7,7 @@ import { mountView } from '@/__tests__/support.ts'
 
 const valid: DomainDnsRecordDto = {
     current: 'v=DMARC1; p=none;',
+    issue: null,
     host: '_dmarc.forms.acme.com',
     status: 'valid',
     type: 'txt',
@@ -16,6 +17,7 @@ const valid: DomainDnsRecordDto = {
 
 const missing: DomainDnsRecordDto = {
     current: null,
+    issue: 'missing',
     host: 's1._domainkey.forms.acme.com',
     status: 'invalid',
     type: 'txt',
@@ -25,6 +27,7 @@ const missing: DomainDnsRecordDto = {
 
 const different: DomainDnsRecordDto = {
     current: 'v=spf1 include:_spf.google.com ~all',
+    issue: 'incomplete',
     host: 'forms.acme.com',
     status: 'invalid',
     type: 'txt',
@@ -50,14 +53,57 @@ describe('DnsRecord', () => {
         expect(wrapper.text()).toContain('No record found at this host yet.')
     })
 
-    it('shows what DNS returns when the value differs', async () => {
+    it('suggests a merged SPF record when the include is missing', async () => {
         const wrapper = mountView(DnsRecord, { props: { record: different } })
 
         expect(wrapper.text()).toContain('Found a different value')
         await wrapper.get('button.disclosure-box__summary').trigger('click')
         await nextTick()
         expect(wrapper.text()).toContain('v=spf1 include:_spf.google.com ~all')
-        expect(wrapper.text()).toContain('existing SPF record')
+        expect(wrapper.text()).toContain('This domain already has an SPF record.')
+        expect(wrapper.text()).toContain('v=spf1 include:_spf.google.com include:mail.acme-mailer.com ~all')
+    })
+
+    it('names the copy buttons of the expected and the merged SPF value apart', async () => {
+        const wrapper = mountView(DnsRecord, { props: { record: different } })
+
+        await wrapper.get('button.disclosure-box__summary').trigger('click')
+        await nextTick()
+        const copyLabels = wrapper
+            .findAll('button[aria-label]')
+            .map((button) => button.attributes('aria-label'))
+            .filter((label) => label?.startsWith('Copy '))
+        expect(copyLabels).toContain('Copy value for SPF')
+        expect(copyLabels).toContain('Copy merged value for SPF')
+        expect(new Set(copyLabels).size).toBe(copyLabels.length)
+    })
+
+    it('asks to merge several SPF records', () => {
+        const wrapper = mountView(DnsRecord, { props: { record: { ...different, issue: 'multiple' } } })
+
+        expect(wrapper.text()).toContain('Several SPF records were found.')
+        expect(wrapper.text()).not.toContain('Found a different value')
+    })
+
+    it('tells to replace a mismatching record', async () => {
+        const wrapper = mountView(DnsRecord, {
+            props: { record: { ...missing, current: 'v=DKIM1; p=OLD', issue: 'mismatch' } },
+        })
+
+        await wrapper.get('button.disclosure-box__summary').trigger('click')
+        await nextTick()
+        expect(wrapper.text()).toContain('v=DKIM1; p=OLD')
+        expect(wrapper.text()).toContain('Replace the existing record with the value above.')
+    })
+
+    it('asks for a policy tag on an incomplete DMARC record', async () => {
+        const wrapper = mountView(DnsRecord, {
+            props: { record: { ...valid, current: 'v=DMARC1;', issue: 'incomplete', status: 'invalid' } },
+        })
+
+        await wrapper.get('button.disclosure-box__summary').trigger('click')
+        await nextTick()
+        expect(wrapper.text()).toContain('p=none, p=quarantine or p=reject')
     })
 })
 

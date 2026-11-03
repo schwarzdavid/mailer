@@ -3,7 +3,7 @@ import type { Permission, ProjectPermission, RoleScope } from 'api'
 export const GLOBAL_PERMISSION_GROUPS: Record<string, Permission[]> = {
     domains: ['domains.read', 'domains.create', 'domains.update', 'domains.delete'],
     projects: ['projects.create', 'projects.all'],
-    bounces: ['bounces.read', 'bounces.block', 'bounces.unblock'],
+    bounces: ['bounces.read', 'bounces.unblock'],
     settings: ['settings.read', 'settings.update'],
     users: ['users.read', 'users.create', 'users.update', 'users.delete'],
     roles: ['roles.read', 'roles.create', 'roles.update', 'roles.delete'],

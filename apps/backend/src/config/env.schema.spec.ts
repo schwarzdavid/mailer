@@ -74,6 +74,11 @@ describe('envSchema', () => {
         expect(envSchema.parse({ ...requiredEnv, SMTP_REQUIRE_TLS: 'false' }).SMTP_REQUIRE_TLS).toBe(false)
     })
 
+    it('requires valid dns records for sending unless SEND_REQUIRE_VALID_DNS is switched off', () => {
+        expect(envSchema.parse(requiredEnv).SEND_REQUIRE_VALID_DNS).toBe(true)
+        expect(envSchema.parse({ ...requiredEnv, SEND_REQUIRE_VALID_DNS: 'false' }).SEND_REQUIRE_VALID_DNS).toBe(false)
+    })
+
     it('coerces the public api rate limit settings', () => {
         const env = envSchema.parse({ ...requiredEnv, PUBLIC_API_RATE_LIMIT: '5', PUBLIC_API_RATE_TTL: '1000' })
 

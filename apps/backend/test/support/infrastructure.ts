@@ -17,6 +17,7 @@ export interface E2eEnv {
     SMTP_PORT: string
     SMTP_SECURE: string
     SMTP_REQUIRE_TLS: string
+    SEND_REQUIRE_VALID_DNS: string
     MAILHOG_URL: string
     IMAP_HOST: string
     IMAP_PORT: string
@@ -89,6 +90,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',
         SMTP_REQUIRE_TLS: 'false',
+        SEND_REQUIRE_VALID_DNS: 'false',
         MAILHOG_URL: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
         IMAP_HOST: greenmail.getHost(),
         IMAP_PORT: String(greenmail.getMappedPort(3143)),

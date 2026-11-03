@@ -11,6 +11,7 @@ import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { DomainDkim, DomainDkimAlgorithm } from '../interfaces/domain-dkim.interface.js'
 import {
     DomainDnsRecord,
+    DomainDnsRecordIssue,
     DomainDnsRecordStatus,
     DomainDnsRecordType,
     DomainDnsRecordUse,
@@ -25,6 +26,7 @@ const dnsRecord = (use: DomainDnsRecordUse, host: string, value: string): Domain
     host,
     value,
     current: null,
+    issue: DomainDnsRecordIssue.MISSING,
     createdAt: new Date(),
     updatedAt: new Date(),
 })

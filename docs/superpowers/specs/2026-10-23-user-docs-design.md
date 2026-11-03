@@ -159,7 +159,7 @@ a page.** Every page is therefore self-contained:
    `apps/docs/screenshots/`, `@playwright/test` as a devDependency and the script `screenshots`
    (`playwright test`), run as `pnpm --filter docs screenshots` after a one-time
    `pnpm --filter docs exec playwright install chromium`. The spec seeds deterministic demo data
-   through the API (project "Acme Website", domain `mail.example.com`, a contact form with three
+   through the API (project "Acme Website", domain `mail.example.net`, a contact form with three
    fields, a receiver with a published template, one sent mail, one bounce), visits each screen
    from the Screenshot list below and writes PNGs to
    `apps/docs/public/screenshots/<section>/<name>.png`. The PNGs are committed; the Pages build
@@ -198,7 +198,7 @@ pipeline`, `License`, gains a "Documentation" paragraph with the Pages URL right
    job or an admin UI flow updates the matching page in the same change, and the README holds
    developer content only.
 9. **Placeholders and conventions** used on every page: `app.example.com` for `SITE_ADDRESS`,
-   `mx.example.com` for `MAIL_HOSTNAME`, `mail.example.com` for a customer sending domain,
+   `mx.example.com` for `MAIL_HOSTNAME`, `mail.example.net` for a customer sending domain (it must sit under a different registrable domain than `MAIL_HOSTNAME`, because the backend allows one domain per root domain and the platform sending domain already occupies `example.com`; the installation pages `requirements` and `dns` state this rule before the operator picks the names),
    `203.0.113.10` / `2001:db8::10` for the server addresses, `/opt/mailer` as the install
    directory, `mailer` as database name and user, `example.org` for recipients, `sdm_…` for API
    keys. Admonitions: `::: tip`, `::: warning`, `::: danger` (data loss: `BACKEND_ENCRYPTION_SECRET`,
