@@ -89,7 +89,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
                 throw new Error('The startup DNS check has not run yet')
             }
         })
-        await app.get(InboundFormDeliveryProcessor).worker.pause(true)
+        await app.get(InboundFormDeliveryProcessor).worker.close()
 
         await seedUser(app, credentials)
         token = await login(app, credentials)

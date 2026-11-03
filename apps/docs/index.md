@@ -5,6 +5,9 @@ hero:
     name: mailer
     text: Self-hosted mail service for websites
     tagline: Let static websites send contact forms and transactional mail through your own server.
+    image:
+        src: /logo.svg
+        alt: ''
     actions:
         - theme: brand
           text: Install
