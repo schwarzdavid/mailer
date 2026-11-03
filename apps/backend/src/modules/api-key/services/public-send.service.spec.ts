@@ -9,6 +9,7 @@ import { MailService } from '../../mail/services/mail.service.js'
 import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
 import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
 import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { DomainNotReadyError } from '../../domain/exceptions/domain-not-ready.error.js'
 import { Domain, DomainWithActiveDkim } from '../../domain/interfaces/domain.interface.js'
 import { DomainDkimAlgorithm } from '../../domain/interfaces/domain-dkim.interface.js'
 import { ApiKey } from '../interfaces/api-key.interface.js'
@@ -62,6 +63,7 @@ describe('PublicSendService', () => {
     let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
     let hasDomain: Mock<ProjectService['hasDomain']>
     let sendMail: Mock<MailService['sendMail']>
+    let assertFromDomainReady: Mock<MailService['assertFromDomainReady']>
 
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
@@ -69,13 +71,14 @@ describe('PublicSendService', () => {
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
         hasDomain = vi.fn<typeof hasDomain>().mockResolvedValue(true)
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 70, smtpMessageId: '<m@x>' })
+        assertFromDomainReady = vi.fn<typeof assertFromDomainReady>().mockResolvedValue(undefined)
 
         const module = await Test.createTestingModule({
             providers: [
                 PublicSendService,
                 { provide: DomainService, useValue: { getDomainByFqdn, getSendingDomainByFqdn } },
                 { provide: ProjectService, useValue: { hasDomain } },
-                { provide: MailService, useValue: { sendMail } },
+                { provide: MailService, useValue: { sendMail, assertFromDomainReady } },
             ],
         }).compile()
         service = module.get(PublicSendService)
@@ -146,6 +149,34 @@ describe('PublicSendService', () => {
         expect(sendMail).not.toHaveBeenCalled()
     })
 
+    it('rejects a project domain whose dns records are not valid yet', async () => {
+        assertFromDomainReady.mockRejectedValue(new DomainNotReadyError(8, 'mail.example.com'))
+
+        const error = await sendError()
+        expect(assertFromDomainReady).toHaveBeenCalledWith('mail.example.com')
+        expect(error.code).toBe(PublicSendErrorCode.FROM_DOMAIN_NOT_READY)
+        expect(error.getStatus()).toBe(422)
+        expect(error.message).toBe('The from domain has DNS records that are not valid yet')
+        expect(sendMail).not.toHaveBeenCalled()
+    })
+
+    it('reports a from domain that stopped being ready between the check and the send', async () => {
+        sendMail.mockRejectedValue(new DomainNotReadyError(8, 'mail.example.com'))
+
+        const error = await sendError()
+        expect(error.code).toBe(PublicSendErrorCode.FROM_DOMAIN_NOT_READY)
+        expect(error.getStatus()).toBe(422)
+        expect(error.message).toBe('The from domain has DNS records that are not valid yet')
+    })
+
+    it('rethrows any other error of the dns readiness check', async () => {
+        const failure = new Error('db down')
+        assertFromDomainReady.mockRejectedValue(failure)
+
+        await expect(service.send(apiKey, mail)).rejects.toBe(failure)
+        expect(sendMail).not.toHaveBeenCalled()
+    })
+
     it('reports a blocked recipient', async () => {
         sendMail.mockRejectedValue(
             new MailSendError(71, new EmailBlockedException('reader@example.org', new Date('2026-11-01'))),
@@ -164,6 +195,25 @@ describe('PublicSendService', () => {
         expect(error.code).toBe(PublicSendErrorCode.DELIVERY_FAILED)
         expect(error.getStatus()).toBe(502)
         expect(error.getResponse()).toEqual(expect.objectContaining({ mailMessageId: 72 }))
+    })
+
+    it('logs a delivery failure by its codes without the relay message', async () => {
+        const logWarn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        sendMail.mockRejectedValue(
+            new MailSendError(
+                73,
+                Object.assign(new Error('550 5.1.1 <reader@example.org>: unknown user'), {
+                    code: 'EENVELOPE',
+                    responseCode: 550,
+                }),
+            ),
+        )
+
+        await sendError()
+
+        expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+            `API key ${apiKey.prefix} delivery 73 failed: MailSendError caused by Error (code EENVELOPE, responseCode 550)`,
+        )
     })
 
     it('rethrows errors that happen before a message was logged', async () => {

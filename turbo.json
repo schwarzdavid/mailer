@@ -3,15 +3,43 @@
     "globalDependencies": ["tsconfig.json", "tsconfig.build.json", "eslint.config.ts", "prettier.config.ts"],
     "tasks": {
         "dev": {
+            "dependsOn": ["^build"],
+            "cache": false,
+            "persistent": true
+        },
+        "backend#dev": {
+            "dependsOn": ["generate"],
+            "cache": false,
+            "persistent": true
+        },
+        "docs#build": {
+            "dependsOn": ["^build", "backend#generate"],
+            "outputs": [".vitepress/dist/**"]
+        },
+        "docs#dev": {
+            "dependsOn": ["^build", "backend#generate"],
+            "cache": false,
+            "persistent": true
+        },
+        "api#dev": {
+            "dependsOn": ["build"],
             "cache": false,
             "persistent": true
         },
         "build": {
             "dependsOn": ["^build"],
-            "inputs": ["$TURBO_DEFAULT$", "assets/openapi.json"],
             "outputs": ["dist/**", ".output/**"]
         },
+        "api#build": {
+            "dependsOn": ["backend#generate"],
+            "outputs": ["dist/**"]
+        },
+        "generate": {
+            "dependsOn": ["build"],
+            "outputs": ["openapi.json", "env-keys.json"]
+        },
         "lint": {
+            "dependsOn": ["^build"],
             "outputs": []
         },
         "lint:fix": {
@@ -22,14 +50,12 @@
             "outputs": []
         },
         "test": {
+            "dependsOn": ["^build"],
             "outputs": []
         },
         "test:cov": {
-            "outputs": ["coverage/**"]
-        },
-        "generate": {
             "dependsOn": ["^build"],
-            "outputs": ["src/generated/**", "../../openapi/**"]
+            "outputs": ["coverage/**"]
         }
     }
 }

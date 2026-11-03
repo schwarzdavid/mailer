@@ -1,9 +1,13 @@
 import { useI18n } from 'vue-i18n'
-import type { InboundFormReceiverDto } from 'api'
+import type { InboundFormListDto, InboundFormReceiverDto } from 'api'
 import type { StatusTone } from '@/components/statusTone.ts'
 
 export function needsTemplate(receiver: Pick<InboundFormReceiverDto, 'isActive' | 'publishedVersion'>): boolean {
     return receiver.isActive && receiver.publishedVersion === null
+}
+
+export function acceptsAnyOrigin(form: Pick<InboundFormListDto, 'allowedHostnames'>): boolean {
+    return form.allowedHostnames.length === 0
 }
 
 export function useReceiverStatus() {
@@ -28,5 +32,9 @@ export function useReceiverStatus() {
             : { tone: 'neutral', label: t('status.inactive') }
     }
 
-    return { templateBadge, activityBadge }
+    function openOriginBadge(): { tone: StatusTone; label: string } {
+        return { tone: 'warning', label: t('status.anyWebsite') }
+    }
+
+    return { templateBadge, activityBadge, openOriginBadge }
 }

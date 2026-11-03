@@ -9,6 +9,7 @@ const registration: RegisterUserDto = {
     lastName: 'Lovelace',
     email: 'ada@example.com',
     password: 'correct-horse-battery-staple',
+    setupToken: 'token-from-the-log-0123456789abcd',
 }
 
 const authentication: AuthenticationDto = {

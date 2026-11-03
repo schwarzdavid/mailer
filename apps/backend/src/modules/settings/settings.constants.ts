@@ -1,0 +1,1 @@
+export const SENDING_DOMAIN_LOCK_KEY = 815_004

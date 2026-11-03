@@ -100,11 +100,11 @@ function collectRoutes(): Record<string, RouteAccess> {
 }
 
 const jwt = ['JwtAuthGuard', 'PoliciesGuard']
-const throttled = ['ThrottlerGuard']
-const apiKeyAuth = ['ThrottlerGuard', 'ApiKeyAuthGuard']
+const throttled = ['AppThrottlerGuard']
+const apiKeyAuth = ['AppThrottlerGuard', 'ApiKeyAuthGuard']
 
 const expectedRoutes: Record<string, RouteAccess> = {
-    'POST /auth/login': { guards: ['ThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
+    'POST /auth/login': { guards: ['AppThrottlerGuard', 'LocalAuthGuard'], abilities: [], scopedByPrincipal: true },
     'GET /auth/user': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/ability': { guards: jwt, abilities: [], scopedByPrincipal: true },
     'GET /auth/permissions': { guards: jwt, abilities: [], scopedByPrincipal: true },
@@ -187,6 +187,7 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'DELETE /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
     'GET /settings': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
+    'GET /settings/sending-domain/proposal': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
     'PUT /settings/sending-domain': { guards: jwt, abilities: ['update:Settings'], scopedByPrincipal: false },
     'POST /settings/sending-domain/refresh': {
         guards: jwt,

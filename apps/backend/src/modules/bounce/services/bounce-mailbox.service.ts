@@ -8,6 +8,7 @@ import { DsnParserService } from './dsn-parser.service.js'
 import { BounceService } from './bounce.service.js'
 import { BOUNCE_POLL_INTERVAL_MS, BOUNCE_POLL_LOCK_KEY } from '../bounce.constants.js'
 import type { Env } from '../../../config/env.schema.js'
+import { describeError } from '../../../helpers/describe-error.js'
 
 @Injectable()
 export class BounceMailboxService implements OnApplicationBootstrap {
@@ -39,8 +40,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
         try {
             await this.pollRound()
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            this.logger.error(`Bounce mailbox poll failed: ${message}`)
+            this.logger.error(`Bounce mailbox poll failed: ${describeError(error)}`)
         }
     }
 
@@ -68,6 +68,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
     }
 
     private async processMailbox(): Promise<void> {
+        const servername = this.configService.get('IMAP_TLS_SERVERNAME', { infer: true })
         const client = new ImapFlow({
             host: this.configService.getOrThrow('IMAP_HOST', { infer: true }),
             port: this.configService.get('IMAP_PORT', { infer: true }),
@@ -76,6 +77,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
                 user: this.configService.getOrThrow('IMAP_USER', { infer: true }),
                 pass: this.configService.getOrThrow('IMAP_PASSWORD', { infer: true }),
             },
+            ...(servername ? { tls: { servername } } : {}),
             logger: false,
         })
 
@@ -88,8 +90,7 @@ export class BounceMailboxService implements OnApplicationBootstrap {
                     try {
                         await this.processMessage(client, uid)
                     } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error)
-                        this.logger.error(`Processing bounce message ${uid} failed: ${message}`)
+                        this.logger.error(`Processing bounce message ${uid} failed: ${describeError(error)}`)
                     }
                 }
             } finally {

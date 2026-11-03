@@ -1,0 +1,17 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "module": "preserve",
+        "moduleResolution": "bundler",
+        "target": "ES2023",
+        "lib": ["ESNext", "DOM"],
+        "types": ["node"],
+        "noEmit": true,
+        "isolatedModules": true,
+        "allowImportingTsExtensions": true,
+        "esModuleInterop": true,
+        "erasableSyntaxOnly": true,
+        "verbatimModuleSyntax": true
+    },
+    "include": ["src/**/*.ts"]
+}

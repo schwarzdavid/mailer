@@ -7,6 +7,7 @@ import { UserCreate, UserWithRole } from '../../user/interfaces/user.interface.j
 import { RoleService } from '../../permission/services/role.service.js'
 import { SettingsService } from '../../settings/services/settings.service.js'
 import { SETUP_LOCK_KEY, SetupStep } from '../setup.constants.js'
+import { SetupTokenService } from './setup-token.service.js'
 
 @Injectable()
 export class SetupService {
@@ -15,6 +16,7 @@ export class SetupService {
         private readonly userService: UserService,
         private readonly roleService: RoleService,
         private readonly settingsService: SettingsService,
+        private readonly setupTokenService: SetupTokenService,
         @InjectModel(UserModel) private readonly userModel: typeof UserModel,
     ) {}
 
@@ -37,7 +39,11 @@ export class SetupService {
         return this.getStep()
     }
 
-    registerFirstUser(user: Omit<UserCreate, 'roleId'>): Promise<UserWithRole> {
+    async registerFirstUser(user: Omit<UserCreate, 'roleId'>, setupToken: string): Promise<UserWithRole> {
+        if (!this.setupTokenService.matches(setupToken)) {
+            throw new ForbiddenException('Invalid setup token')
+        }
+
         return this.sequelize.transaction(async (transaction) => {
             await this.sequelize.query('SELECT pg_advisory_xact_lock(:key)', {
                 replacements: { key: SETUP_LOCK_KEY },

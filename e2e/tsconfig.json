@@ -1,0 +1,15 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "target": "ES2023",
+        "types": ["node", "vitest/globals"],
+        "noEmit": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "erasableSyntaxOnly": true,
+        "verbatimModuleSyntax": true
+    },
+    "include": ["smoke/**/*.ts"]
+}

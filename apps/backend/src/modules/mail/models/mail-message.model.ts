@@ -19,6 +19,7 @@ import {
 } from '../interfaces/mail-message.interface.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { ApiKeyModel } from '../../api-key/models/api-key.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'mail_messages',
@@ -92,11 +93,11 @@ export class MailMessageModel extends Model<MailMessage, MailMessageCreate> impl
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    project: ProjectModel | null = null
+    declare project?: Relation<ProjectModel> | null
 
     @BelongsTo(() => ApiKeyModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    apiKey: ApiKeyModel | null = null
+    declare apiKey?: Relation<ApiKeyModel> | null
 }

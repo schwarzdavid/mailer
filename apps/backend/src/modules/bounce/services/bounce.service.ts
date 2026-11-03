@@ -18,17 +18,18 @@ export class BounceService {
     async recordBounce(bounce: BounceCreate): Promise<void> {
         const emailAddress = bounce.emailAddress.toLowerCase()
 
+        let recorded: BounceModel
         try {
-            await this.bounceModel.create({ ...bounce, emailAddress })
+            recorded = await this.bounceModel.create({ ...bounce, emailAddress })
         } catch (error) {
             if (error instanceof UniqueConstraintError) {
-                this.logger.debug(`Bounce for ${emailAddress} from ${bounce.messageId ?? 'unknown'} already recorded`)
+                this.logger.debug(`Bounce ${bounce.messageId ?? 'without message id'} already recorded`)
                 return
             }
             throw error
         }
 
-        this.logger.log(`Recorded ${bounce.type} bounce for ${emailAddress}: ${bounce.reason}`)
+        this.logger.log(`Recorded ${bounce.type} bounce #${recorded.bounceId}`)
 
         if (bounce.type === BounceType.PERMANENT) {
             await this.emailBlockService.applyBlock(emailAddress)

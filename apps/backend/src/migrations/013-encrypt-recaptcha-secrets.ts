@@ -46,15 +46,13 @@ async function rewriteConfigs(
     queryInterface: QueryInterface,
     updates: { inboundFormSecurityId: number; config: PlaintextConfig | EncryptedConfig }[],
 ): Promise<void> {
-    await queryInterface.sequelize.transaction(async (transaction) => {
-        for (const { inboundFormSecurityId, config } of updates) {
-            await queryInterface.sequelize.query(
-                `UPDATE "inbound_form_security" SET "config" = CAST(:config AS jsonb)
-                 WHERE "inboundFormSecurityId" = :inboundFormSecurityId`,
-                { replacements: { config: JSON.stringify(config), inboundFormSecurityId }, transaction },
-            )
-        }
-    })
+    for (const { inboundFormSecurityId, config } of updates) {
+        await queryInterface.sequelize.query(
+            `UPDATE "inbound_form_security" SET "config" = CAST(:config AS jsonb)
+             WHERE "inboundFormSecurityId" = :inboundFormSecurityId`,
+            { replacements: { config: JSON.stringify(config), inboundFormSecurityId } },
+        )
+    }
 }
 
 function withMinScore<Config extends object>(config: Config, minScore: number | undefined): Config {

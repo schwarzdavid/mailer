@@ -15,10 +15,8 @@ import { InboundFormDeliveryModel } from '../models/inbound-form-delivery.model.
 import { InboundFormSecurityService, SecurityCheckResult } from './inbound-form-security.service.js'
 import { InboundFormTemplateService } from './inbound-form-template.service.js'
 import { InboundFormTokenService } from './inbound-form-token.service.js'
-import { TemplateRendererService } from '../../mail/services/template-renderer.service.js'
-import { MailService, SentMail } from '../../mail/services/mail.service.js'
-import { MailSendError } from '../../mail/exceptions/mail-send.error.js'
-import { MailMessageSource } from '../../mail/interfaces/mail-message.interface.js'
+import { InboundFormDeliveryQueueService } from './inbound-form-delivery-queue.service.js'
+import { EnqueueTimeoutError } from '../exceptions/enqueue-timeout.error.js'
 import { INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 import { InboundFormFull } from '../interfaces/inbound-form.interface.js'
 import { InboundFormField, InboundFormFieldType } from '../interfaces/inbound-form-field.interface.js'
@@ -113,10 +111,6 @@ const submission: PublicSubmission = {
     data: { email: 'max@example.com', firstName: 'Max' },
 }
 
-type DeliveryRow = InboundFormDelivery & {
-    update: Mock<(values: Partial<InboundFormDelivery>) => Promise<unknown>>
-}
-
 describe('InboundFormSubmissionService', () => {
     let service: InboundFormSubmissionService
     let formFindOne: Mock<(typeof InboundFormModel)['findOne']>
@@ -134,11 +128,10 @@ describe('InboundFormSubmissionService', () => {
     >
     let checkSubmission: Mock<InboundFormSecurityService['checkSubmission']>
     let getPublished: Mock<InboundFormTemplateService['getPublished']>
-    let sendMail: Mock<MailService['sendMail']>
+    let enqueue: Mock<InboundFormDeliveryQueueService['enqueue']>
     let transaction: Mock<(callback: (t: unknown) => PromiseLike<unknown>) => Promise<unknown>>
     let issue: Mock<InboundFormTokenService['issue']>
     let consume: Mock<InboundFormTokenService['consume']>
-    let deliveryRows: DeliveryRow[]
 
     function mockForm(form: InboundFormFull | null) {
         formFindOne.mockResolvedValue(
@@ -167,7 +160,6 @@ describe('InboundFormSubmissionService', () => {
         vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
         vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
-        deliveryRows = []
         formFindOne = vi.fn<typeof formFindOne>()
         submissionCreate = vi.fn<typeof submissionCreate>().mockImplementation((values) => {
             const row: InboundFormSubmission = {
@@ -178,21 +170,19 @@ describe('InboundFormSubmissionService', () => {
             return Promise.resolve({ ...row, get: () => row } as unknown as InboundFormSubmissionModel)
         })
         deliveryCreate = vi.fn<typeof deliveryCreate>().mockImplementation((values) => {
-            const row = {
-                inboundFormDeliveryId: deliveryRows.length + 1,
+            const row: InboundFormDelivery = {
+                inboundFormDeliveryId: deliveryCreate.mock.calls.length,
                 createdAt: new Date(),
                 updatedAt: new Date(),
-                ...(values as Omit<InboundFormDelivery, 'inboundFormDeliveryId' | 'createdAt' | 'updatedAt'>),
-                update: vi.fn<DeliveryRow['update']>().mockResolvedValue(null),
-            } as DeliveryRow
-            deliveryRows.push(row)
+                ...values,
+            }
             return Promise.resolve(row as unknown as InboundFormDeliveryModel)
         })
         checkSubmission = vi
             .fn<typeof checkSubmission>()
             .mockResolvedValue({ result: SecurityCheckResult.PASSED, token: null })
         getPublished = vi.fn<typeof getPublished>().mockResolvedValue(publishedTemplate)
-        sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 501, smtpMessageId: '<m@x>' })
+        enqueue = vi.fn<typeof enqueue>().mockResolvedValue(undefined)
         transaction = vi
             .fn<typeof transaction>()
             .mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => callback(null))
@@ -202,13 +192,12 @@ describe('InboundFormSubmissionService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 InboundFormSubmissionService,
-                TemplateRendererService,
                 { provide: getModelToken(InboundFormModel), useValue: { findOne: formFindOne } },
                 { provide: getModelToken(InboundFormSubmissionModel), useValue: { create: submissionCreate } },
                 { provide: getModelToken(InboundFormDeliveryModel), useValue: { create: deliveryCreate } },
                 { provide: InboundFormSecurityService, useValue: { checkSubmission } },
                 { provide: InboundFormTemplateService, useValue: { getPublished } },
-                { provide: MailService, useValue: { sendMail } },
+                { provide: InboundFormDeliveryQueueService, useValue: { enqueue } },
                 { provide: Sequelize, useValue: { transaction } },
                 { provide: InboundFormTokenService, useValue: { issue, consume } },
             ],
@@ -267,7 +256,7 @@ describe('InboundFormSubmissionService', () => {
             expect.anything(),
         )
         expect(deliveryCreate).not.toHaveBeenCalled()
-        expect(sendMail).not.toHaveBeenCalled()
+        expect(enqueue).not.toHaveBeenCalled()
     })
 
     it('stores a spam submission with the raw payload even when validation would fail', async () => {
@@ -281,14 +270,24 @@ describe('InboundFormSubmissionService', () => {
             expect.anything(),
         )
         expect(deliveryCreate).not.toHaveBeenCalled()
-        expect(sendMail).not.toHaveBeenCalled()
+        expect(enqueue).not.toHaveBeenCalled()
     })
 
-    it('accepts a submission, renders templates and sends one mail per receiver', async () => {
+    it('creates one pending delivery per active receiver with a published template and enqueues each id after the transaction', async () => {
         mockForm(formFull)
+        let committed = false
+        const committedWhenEnqueued: boolean[] = []
+        transaction.mockImplementation(async (callback: (t: unknown) => PromiseLike<unknown>) => {
+            const result = await callback(null)
+            committed = true
+            return result
+        })
+        enqueue.mockImplementation(() => {
+            committedWhenEnqueued.push(committed)
+            return Promise.resolve()
+        })
 
-        await service.submitForm('contact', submission, {}, {}, '')
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(2))
+        await expect(service.submitForm('contact', submission, {}, {}, '')).resolves.toBeUndefined()
 
         expect(submissionCreate).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -297,70 +296,34 @@ describe('InboundFormSubmissionService', () => {
             }),
             expect.anything(),
         )
-        expect(sendMail).toHaveBeenCalledWith(
+        expect(deliveryCreate.mock.calls.map(([values]) => values)).toEqual([
             {
-                from: 'noreply@mail.example.com',
-                to: 'owner@business.com',
-                replyTo: 'max@example.com',
-                subject: 'Message from Max',
-                html: '<p>Max wrote in</p>',
-            },
-            { projectId: formFull.projectId, source: MailMessageSource.INBOUND_FORM },
-        )
-        expect(sendMail).toHaveBeenCalledWith(
-            expect.objectContaining({ to: 'max@example.com', replyTo: undefined }),
-            expect.anything(),
-        )
-        expect(deliveryCreate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                status: InboundFormDeliveryStatus.PENDING,
+                inboundFormSubmissionId: 91,
+                inboundFormReceiverId: 31,
+                inboundFormTemplateId: 41,
                 emailFrom: 'noreply@mail.example.com',
-                emailTo: '{{email}}',
+                emailTo: 'owner@business.com',
+                status: InboundFormDeliveryStatus.PENDING,
+                attempts: 0,
                 error: null,
                 sentAt: null,
                 mailMessageId: null,
-            }),
-            expect.anything(),
-        )
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    status: InboundFormDeliveryStatus.SENT,
-                    emailTo: 'owner@business.com',
-                    mailMessageId: 501,
-                }),
-            ),
-        )
-    })
-
-    it('links a failed delivery to the logged message of the failed attempt', async () => {
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-        sendMail.mockRejectedValue(new MailSendError(502, new Error('SMTP down')))
-
-        await service.submitForm('contact', submission, {}, {}, '')
-
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
-                status: InboundFormDeliveryStatus.FAILED,
-                error: 'SMTP down',
-                mailMessageId: 502,
-            }),
-        )
-    })
-
-    it('leaves the delivery unlinked when it fails before reaching the mail service', async () => {
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-        sendMail.mockRejectedValue(new Error('SMTP down'))
-
-        await service.submitForm('contact', submission, {}, {}, '')
-
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith({
-                status: InboundFormDeliveryStatus.FAILED,
-                error: 'SMTP down',
+            },
+            {
+                inboundFormSubmissionId: 91,
+                inboundFormReceiverId: 32,
+                inboundFormTemplateId: 41,
+                emailFrom: 'noreply@mail.example.com',
+                emailTo: '{{email}}',
+                status: InboundFormDeliveryStatus.PENDING,
+                attempts: 0,
+                error: null,
+                sentAt: null,
                 mailMessageId: null,
-            }),
-        )
+            },
+        ])
+        expect(enqueue.mock.calls).toEqual([[1], [2]])
+        expect(committedWhenEnqueued).toEqual([true, true])
     })
 
     it('skips receivers without a published template', async () => {
@@ -368,9 +331,12 @@ describe('InboundFormSubmissionService', () => {
         getPublished.mockImplementation((receiverId) => Promise.resolve(receiverId === 31 ? publishedTemplate : null))
 
         await service.submitForm('contact', submission, {}, {}, '')
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
 
-        expect(deliveryCreate).toHaveBeenCalledTimes(1)
+        expect(deliveryCreate).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ inboundFormReceiverId: 31 }),
+            expect.anything(),
+        )
+        expect(enqueue.mock.calls).toEqual([[1]])
     })
 
     it('skips inactive receivers', async () => {
@@ -380,67 +346,48 @@ describe('InboundFormSubmissionService', () => {
         })
 
         await service.submitForm('contact', submission, {}, {}, '')
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
-    })
 
-    it('marks a delivery failed when sending throws', async () => {
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-        sendMail.mockRejectedValue(new Error('SMTP down'))
-
-        await service.submitForm('contact', submission, {}, {}, '')
-
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.FAILED, error: 'SMTP down' }),
-            ),
+        expect(deliveryCreate).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ inboundFormReceiverId: 31 }),
+            expect.anything(),
         )
+        expect(enqueue.mock.calls).toEqual([[1]])
     })
 
-    it('marks a delivery failed when its template does not render while others still send', async () => {
+    it('logs a failed enqueue, continues with the next delivery and still accepts the submission', async () => {
+        const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
         mockForm(formFull)
-        getPublished.mockImplementation((receiverId) =>
-            Promise.resolve(
-                receiverId === 31
-                    ? { ...publishedTemplate, template: '{{#if}}' }
-                    : { ...publishedTemplate, inboundFormTemplateId: 42, inboundFormReceiverId: 32 },
-            ),
+        enqueue.mockRejectedValueOnce(
+            Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:6379'), { code: 'ECONNREFUSED' }),
         )
 
-        await service.submitForm('contact', submission, {}, {}, '')
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(1))
+        await expect(service.submitForm('contact', submission, {}, {}, '')).resolves.toBeUndefined()
 
-        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'max@example.com' }), expect.anything())
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.FAILED }),
-            ),
-        )
-        expect(typeof deliveryRows[0]!.update.mock.calls[0]![0].error).toBe('string')
-        await vi.waitFor(() =>
-            expect(deliveryRows[1]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT, emailTo: 'max@example.com' }),
-            ),
-        )
+        expect(enqueue.mock.calls).toEqual([[1], [2]])
+        expect(logError).toHaveBeenCalledExactlyOnceWith('Enqueuing delivery 1 failed: Error (code ECONNREFUSED)')
     })
 
-    it('marks a delivery failed when a placeholder recipient is empty', async () => {
+    it('leaves the remaining deliveries to the recovery sweep after an enqueue timeout', async () => {
+        const logWarn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
         mockForm({
             ...formFull,
-            inboundFormFields: [{ ...emailField, validation: null }, nameField],
-            inboundFormReceivers: [confirmationReceiver],
+            inboundFormReceivers: [
+                ownerReceiver,
+                confirmationReceiver,
+                { ...confirmationReceiver, inboundFormReceiverId: 33 },
+            ],
         })
+        enqueue.mockRejectedValueOnce(new EnqueueTimeoutError('Enqueuing timed out after 2000 ms'))
 
-        await service.submitForm('contact', { data: { firstName: 'Max' } }, {}, {}, '')
+        await expect(service.submitForm('contact', submission, {}, {}, '')).resolves.toBeUndefined()
 
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    status: InboundFormDeliveryStatus.FAILED,
-                    error: 'Recipient field "email" is empty',
-                }),
-            ),
+        expect(deliveryCreate).toHaveBeenCalledTimes(3)
+        expect(enqueue.mock.calls).toEqual([[1]])
+        expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+            'Enqueuing timed out, left 3 deliveries to the recovery sweep: 1, 2, 3',
         )
-        expect(sendMail).not.toHaveBeenCalled()
+        expect(logError).not.toHaveBeenCalled()
     })
 
     it('forwards the form schemes, submitted security values, headers and query to the security check', async () => {
@@ -495,7 +442,7 @@ describe('InboundFormSubmissionService', () => {
 
         expect(submissionCreate).not.toHaveBeenCalled()
         expect(transaction).not.toHaveBeenCalled()
-        expect(sendMail).not.toHaveBeenCalled()
+        expect(enqueue).not.toHaveBeenCalled()
     })
 
     it('rejects a missing data payload when the form has required fields', async () => {
@@ -549,104 +496,12 @@ describe('InboundFormSubmissionService', () => {
         )
     })
 
-    it('sends nothing when persisting the submission fails', async () => {
+    it('enqueues nothing when persisting the submission fails', async () => {
         mockForm(formFull)
         transaction.mockRejectedValue(new Error('deadlock detected'))
 
         await expect(service.submitForm('contact', submission, {}, {}, '')).rejects.toThrow('deadlock detected')
-        expect(sendMail).not.toHaveBeenCalled()
-    })
-
-    it('resolves before the mail transport finishes delivering', async () => {
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-        let finishSending: () => void = () => undefined
-        sendMail.mockImplementation(
-            () =>
-                new Promise<SentMail>((resolve) => {
-                    finishSending = () => resolve({ mailMessageId: 501, smtpMessageId: '<m@x>' })
-                }),
-        )
-
-        await service.submitForm('contact', submission, {}, {}, '')
-
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledOnce())
-        expect(deliveryRows[0]!.update).not.toHaveBeenCalled()
-        finishSending()
-        await vi.waitFor(() =>
-            expect(deliveryRows[0]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT }),
-            ),
-        )
-    })
-
-    it('logs instead of crashing when recording a failed delivery also fails', async () => {
-        const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-        sendMail.mockRejectedValue(new Error('SMTP down'))
-        deliveryCreate.mockImplementationOnce((values) => {
-            const row = {
-                inboundFormDeliveryId: 1,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                ...(values as Omit<InboundFormDelivery, 'inboundFormDeliveryId' | 'createdAt' | 'updatedAt'>),
-                update: vi.fn<DeliveryRow['update']>().mockRejectedValue(new Error('db gone')),
-            } as DeliveryRow
-            deliveryRows.push(row)
-            return Promise.resolve(row as unknown as InboundFormDeliveryModel)
-        })
-
-        await expect(service.submitForm('contact', submission, {}, {}, '')).resolves.toBeUndefined()
-
-        await vi.waitFor(() =>
-            expect(logError).toHaveBeenCalledWith('Recording the outcome of delivery 1 failed: db gone'),
-        )
-    })
-
-    it('keeps processing the remaining deliveries when recording a failed one throws', async () => {
-        mockForm(formFull)
-        sendMail.mockRejectedValueOnce(new Error('SMTP down'))
-        deliveryCreate.mockImplementationOnce((values) => {
-            const row = {
-                inboundFormDeliveryId: 1,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                ...(values as Omit<InboundFormDelivery, 'inboundFormDeliveryId' | 'createdAt' | 'updatedAt'>),
-                update: vi.fn<DeliveryRow['update']>().mockRejectedValue(new Error('db gone')),
-            } as DeliveryRow
-            deliveryRows.push(row)
-            return Promise.resolve(row as unknown as InboundFormDeliveryModel)
-        })
-
-        await service.submitForm('contact', submission, {}, {}, '')
-
-        await vi.waitFor(() => expect(sendMail).toHaveBeenCalledTimes(2))
-        await vi.waitFor(() =>
-            expect(deliveryRows[1]!.update).toHaveBeenCalledWith(
-                expect.objectContaining({ status: InboundFormDeliveryStatus.SENT, emailTo: 'max@example.com' }),
-            ),
-        )
-    })
-
-    it('renders the subject without html escaping', async () => {
-        mockForm({ ...formFull, inboundFormReceivers: [ownerReceiver] })
-
-        await service.submitForm(
-            'contact',
-            { data: { email: 'max@example.com', firstName: "O'Brien & Co" } },
-            {},
-            {},
-            '',
-        )
-
-        await vi.waitFor(() =>
-            expect(sendMail).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    subject: "Message from O'Brien & Co",
-                    html: '<p>O&#x27;Brien &amp; Co wrote in</p>',
-                }),
-                expect.anything(),
-            ),
-        )
+        expect(enqueue).not.toHaveBeenCalled()
     })
 
     describe('timed token', () => {
@@ -704,7 +559,7 @@ describe('InboundFormSubmissionService', () => {
             )
             expect(transaction).not.toHaveBeenCalled()
             expect(submissionCreate).not.toHaveBeenCalled()
-            expect(sendMail).not.toHaveBeenCalled()
+            expect(enqueue).not.toHaveBeenCalled()
         })
 
         it('consumes nothing for a form without a timed token', async () => {

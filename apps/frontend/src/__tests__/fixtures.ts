@@ -22,6 +22,7 @@ const created = new Date('2026-01-01T00:00:00.000Z')
 export function dnsRecord(overrides: Partial<DomainDnsRecordDto> = {}): DomainDnsRecordDto {
     return {
         current: null,
+        issue: null,
         host: 'forms.acme.com',
         status: 'valid',
         type: 'txt',

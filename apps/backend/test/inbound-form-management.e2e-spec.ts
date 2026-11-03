@@ -1,14 +1,21 @@
 import { INestApplication } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
+import { Sequelize } from 'sequelize-typescript'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './support/mailhog.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
+import { InboundFormReceiverModel } from '../src/modules/inbound-form/models/inbound-form-receiver.model.js'
+import { InboundFormTemplateModel } from '../src/modules/inbound-form/models/inbound-form-template.model.js'
+import { InboundFormTemplateStatus } from '../src/modules/inbound-form/interfaces/inbound-form-template.interface.js'
+import { InboundFormDeliveryRecoveryService } from '../src/modules/inbound-form/services/inbound-form-delivery-recovery.service.js'
+import { InboundFormSubmissionStatus } from '../src/modules/inbound-form/interfaces/inbound-form-submission.interface.js'
+import { InboundFormDeliveryStatus } from '../src/modules/inbound-form/interfaces/inbound-form-delivery.interface.js'
 import { InboundFormSecurityModel } from '../src/modules/inbound-form/models/inbound-form-security.model.js'
 import { InboundFormRecaptchaStoredConfig } from '../src/modules/inbound-form/interfaces/inbound-form-security.interface.js'
 import { isRecaptchaConfig } from '../src/modules/inbound-form/helpers/security-config.js'
@@ -78,6 +85,8 @@ describe('InboundForm management + delivery (e2e)', () => {
 
     const submissionModel = () => app.get<typeof InboundFormSubmissionModel>(getModelToken(InboundFormSubmissionModel))
     const deliveryModel = () => app.get<typeof InboundFormDeliveryModel>(getModelToken(InboundFormDeliveryModel))
+    const receiverModel = () => app.get<typeof InboundFormReceiverModel>(getModelToken(InboundFormReceiverModel))
+    const templateModel = () => app.get<typeof InboundFormTemplateModel>(getModelToken(InboundFormTemplateModel))
 
     async function latestSubmission(inboundFormId: number): Promise<InboundFormSubmissionModel | null> {
         return await submissionModel().findOne({
@@ -120,7 +129,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         ownerToken = await login(app, ownerCredentials)
         viewerToken = await login(app, viewerCredentials)
         outsiderToken = await login(app, outsiderCredentials)
-        await configureSendingDomain(app, ownerToken, 'mail.ifm-sending.org')
+        await configureSendingDomain(app, ownerToken)
 
         const domain = await http()
             .post('/api/domain')
@@ -505,7 +514,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(header(ownerMessage!, 'From')[0]).toContain('contact@forms.ifm-example.com')
             expect(header(ownerMessage!, 'Reply-To')).toContain('grace@ifm-submitter.test')
             expect(header(ownerMessage!, 'DKIM-Signature')[0]).toContain('d=forms.ifm-example.com')
-            expect(ownerMessage!.Raw.From).toBe('bounce@mail.ifm-sending.org')
+            expect(ownerMessage!.Raw.From).toBe(`bounce@${E2E_MAIL_HOSTNAME}`)
 
             const ownerMail = await parseMessage(ownerMessage!)
             expect(ownerMail.subject).toBe('Inquiry from Grace')
@@ -561,6 +570,104 @@ describe('InboundForm management + delivery (e2e)', () => {
                 .expect(400)
 
             expect(await submissionModel().count({ where: { inboundFormId: formId } })).toBe(before)
+        })
+
+        it('recovers a pending delivery that never reached the queue', async () => {
+            const submission = await submissionModel().create({
+                inboundFormId: formId,
+                data: { name: 'Lost', email: 'lost@ifm-submitter.test' },
+                status: InboundFormSubmissionStatus.ACCEPTED,
+            })
+            const ownerReceiver = await receiverModel().findByPk(ownerReceiverId, { rejectOnEmpty: true })
+            const ownerTemplate = await templateModel().findOne({
+                where: { inboundFormReceiverId: ownerReceiverId, status: InboundFormTemplateStatus.PUBLISHED },
+                order: [['version', 'DESC']],
+                rejectOnEmpty: true,
+            })
+            const delivery = await deliveryModel().create({
+                inboundFormSubmissionId: submission.inboundFormSubmissionId,
+                inboundFormReceiverId: ownerReceiverId,
+                inboundFormTemplateId: ownerTemplate.inboundFormTemplateId,
+                emailFrom: ownerReceiver.emailFrom,
+                emailTo: ownerAddress,
+                status: InboundFormDeliveryStatus.PENDING,
+                attempts: 0,
+                error: null,
+                sentAt: null,
+                mailMessageId: null,
+            })
+            await app
+                .get(Sequelize)
+                .query(
+                    `UPDATE "inbound_form_delivery" SET "updatedAt" = NOW() - INTERVAL '3 minutes' WHERE "inboundFormDeliveryId" = :id`,
+                    { replacements: { id: delivery.inboundFormDeliveryId } },
+                )
+            const ownerMessagesBefore = (await fetchMessagesTo(mailhogUrl, ownerAddress)).length
+
+            expect(await app.get(InboundFormDeliveryRecoveryService).recoverStalled()).toBeGreaterThanOrEqual(1)
+
+            await vi.waitFor(
+                async () => {
+                    const row = await deliveryModel().findByPk(delivery.inboundFormDeliveryId)
+                    expect(row?.status).toBe(InboundFormDeliveryStatus.SENT)
+                    expect(row?.attempts).toBe(1)
+                },
+                { timeout: 15_000, interval: 250 },
+            )
+            await waitForMessagesTo(mailhogUrl, ownerAddress, ownerMessagesBefore + 1)
+        })
+
+        it('leaves a pending delivery alone until its retry backoff has run out', async () => {
+            const submission = await submissionModel().create({
+                inboundFormId: formId,
+                data: { name: 'Waiting', email: 'waiting@ifm-submitter.test' },
+                status: InboundFormSubmissionStatus.ACCEPTED,
+            })
+            const ownerReceiver = await receiverModel().findByPk(ownerReceiverId, { rejectOnEmpty: true })
+            const ownerTemplate = await templateModel().findOne({
+                where: { inboundFormReceiverId: ownerReceiverId, status: InboundFormTemplateStatus.PUBLISHED },
+                order: [['version', 'DESC']],
+                rejectOnEmpty: true,
+            })
+            const delivery = await deliveryModel().create({
+                inboundFormSubmissionId: submission.inboundFormSubmissionId,
+                inboundFormReceiverId: ownerReceiverId,
+                inboundFormTemplateId: ownerTemplate.inboundFormTemplateId,
+                emailFrom: ownerReceiver.emailFrom,
+                emailTo: ownerAddress,
+                status: InboundFormDeliveryStatus.PENDING,
+                attempts: 3,
+                error: 'Error (code ECONNECTION)',
+                sentAt: null,
+                mailMessageId: null,
+            })
+            const backdate = (minutes: number) =>
+                app
+                    .get(Sequelize)
+                    .query(
+                        `UPDATE "inbound_form_delivery" SET "updatedAt" = NOW() - make_interval(mins => :minutes) WHERE "inboundFormDeliveryId" = :id`,
+                        { replacements: { id: delivery.inboundFormDeliveryId, minutes } },
+                    )
+            const untouched = async () => {
+                const row = await deliveryModel().findByPk(delivery.inboundFormDeliveryId, { rejectOnEmpty: true })
+                return row.status === InboundFormDeliveryStatus.PENDING && row.attempts === 3
+            }
+
+            await backdate(3)
+            await app.get(InboundFormDeliveryRecoveryService).recoverStalled()
+            await new Promise((resolve) => setTimeout(resolve, 2_000))
+            expect(await untouched()).toBe(true)
+
+            await backdate(7)
+            await app.get(InboundFormDeliveryRecoveryService).recoverStalled()
+            await vi.waitFor(
+                async () => {
+                    const row = await deliveryModel().findByPk(delivery.inboundFormDeliveryId)
+                    expect(row?.status).toBe(InboundFormDeliveryStatus.SENT)
+                    expect(row?.attempts).toBe(4)
+                },
+                { timeout: 15_000, interval: 250 },
+            )
         })
     })
 

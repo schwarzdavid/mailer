@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { Logger } from '@nestjs/common'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { ConfigService } from '@nestjs/config'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import type { Transporter } from 'nodemailer'
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js'
+import type SMTPConnection from 'nodemailer/lib/smtp-connection/index.js'
 import { MailService, SendMail, SendMailContext } from './mail.service.js'
 import { MailMessageService } from './mail-message.service.js'
 import { MailSendError } from '../exceptions/mail-send.error.js'
@@ -16,18 +18,31 @@ import { EmailBlockService } from '../../bounce/services/email-block.service.js'
 import { BounceService } from '../../bounce/services/bounce.service.js'
 import { BounceType } from '../../bounce/interfaces/bounce.interface.js'
 import { EmailBlockedException } from '../../bounce/exceptions/email-blocked.exception.js'
+import { DomainNotReadyError } from '../../domain/exceptions/domain-not-ready.error.js'
+
+function smtpError(
+    message: string,
+    fields: Pick<SMTPConnection.SMTPError, 'code' | 'response' | 'responseCode' | 'command'>,
+): SMTPConnection.SMTPError {
+    return Object.assign(new Error(message), fields)
+}
 
 describe('MailService', () => {
     let service: MailService
     let sendMail: Mock<Transporter<SMTPTransport.SentMessageInfo>['sendMail']>
     let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
     let getConfiguredSendingDomain: Mock<DomainService['getConfiguredSendingDomain']>
+    let getDomainByFqdn: Mock<DomainService['getDomainByFqdn']>
+    let assertReadyToSend: Mock<DomainService['assertReadyToSend']>
+    let sendRequireValidDns: boolean
     let decrypt: Mock<SecretEncryptionService['decrypt']>
     let assertNotBlocked: Mock<EmailBlockService['assertNotBlocked']>
     let recordBounce: Mock<BounceService['recordBounce']>
     let recordPending: Mock<MailMessageService['recordPending']>
     let markSent: Mock<MailMessageService['markSent']>
     let markUnsent: Mock<MailMessageService['markUnsent']>
+    let logSpy: MockInstance<Logger['log']>
+    let errorSpy: MockInstance<Logger['error']>
 
     const sendingDomain: DomainWithActiveDkim = {
         domainId: 1,
@@ -81,12 +96,18 @@ describe('MailService', () => {
     }
 
     beforeEach(async () => {
-        vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
-        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+        logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)
         getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
         getConfiguredSendingDomain = vi.fn<typeof getConfiguredSendingDomain>().mockResolvedValue(null)
+        getDomainByFqdn = vi.fn<typeof getDomainByFqdn>().mockResolvedValue(sendingDomain)
+        assertReadyToSend = vi.fn<typeof assertReadyToSend>().mockResolvedValue(undefined)
+        sendRequireValidDns = false
+        const configGet = vi
+            .fn<(key: 'SEND_REQUIRE_VALID_DNS') => boolean>()
+            .mockImplementation(() => sendRequireValidDns)
         decrypt = vi.fn<typeof decrypt>().mockResolvedValue('-----BEGIN PRIVATE KEY-----')
         assertNotBlocked = vi.fn<typeof assertNotBlocked>().mockResolvedValue(undefined)
         recordBounce = vi.fn<typeof recordBounce>().mockResolvedValue(undefined)
@@ -98,7 +119,16 @@ describe('MailService', () => {
             providers: [
                 MailService,
                 { provide: MAIL_TRANSPORTER, useValue: { sendMail } },
-                { provide: DomainService, useValue: { getSendingDomainByFqdn, getConfiguredSendingDomain } },
+                {
+                    provide: DomainService,
+                    useValue: {
+                        getSendingDomainByFqdn,
+                        getConfiguredSendingDomain,
+                        getDomainByFqdn,
+                        assertReadyToSend,
+                    },
+                },
+                { provide: ConfigService, useValue: { get: configGet } },
                 { provide: SecretEncryptionService, useValue: { decrypt } },
                 { provide: EmailBlockService, useValue: { assertNotBlocked } },
                 { provide: BounceService, useValue: { recordBounce } },
@@ -138,6 +168,56 @@ describe('MailService', () => {
         await service.sendMail({ ...mail, replyTo: 'visitor@example.org' }, context)
 
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ replyTo: 'visitor@example.org' }))
+    })
+
+    describe('with SEND_REQUIRE_VALID_DNS on', () => {
+        beforeEach(() => {
+            sendRequireValidDns = true
+        })
+
+        it('refuses a from domain whose dns records are not valid before logging a message', async () => {
+            const notReady = new DomainNotReadyError(1, 'mail.example.com')
+            assertReadyToSend.mockRejectedValue(notReady)
+
+            await expect(service.sendMail(mail, context)).rejects.toBe(notReady)
+
+            expect(getDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+            expect(assertReadyToSend).toHaveBeenCalledWith(sendingDomain)
+            expect(recordPending).not.toHaveBeenCalled()
+            expect(sendMail).not.toHaveBeenCalled()
+        })
+
+        it('sends from a domain that is ready', async () => {
+            await expect(service.sendMail(mail, context)).resolves.toEqual({
+                mailMessageId: 41,
+                smtpMessageId: '<m1@mail.example.com>',
+            })
+
+            expect(assertReadyToSend).toHaveBeenCalledWith(sendingDomain)
+            expect(sendMail).toHaveBeenCalledTimes(1)
+        })
+
+        it('leaves an unknown from domain to the delivery, which fails as before', async () => {
+            getDomainByFqdn.mockResolvedValue(null)
+            getSendingDomainByFqdn.mockResolvedValue(null)
+
+            await expect(service.sendMail(mail, context)).rejects.toThrow(
+                'No sending domain configured for mail.example.com',
+            )
+
+            expect(assertReadyToSend).not.toHaveBeenCalled()
+            expect(recordPending).toHaveBeenCalled()
+        })
+    })
+
+    it('skips the dns check while SEND_REQUIRE_VALID_DNS is off', async () => {
+        assertReadyToSend.mockRejectedValue(new DomainNotReadyError(1, 'mail.example.com'))
+
+        await service.sendMail(mail, context)
+
+        expect(getDomainByFqdn).not.toHaveBeenCalled()
+        expect(assertReadyToSend).not.toHaveBeenCalled()
+        expect(sendMail).toHaveBeenCalledTimes(1)
     })
 
     it('rejects when no sending domain is configured for the from address', async () => {
@@ -194,35 +274,143 @@ describe('MailService', () => {
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ envelope: undefined }))
     })
 
-    it('records a permanent bounce when the relay rejects with a 5xx and rethrows', async () => {
-        const rejection = Object.assign(new Error('550 5.1.1 User unknown'), { responseCode: 550 })
+    it('records a bounce for 550 5.1.1 at RCPT TO and rethrows', async () => {
+        const response =
+            '550 5.1.1 <owner@business.com>: Recipient address rejected: User unknown in virtual mailbox table'
+        const rejection = smtpError(response, {
+            code: 'EENVELOPE',
+            response,
+            responseCode: 550,
+            command: 'RCPT TO',
+        })
         sendMail.mockRejectedValue(rejection)
 
-        await expect(service.sendMail(mail, context)).rejects.toThrow('550 5.1.1 User unknown')
-        expect(recordBounce).toHaveBeenCalledWith({
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).toHaveBeenCalledExactlyOnceWith({
             emailAddress: 'owner@business.com',
             type: BounceType.PERMANENT,
             statusCode: '550',
-            reason: '550 5.1.1 User unknown',
+            reason: response,
             messageId: null,
             receivedAt: expect.any(Date) as Date,
         })
     })
 
-    it('does not record a bounce for non-5xx transporter errors', async () => {
-        const rejection = Object.assign(new Error('451 try again later'), { responseCode: 451 })
+    it.each(['5.1.1', '5.1.2', '5.1.3', '5.1.6', '5.1.10'])(
+        'records a bounce for the destination-address code %s at RCPT TO',
+        async (enhancedCode) => {
+            const response = `550 ${enhancedCode} <owner@business.com>: Recipient address rejected`
+            sendMail.mockRejectedValue(
+                smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' }),
+            )
+
+            await expect(service.sendMail(mail, context)).rejects.toBeInstanceOf(MailSendError)
+            expect(recordBounce).toHaveBeenCalledOnce()
+        },
+    )
+
+    it('records a bounce when the enhanced code follows a continuation hyphen', async () => {
+        const response = '550-5.1.1 The email account that you tried to reach does not exist'
+        sendMail.mockRejectedValue(
+            smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' }),
+        )
+
+        await expect(service.sendMail(mail, context)).rejects.toBeInstanceOf(MailSendError)
+        expect(recordBounce).toHaveBeenCalledOnce()
+    })
+
+    it('does not record the spoof-protection rejection at RCPT TO and rethrows', async () => {
+        const response =
+            '553 5.7.1 <other@mail.smoke.test>: Sender address rejected: not owned by user bounce@mail.smoke.test'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 553, command: 'RCPT TO' })
         sendMail.mockRejectedValue(rejection)
 
-        await expect(service.sendMail(mail, context)).rejects.toThrow('451 try again later')
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, rejection.message)
+    })
+
+    it('does not record a sender-address code at RCPT TO', async () => {
+        const response = '553 5.1.8 <bounce@nowhere.invalid>: Sender address rejected: Domain not found'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 553, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a RCPT TO 5xx without an enhanced status code', async () => {
+        const response = '550 Mailbox unavailable'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a RCPT TO 5xx when the error carries no response text', async () => {
+        const rejection = smtpError('rejected', { code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+    })
+
+    it('does not record a bounce when the server rejects the envelope sender at MAIL FROM and rethrows', async () => {
+        const rejection = smtpError('Mail command failed: 553 5.7.1 Sender address rejected: not owned by user', {
+            code: 'EENVELOPE',
+            responseCode: 553,
+            command: 'MAIL FROM',
+        })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, rejection.message)
+    })
+
+    it('does not record a bounce when authentication fails and rethrows', async () => {
+        const rejection = smtpError('Invalid login: 535 5.7.8 Error: authentication failed', {
+            code: 'EAUTH',
+            responseCode: 535,
+            command: 'AUTH PLAIN',
+        })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).not.toHaveBeenCalled()
+        expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, rejection.message)
+    })
+
+    it('does not record a bounce when the server defers the recipient at RCPT TO with a 4xx', async () => {
+        const rejection = smtpError('451 4.3.0 try again later', {
+            code: 'EENVELOPE',
+            responseCode: 451,
+            command: 'RCPT TO',
+        })
+        sendMail.mockRejectedValue(rejection)
+
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
         expect(recordBounce).not.toHaveBeenCalled()
     })
 
     it('still rejects with the transporter error when bounce recording itself fails', async () => {
-        const rejection = Object.assign(new Error('550 rejected'), { responseCode: 550 })
+        const response = '550 5.1.1 rejected'
+        const rejection = smtpError(response, { code: 'EENVELOPE', response, responseCode: 550, command: 'RCPT TO' })
         sendMail.mockRejectedValue(rejection)
         recordBounce.mockRejectedValue(new Error('db down'))
 
-        await expect(service.sendMail(mail, context)).rejects.toThrow('550 rejected')
+        await expect(service.sendMail(mail, context)).rejects.toHaveProperty('cause', rejection)
+        expect(recordBounce).toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+            'Failed to record rejection bounce for mail message 41: db down',
+        )
+    })
+
+    it('logs a sent mail by its message id, never by address', async () => {
+        await service.sendMail(mail, context)
+
+        expect(logSpy).toHaveBeenLastCalledWith('Sent mail message 41')
     })
 
     it('never sends unsigned mail when the DKIM key cannot be decrypted', async () => {
@@ -285,6 +473,7 @@ describe('MailService', () => {
         expect(error).toBeInstanceOf(MailSendError)
         expect((error as MailSendError).mailMessageId).toBe(41)
         expect((error as MailSendError).cause).toBe(blocked)
+        expect((error as MailSendError).transient).toBe(false)
         expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.BLOCKED, blocked.message)
         expect(sendMail).not.toHaveBeenCalled()
     })
@@ -294,6 +483,24 @@ describe('MailService', () => {
 
         await expect(service.sendMail(mail, context)).rejects.toThrow(MailSendError)
         expect(markUnsent).toHaveBeenCalledWith(41, MailMessageStatus.FAILED, 'connect ECONNREFUSED')
+    })
+
+    it('flags a 4xx transporter failure as transient', async () => {
+        sendMail.mockRejectedValue(smtpError('421 4.3.2 shutting down', { code: 'ECONNECTION', responseCode: 421 }))
+
+        const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(MailSendError)
+        expect((error as MailSendError).transient).toBe(true)
+    })
+
+    it('flags a 5xx transporter failure as permanent', async () => {
+        sendMail.mockRejectedValue(smtpError('550 5.7.1 rejected', { code: 'EENVELOPE', responseCode: 550 }))
+
+        const error = await service.sendMail(mail, context).catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(MailSendError)
+        expect((error as MailSendError).transient).toBe(false)
     })
 
     it('marks a missing sending domain as failed', async () => {

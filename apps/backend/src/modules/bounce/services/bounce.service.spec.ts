@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common'
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Op, UniqueConstraintError, type FindAndCountOptions } from 'sequelize'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { BounceService } from './bounce.service.js'
 import { EmailBlockService } from './email-block.service.js'
 import { BounceModel } from '../models/bounce.model.js'
@@ -52,12 +52,14 @@ describe('BounceService', () => {
     let findAll: Mock<(typeof BounceModel)['findAll']>
     let findAndCountAll: Mock<(options: FindAndCountOptions<Bounce>) => Promise<{ rows: BounceRow[]; count: number }>>
     let applyBlock: Mock<EmailBlockService['applyBlock']>
+    let logSpy: MockInstance<Logger['log']>
+    let debugSpy: MockInstance<Logger['debug']>
 
     beforeEach(async () => {
         vi.useFakeTimers()
         vi.setSystemTime(now)
-        vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
-        vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined)
+        logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+        debugSpy = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined)
 
         create = vi.fn<typeof create>().mockResolvedValue(bounceRow())
         count = vi.fn<typeof count>().mockResolvedValue(1)
@@ -96,6 +98,22 @@ describe('BounceService', () => {
             await service.recordBounce(permanentBounce)
 
             expect(applyBlock).not.toHaveBeenCalled()
+        })
+
+        it('logs a recorded bounce by its id, never by address or reason', async () => {
+            create.mockResolvedValue(bounceRow({ bounceId: 17 }))
+
+            await service.recordBounce(permanentBounce)
+
+            expect(logSpy).toHaveBeenLastCalledWith('Recorded permanent bounce #17')
+        })
+
+        it('logs a duplicate bounce by its message id only', async () => {
+            create.mockRejectedValue(new UniqueConstraintError({}))
+
+            await service.recordBounce(permanentBounce)
+
+            expect(debugSpy).toHaveBeenCalledExactlyOnceWith('Bounce <dsn-1@relay.example.com> already recorded')
         })
 
         it('rethrows unexpected persistence errors', async () => {

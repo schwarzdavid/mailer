@@ -13,6 +13,7 @@ import {
 } from '../interfaces/domain.interface.js'
 import { DomainDnsService } from './domain-dns.service.js'
 import { DomainDkimModel } from '../models/domain-dkim.model.js'
+import { DomainNotReadyError } from '../exceptions/domain-not-ready.error.js'
 import { SettingsModel } from '../../settings/models/settings.model.js'
 import { InboundFormModel } from '../../inbound-form/models/inbound-form.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
@@ -205,6 +206,21 @@ export class DomainService {
         return domain ? domain.get({ plain: true }) : null
     }
 
+    async getDomainByRootDomain(rootDomain: string, excludeDomainId?: number): Promise<Domain | null> {
+        const domain = await this.domainModel.findOne({
+            where:
+                excludeDomainId === undefined ? { rootDomain } : { rootDomain, domainId: { [Op.ne]: excludeDomainId } },
+        })
+
+        return domain ? domain.get({ plain: true }) : null
+    }
+
+    async assertReadyToSend(domain: Pick<Domain, 'domainId' | 'fqdn'>): Promise<void> {
+        if (!(await this.domainDnsService.allRecordsValid(domain.domainId))) {
+            throw new DomainNotReadyError(domain.domainId, domain.fqdn)
+        }
+    }
+
     async getSendingDomainByFqdn(fqdn: string): Promise<DomainWithActiveDkim | null> {
         const domain = await this.domainModel.findOne({
             where: { fqdn },
@@ -215,9 +231,6 @@ export class DomainService {
             return null
         }
 
-        // The class-field initializer on DomainModel.activeDkim shadows the
-        // association accessor, so the eager-loaded value is only reliably
-        // present on the plain representation.
         const sendingDomain = domain.get({ plain: true }) as DomainWithActiveDkim
         if (!sendingDomain.activeDkim) {
             return null

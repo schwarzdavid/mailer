@@ -17,6 +17,7 @@ import {
     type DomainDkimKeyBits,
 } from '../interfaces/domain-dkim.interface.js'
 import { DomainModel } from './domain.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'domain_dkim',
@@ -62,5 +63,5 @@ export class DomainDkimModel extends Model<DomainDkim, DomainDkimCreate> impleme
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     })
-    domain: DomainModel | null = null
+    declare domain?: Relation<DomainModel>
 }

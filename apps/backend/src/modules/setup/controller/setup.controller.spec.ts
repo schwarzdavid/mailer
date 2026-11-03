@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { ThrottlerGuard } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SetupController } from './setup.controller.js'
 import { SetupService } from '../services/setup.service.js'
@@ -42,6 +42,7 @@ describe('SetupController', () => {
         lastName: 'Lovelace',
         email: 'ada@example.com',
         password: 'correct-horse-battery-staple',
+        setupToken: 'the-token',
     }
 
     beforeEach(async () => {
@@ -57,7 +58,7 @@ describe('SetupController', () => {
                 { provide: JwtHelperService, useValue: { createToken } },
             ],
         })
-            .overrideGuard(ThrottlerGuard)
+            .overrideGuard(AppThrottlerGuard)
             .useValue({ canActivate: () => true })
             .overrideGuard(PoliciesGuard)
             .useValue({ canActivate: () => true })
@@ -82,10 +83,18 @@ describe('SetupController', () => {
         expect(finishSetup).toHaveBeenCalledOnce()
     })
 
-    it('registers the first user and returns an authentication', async () => {
+    it('passes the setup token separately and never into the user', async () => {
         const result = await controller.registerUser(registration)
 
-        expect(registerFirstUser).toHaveBeenCalledWith(registration)
+        expect(registerFirstUser).toHaveBeenCalledWith(
+            {
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+                email: 'ada@example.com',
+                password: 'correct-horse-battery-staple',
+            },
+            'the-token',
+        )
         expect(createToken).toHaveBeenCalledWith(user)
         expect(result).toEqual({ token: 'jwt-token', user })
     })

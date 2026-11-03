@@ -1,0 +1,19 @@
+name: Setup
+description: Install pnpm and the Node version pinned in the Dockerfile, then install the dependencies
+
+runs:
+    using: composite
+    steps:
+        - id: node
+          shell: bash
+          run: |
+              version=$(sed -n 's/^ARG NODE_VERSION=//p' Dockerfile)
+              test -n "$version"
+              echo "version=$version" >>"$GITHUB_OUTPUT"
+        - uses: pnpm/action-setup@v6
+        - uses: actions/setup-node@v7
+          with:
+              node-version: ${{ steps.node.outputs.version }}
+              cache: pnpm
+        - shell: bash
+          run: pnpm install --frozen-lockfile

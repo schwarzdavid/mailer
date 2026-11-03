@@ -36,6 +36,23 @@ describe('ProjectFormsCard', () => {
         expect(rows[1]!.text()).toContain('Inactive')
     })
 
+    it('flags a form without allowed domains as open to any website', async () => {
+        vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([formListItem({ allowedHostnames: [] })])
+        const wrapper = mountInApp(ProjectFormsCard, { project: projectDetail(), canUpdate: true })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Any website'))
+    })
+
+    it('shows no open-origin warning once domains are allowed', async () => {
+        vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([
+            formListItem({ allowedHostnames: ['kunde.at'] }),
+        ])
+        const wrapper = mountInApp(ProjectFormsCard, { project: projectDetail(), canUpdate: true })
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
+        expect(wrapper.text()).not.toContain('Any website')
+    })
+
     it('explains an empty project', async () => {
         vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([])
         const wrapper = mountInApp(ProjectFormsCard, { project: projectDetail(), canUpdate: true })

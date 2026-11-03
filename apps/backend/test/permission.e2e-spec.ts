@@ -47,7 +47,7 @@ describe('Permissions (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, superCredentials)
         superToken = await login(app, superCredentials)
-        await configureSendingDomain(app, superToken, 'mail.perm-example.org')
+        await configureSendingDomain(app, superToken)
 
         const me = await http().get('/api/auth/user').set('Authorization', asSuper()).expect(200)
         superUserId = (me.body as { userId: number }).userId

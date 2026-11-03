@@ -1,0 +1,22 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "module": "preserve",
+        "moduleResolution": "bundler",
+        "lib": ["ESNext", "DOM"],
+        "types": ["node", "vitest/globals"],
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "erasableSyntaxOnly": true,
+        "verbatimModuleSyntax": true
+    },
+    "include": [
+        ".vitepress/**/*.ts",
+        "scripts/**/*.ts",
+        "screenshots/**/*.ts",
+        "playwright.config.ts",
+        "vitest.config.ts"
+    ],
+    "exclude": [".vitepress/cache", ".vitepress/dist"]
+}

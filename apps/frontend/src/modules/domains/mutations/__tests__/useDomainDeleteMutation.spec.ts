@@ -10,6 +10,7 @@ vi.mock('@/helper/waitAtleast.ts', () => ({
 
 const record: DomainDnsRecordDto = {
     current: null,
+    issue: 'missing',
     host: 'mail.example.org',
     status: 'invalid',
     type: 'txt',

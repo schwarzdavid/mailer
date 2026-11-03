@@ -1,47 +1,29 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module.js'
-import { INestApplication, Logger } from '@nestjs/common'
-import { OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
+import { SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
-import { dirname, join } from 'node:path'
-import * as fs from 'node:fs/promises'
+import { getConnectionToken } from '@nestjs/sequelize'
+import { Logger } from 'nestjs-pino'
+import { Sequelize } from 'sequelize-typescript'
 import { appOptions } from './factories/app.options.js'
-import { configureApp, createOpenApiDocument } from './factories/app.setup.js'
+import { configureApp, createOpenApiDocument, shouldServeApiDocs } from './factories/app.setup.js'
+import { createUmzug } from './factories/umzug.factory.js'
 import type { Env } from './config/env.schema.js'
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule, appOptions)
+    const app = await NestFactory.create(AppModule, { ...appOptions, bufferLogs: true })
+    const logger = app.get(Logger)
+    app.useLogger(logger)
+    await createUmzug(app.get<Sequelize>(getConnectionToken())).up()
+    const configService = app.get<ConfigService<Env, true>>(ConfigService)
 
     configureApp(app)
 
-    const specOnly = process.argv.some((arg) => arg === '--spec-only')
-    const document = createOpenApiDocument(app)
-    const logger = new Logger('Bootstrap')
-
-    if (specOnly || process.env.NODE_ENV !== 'production') {
-        await saveOpenApiSpec(app, document)
-        logger.log('OpenAPI spec saved.')
+    if (shouldServeApiDocs(configService)) {
+        SwaggerModule.setup('docs', app, createOpenApiDocument(app))
     }
-
-    if (specOnly) {
-        logger.log('Closing application')
-        await app.close()
-        logger.log('Application closed')
-    } else {
-        SwaggerModule.setup('docs', app, document)
-        await app.listen(app.get<ConfigService<Env, true>>(ConfigService).get('PORT', { infer: true }))
-        logger.log(`Application is running on: ${await app.getUrl()}`)
-    }
-}
-
-async function saveOpenApiSpec(app: INestApplication, document: OpenAPIObject) {
-    const configService = app.get<ConfigService<Env, true>>(ConfigService)
-    const outputPath =
-        configService.get('OPENAPI_PATH', { infer: true }) ??
-        join(import.meta.dirname, '../../../packages/api/assets/openapi.json')
-
-    await fs.mkdir(dirname(outputPath), { recursive: true })
-    await fs.writeFile(outputPath, JSON.stringify(document))
+    await app.listen(configService.get('PORT', { infer: true }))
+    logger.log(`Application is running on: ${await app.getUrl()}`, 'Bootstrap')
 }
 
 void bootstrap()

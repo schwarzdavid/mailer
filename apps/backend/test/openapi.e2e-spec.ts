@@ -5,11 +5,12 @@ import { INestApplication, RequestMethod, type CanActivate, type Type } from '@n
 import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js'
 import { ModulesContainer, Reflector } from '@nestjs/core'
 import { PluginMetadataGenerator } from '@nestjs/cli/lib/compiler/plugins/plugin-metadata-generator.js'
-import { SwaggerModule, type OpenAPIObject, type OperationObject } from '@nestjs/swagger'
+import { DECORATORS, SwaggerModule, type OpenAPIObject, type OperationObject } from '@nestjs/swagger'
 import { ReadonlyVisitor } from '@nestjs/swagger/plugin'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { createOpenApiDocument } from '../src/factories/app.setup.js'
+import { createPreviewOpenApiDocument } from '../src/openapi/preview-document.js'
 import { JwtAuthGuard } from '../src/modules/auth/guards/jwt-auth.guard.js'
 import { PUBLIC_KEY } from '../src/modules/auth/decorators/Public.js'
 import { createTestApp } from './support/app.js'
@@ -25,6 +26,7 @@ interface Route {
     method: string
     path: string
     requiresJwt: boolean
+    excludedFromDocument: boolean
 }
 
 const httpMethods = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
@@ -87,6 +89,8 @@ function listRoutes(app: INestApplication): Route[] {
             const controller = metatype as Type
             const controllerPath = reflector.get<string>(PATH_METADATA, controller)
             const prototype = controller.prototype as Record<string, unknown>
+            const excludedFromDocument =
+                reflector.get<boolean[] | undefined>(DECORATORS.API_EXCLUDE_CONTROLLER, controller)?.[0] === true
 
             return Object.getOwnPropertyNames(prototype).flatMap((key) => {
                 const handler = prototype[key]
@@ -107,6 +111,7 @@ function listRoutes(app: INestApplication): Route[] {
                         method: RequestMethod[requestMethod].toLowerCase(),
                         path: joinRoutePath('api', controllerPath, reflector.get<string>(PATH_METADATA, handler)),
                         requiresJwt: guards.includes(JwtAuthGuard) && !isPublic,
+                        excludedFromDocument,
                     },
                 ]
             })
@@ -147,10 +152,19 @@ describe('OpenAPI contract', () => {
         await app?.close()
     })
 
-    it('documents every controller route', () => {
+    it('generates the same document in preview mode as the booted app', async () => {
+        expect(await createPreviewOpenApiDocument()).toEqual(document)
+    })
+
+    it('lists no servers, so every client resolves requests against its own origin', () => {
+        expect(document.servers ?? []).toEqual([])
+    })
+
+    it('documents every controller route that is not excluded from the document', () => {
         expect(routes.length).toBeGreaterThan(0)
         const documented = new Set(operations.map(({ method, path }) => `${method} ${path}`))
         const missing = routes
+            .filter(({ excludedFromDocument }) => !excludedFromDocument)
             .filter(({ method, path }) => !documented.has(`${method} ${path}`))
             .map(({ label, method, path }) => `${label}: ${method.toUpperCase()} ${path}`)
         expect(missing).toEqual([])

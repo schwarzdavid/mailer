@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
-import { ThrottlerGuard } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import { describe, expect, it } from 'vitest'
 import { ApiKeyAuth } from './ApiKeyAuth.js'
 import { ApiKeyAuthGuard } from '../guards/api-key-auth.guard.js'
@@ -14,7 +14,7 @@ describe('ApiKeyAuth', () => {
 
     it('throttles before authenticating the api key', () => {
         expect(Reflect.getMetadata(GUARDS_METADATA, Controller.prototype.handler)).toEqual([
-            ThrottlerGuard,
+            AppThrottlerGuard,
             ApiKeyAuthGuard,
         ])
     })

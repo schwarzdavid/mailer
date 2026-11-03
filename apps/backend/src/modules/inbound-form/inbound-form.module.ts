@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { BullModule } from '@nestjs/bullmq'
 import { SequelizeModule } from '@nestjs/sequelize'
 import { InboundFormModel } from './models/inbound-form.model.js'
 import { InboundFormFieldModel } from './models/inbound-form-field.model.js'
@@ -17,6 +18,11 @@ import { InboundFormService } from './services/inbound-form.service.js'
 import { InboundFormTemplateService } from './services/inbound-form-template.service.js'
 import { InboundFormSecurityService } from './services/inbound-form-security.service.js'
 import { InboundFormSubmissionService } from './services/inbound-form-submission.service.js'
+import { InboundFormDeliveryService } from './services/inbound-form-delivery.service.js'
+import { InboundFormDeliveryQueueService } from './services/inbound-form-delivery-queue.service.js'
+import { InboundFormDeliveryRecoveryService } from './services/inbound-form-delivery-recovery.service.js'
+import { InboundFormDeliveryProcessor } from './processors/inbound-form-delivery.processor.js'
+import { INBOUND_FORM_DELIVERY_QUEUE } from './inbound-form.constants.js'
 import {
     FORM_TOKEN_CLOCK,
     InboundFormTokenService,
@@ -40,6 +46,7 @@ import { ThrottlerStorageModule } from '../throttler-storage/throttler-storage.m
         MailModule,
         EncryptionModule,
         ThrottlerStorageModule,
+        BullModule.registerQueue({ name: INBOUND_FORM_DELIVERY_QUEUE }),
     ],
     controllers: [InboundFormController, PublicInboundFormController],
     providers: [
@@ -47,6 +54,10 @@ import { ThrottlerStorageModule } from '../throttler-storage/throttler-storage.m
         InboundFormTemplateService,
         InboundFormSecurityService,
         InboundFormSubmissionService,
+        InboundFormDeliveryService,
+        InboundFormDeliveryQueueService,
+        InboundFormDeliveryRecoveryService,
+        InboundFormDeliveryProcessor,
         InboundFormTokenService,
         { provide: FORM_TOKEN_CLOCK, useValue: systemFormTokenClock },
     ],

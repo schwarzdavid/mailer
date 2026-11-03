@@ -155,4 +155,27 @@ describe('buildDataSchema', () => {
         expect(result.success).toBe(true)
         expect(Date.now() - started).toBeLessThan(1000)
     })
+
+    it('matches a pattern against the whole value', () => {
+        const schema = buildDataSchema([
+            field('code', InboundFormFieldType.TEXT, { required: true, pattern: '[0-9]+' }),
+        ])
+
+        expect(schema.safeParse({ code: '123' }).success).toBe(true)
+        expect(schema.safeParse({ code: 'abc123' }).success).toBe(false)
+    })
+
+    it('keeps working for patterns that carry their own anchors', () => {
+        const schema = buildDataSchema([field('code', InboundFormFieldType.TEXT, { required: true, pattern: '^abc$' })])
+
+        expect(schema.safeParse({ code: 'abc' }).success).toBe(true)
+        expect(schema.safeParse({ code: 'xabc' }).success).toBe(false)
+    })
+
+    it('anchors an alternation as a whole', () => {
+        const schema = buildDataSchema([field('code', InboundFormFieldType.TEXT, { required: true, pattern: 'a|b' })])
+
+        expect(schema.safeParse({ code: 'a' }).success).toBe(true)
+        expect(schema.safeParse({ code: 'ab' }).success).toBe(false)
+    })
 })

@@ -6,6 +6,7 @@
 **/dist-ssr/
 **/.output/
 **/build/
+apps/docs/.vitepress/cache/
 
 # Test / coverage artifacts
 **/coverage/
@@ -16,6 +17,8 @@
 **/src/generated/
 openapi/
 packages/api/assets/
+apps/backend/openapi.json
+apps/backend/env-keys.json
 
 # Turbo cache & TS build info
 **/.turbo/

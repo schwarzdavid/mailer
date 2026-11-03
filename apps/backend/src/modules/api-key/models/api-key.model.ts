@@ -14,6 +14,7 @@ import {
 import { ApiKeyCreate, ApiKeyRecord } from '../interfaces/api-key.interface.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { UserModel } from '../../user/models/user.model.js'
+import type { Relation } from '../../../types/relation.js'
 
 @Table({
     tableName: 'api_keys',
@@ -71,11 +72,11 @@ export class ApiKeyModel extends Model<ApiKeyRecord, ApiKeyCreate> implements Ap
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     })
-    project: ProjectModel | null = null
+    declare project?: Relation<ProjectModel>
 
     @BelongsTo(() => UserModel, {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    createdBy: UserModel | null = null
+    declare createdBy?: Relation<UserModel> | null
 }

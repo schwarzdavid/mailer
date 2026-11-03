@@ -67,7 +67,7 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
     })
-    domain: DomainModel | null = null
+    declare domain?: Relation<DomainModel> | null
 
     @BelongsTo(() => ProjectModel, {
         onDelete: 'CASCADE',

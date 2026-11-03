@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
-import { ThrottlerGuard } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import type { Request } from 'express'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
@@ -24,7 +24,7 @@ describe('PublicInboundFormController', () => {
             controllers: [PublicInboundFormController],
             providers: [{ provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } }],
         })
-            .overrideGuard(ThrottlerGuard)
+            .overrideGuard(AppThrottlerGuard)
             .useValue({ canActivate: () => true })
             .compile()
 

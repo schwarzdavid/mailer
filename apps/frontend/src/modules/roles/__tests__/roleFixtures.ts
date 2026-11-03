@@ -12,7 +12,6 @@ export const ALL_PERMISSIONS: Permission[] = [
     'projects.create',
     'projects.all',
     'bounces.read',
-    'bounces.block',
     'bounces.unblock',
     'settings.read',
     'settings.update',

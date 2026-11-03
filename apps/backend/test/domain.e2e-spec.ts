@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
 import { DomainDkimModel } from '../src/modules/domain/models/domain-dkim.model.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
@@ -89,7 +89,7 @@ describe('DomainController (e2e)', () => {
         const detail = await http().get(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`).expect(200)
         const body = detail.body as { fqdn: string; dns: Record<string, { host: string; value: string }> }
         expect(body.fqdn).toBe('example.com')
-        expect(body.dns.spf).toMatchObject({ host: 'example.com', value: 'v=spf1 include:mail.sending-e2e.org ~all' })
+        expect(body.dns.spf).toMatchObject({ host: 'example.com', value: `v=spf1 include:${E2E_MAIL_HOSTNAME} ~all` })
         expect(body.dns.dkim).toMatchObject({ host: 's1._domainkey.example.com' })
         expect(body.dns.dkim!.value).toMatch(/^v=DKIM1; k=rsa; p=/)
 
@@ -227,7 +227,7 @@ describe('DomainController (e2e)', () => {
         it('refuses to delete the configured sending domain with 409', async () => {
             const domainModel = app.get<typeof DomainModel>(getModelToken(DomainModel))
             const sendingDomain = await domainModel.findOne({
-                where: { fqdn: 'mail.sending-e2e.org' },
+                where: { fqdn: E2E_MAIL_HOSTNAME },
                 rejectOnEmpty: true,
             })
 

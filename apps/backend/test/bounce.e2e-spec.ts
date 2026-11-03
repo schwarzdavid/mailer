@@ -7,7 +7,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, waitForMessagesTo } from './support/mailhog.js'
 import { BounceMailboxService } from '../src/modules/bounce/services/bounce-mailbox.service.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -173,7 +173,7 @@ describe('Bounce (e2e)', () => {
         superToken = await login(app, superCredentials)
         readerToken = await login(app, readerCredentials)
         memberToken = await login(app, memberCredentials)
-        await configureSendingDomain(app, superToken, 'mail.bounce-sending.org')
+        await configureSendingDomain(app, superToken)
 
         const users = await http().get('/api/user').set('Authorization', bearer(superToken)).expect(200)
         const reader = (users.body as { userId: number; email: string }[]).find(
@@ -393,7 +393,7 @@ describe('Bounce (e2e)', () => {
             expect(delivery.status).toBe('sent')
 
             const [message] = await waitForMessagesTo(env.MAILHOG_URL, permanentAddress)
-            expect(message!.Raw.From).toBe('bounce@mail.bounce-sending.org')
+            expect(message!.Raw.From).toBe(`bounce@${E2E_MAIL_HOSTNAME}`)
             expect(header(message!, 'From')[0]).toContain('noreply@forms.bounce-e2e.com')
         })
     })

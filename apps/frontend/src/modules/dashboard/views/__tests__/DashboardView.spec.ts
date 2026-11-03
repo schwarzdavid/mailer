@@ -101,6 +101,22 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Acme Website')
     })
 
+    it('flags a form without allowed domains as open to any website', async () => {
+        mockApis({ forms: [formListItem({ allowedHostnames: [] })] })
+        const wrapper = mountInApp(DashboardView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('contact-request'))
+        expect(wrapper.text()).toContain('Any website')
+    })
+
+    it('shows no open-origin warning once domains are allowed', async () => {
+        mockApis({ forms: [formListItem({ allowedHostnames: ['kunde.at'] })] })
+        const wrapper = mountInApp(DashboardView)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('contact-request'))
+        expect(wrapper.text()).not.toContain('Any website')
+    })
+
     it('says so when nothing needs attention', async () => {
         mockApis({ forms: [formListItem({ domainId: 5 })] })
         vi.spyOn(DomainApi, 'getDomains').mockResolvedValue([domain()])

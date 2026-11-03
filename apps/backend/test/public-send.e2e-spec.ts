@@ -86,7 +86,7 @@ describe('Public send API (e2e)', () => {
         await seedUser(app, readerCredentials, 'user')
         ownerToken = await login(app, ownerCredentials)
         readerToken = await login(app, readerCredentials)
-        await configureSendingDomain(app, ownerToken, 'mail.psa-sending.org')
+        await configureSendingDomain(app, ownerToken)
 
         projectId = await createProjectWithDomain('E2E Public Send', 'send.psa-example.com')
         otherProjectId = await createProjectWithDomain('E2E Public Send Other', 'mail.psa-other.org')

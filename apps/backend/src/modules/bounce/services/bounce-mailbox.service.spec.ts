@@ -126,6 +126,23 @@ describe('BounceMailboxService', () => {
         expect(imapClient.logout).toHaveBeenCalled()
     })
 
+    it('verifies the server certificate against IMAP_TLS_SERVERNAME when it differs from the host', async () => {
+        config.IMAP_HOST = 'mail'
+        config.IMAP_TLS_SERVERNAME = 'mx.example.com'
+
+        await service.pollRound()
+
+        expect(ImapFlow).toHaveBeenCalledWith(
+            expect.objectContaining({ host: 'mail', tls: { servername: 'mx.example.com' } }),
+        )
+    })
+
+    it('leaves the TLS options untouched when IMAP_TLS_SERVERNAME is unset', async () => {
+        await service.pollRound()
+
+        expect(vi.mocked(ImapFlow).mock.calls[0]?.[0]).not.toHaveProperty('tls')
+    })
+
     it('marks non-DSN messages seen without recording anything', async () => {
         parse.mockResolvedValue(null)
 
@@ -137,11 +154,13 @@ describe('BounceMailboxService', () => {
 
     it('isolates a per-message failure so later messages are still processed and marked seen', async () => {
         imapClient.search.mockResolvedValue([42, 43])
-        recordBounce.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(undefined)
+        recordBounce
+            .mockRejectedValueOnce(Object.assign(new Error('mailbox user@example.org missing'), { code: 'ENOENT' }))
+            .mockResolvedValueOnce(undefined)
 
         await service.pollRound()
 
-        expect(errorSpy).toHaveBeenCalledWith('Processing bounce message 42 failed: boom')
+        expect(errorSpy).toHaveBeenCalledWith('Processing bounce message 42 failed: Error (code ENOENT)')
         expect(imapClient.messageFlagsAdd).not.toHaveBeenCalledWith('42', ['\\Seen'], { uid: true })
         expect(imapClient.messageFlagsAdd).toHaveBeenCalledWith('43', ['\\Seen'], { uid: true })
     })
@@ -175,9 +194,11 @@ describe('BounceMailboxService', () => {
     })
 
     it('logs a failed poll round without rethrowing', async () => {
-        vi.spyOn(service, 'pollRound').mockRejectedValue(new Error('imap down'))
+        vi.spyOn(service, 'pollRound').mockRejectedValue(
+            Object.assign(new Error('mailbox user@example.org missing'), { code: 'ENOENT' }),
+        )
 
         await expect(service.handlePollInterval()).resolves.toBeUndefined()
-        expect(errorSpy).toHaveBeenCalledWith('Bounce mailbox poll failed: imap down')
+        expect(errorSpy).toHaveBeenCalledWith('Bounce mailbox poll failed: Error (code ENOENT)')
     })
 })

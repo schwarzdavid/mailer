@@ -6,7 +6,6 @@ export type AbilityAction =
     | 'create'
     | 'update'
     | 'delete'
-    | 'block'
     | 'unblock'
     | 'forms.manage'
     | 'api_keys.manage'

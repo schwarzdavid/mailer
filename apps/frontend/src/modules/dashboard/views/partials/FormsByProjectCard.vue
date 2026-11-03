@@ -47,6 +47,7 @@
                         }}
                     </template>
                     <template #meta>
+                        <StatusBadge v-if="acceptsAnyOrigin(form)" v-bind="openOriginBadge()" />
                         <StatusBadge v-bind="activityBadge(form.isActive)" />
                     </template>
                 </ListRow>
@@ -84,14 +85,14 @@
     import ListSkeleton from '@/components/skeletons/ListSkeleton.vue'
     import type { useDashboardData } from '@/modules/dashboard/composables/useDashboardData.ts'
     import AddInboundFormDialog from '@/modules/inbound-forms/components/AddInboundFormDialog.vue'
-    import { useReceiverStatus } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
+    import { acceptsAnyOrigin, useReceiverStatus } from '@/modules/inbound-forms/helpers/receiverStatus.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 
     const props = defineProps<{ data: ReturnType<typeof useDashboardData> }>()
 
     const { t } = useI18n()
     const userAbility = useAbility()
-    const { activityBadge } = useReceiverStatus()
+    const { activityBadge, openOriginBadge } = useReceiverStatus()
     const createFor = ref<number | null>(null)
 
     const canCreateProjects = computed(() => userAbility.can('create', 'Project'))

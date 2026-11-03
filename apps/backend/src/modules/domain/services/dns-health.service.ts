@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Interval } from '@nestjs/schedule'
+import { OnOneInstance, WithoutOverlapping } from '@nestjs/locks'
 import { InjectModel } from '@nestjs/sequelize'
 import { DomainModel } from '../models/domain.model.js'
 import { DomainDnsService } from './domain-dns.service.js'
@@ -16,6 +17,8 @@ export class DnsHealthService {
     ) {}
 
     @Interval(DNS_CHECK_INTERVAL_MS)
+    @OnOneInstance({ key: 'domain:dns-check' })
+    @WithoutOverlapping()
     async handleCheckInterval(): Promise<void> {
         try {
             await this.checkAllDomains()

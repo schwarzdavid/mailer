@@ -1,5 +1,6 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { GenericContainer, Wait } from 'testcontainers'
+import { E2E_MAIL_HOSTNAME } from './sending-domain.js'
 
 export interface E2eEnv {
     DB_HOST: string
@@ -11,9 +12,12 @@ export interface E2eEnv {
     REDIS_PORT: string
     BACKEND_JWT_SECRET: string
     BACKEND_ENCRYPTION_SECRET: string
+    MAIL_HOSTNAME: string
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
+    SMTP_REQUIRE_TLS: string
+    SEND_REQUIRE_VALID_DNS: string
     MAILHOG_URL: string
     IMAP_HOST: string
     IMAP_PORT: string
@@ -22,6 +26,7 @@ export interface E2eEnv {
     IMAP_PASSWORD: string
     GREENMAIL_SMTP_HOST: string
     GREENMAIL_SMTP_PORT: string
+    LOG_LEVEL: string
 }
 
 export interface Infrastructure {
@@ -78,11 +83,14 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         DB_DATABASE: postgres.getDatabase(),
         REDIS_HOST: redis.getHost(),
         REDIS_PORT: String(redis.getMappedPort(6379)),
-        BACKEND_JWT_SECRET: 'e2e-jwt-secret',
-        BACKEND_ENCRYPTION_SECRET: 'e2e-encryption-secret',
+        BACKEND_JWT_SECRET: 'e2e-jwt-secret-0123456789abcdef0',
+        BACKEND_ENCRYPTION_SECRET: 'e2e-encryption-secret-0123456789ab',
+        MAIL_HOSTNAME: E2E_MAIL_HOSTNAME,
         SMTP_HOST: mailhog.getHost(),
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',
+        SMTP_REQUIRE_TLS: 'false',
+        SEND_REQUIRE_VALID_DNS: 'false',
         MAILHOG_URL: `http://${mailhog.getHost()}:${mailhog.getMappedPort(8025)}`,
         IMAP_HOST: greenmail.getHost(),
         IMAP_PORT: String(greenmail.getMappedPort(3143)),
@@ -91,6 +99,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         IMAP_PASSWORD: 'e2e-imap-password',
         GREENMAIL_SMTP_HOST: greenmail.getHost(),
         GREENMAIL_SMTP_PORT: String(greenmail.getMappedPort(3025)),
+        LOG_LEVEL: 'warn',
     }
 
     return {

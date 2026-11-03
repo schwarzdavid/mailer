@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Header, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
-import { SkipThrottle, ThrottlerGuard } from '@nestjs/throttler'
+import { SkipThrottle } from '@nestjs/throttler'
+import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import type { Request } from 'express'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
@@ -10,7 +11,7 @@ import { FormThrottle } from '../helpers/form-throttle.js'
 import { INBOUND_FORM_CLIENT_SCRIPT } from '../client/inbound-form-client.js'
 
 @ApiTags('public-form')
-@UseGuards(ThrottlerGuard)
+@UseGuards(AppThrottlerGuard)
 @Controller('public/form')
 export class PublicInboundFormController {
     constructor(private readonly submissionService: InboundFormSubmissionService) {}
@@ -19,6 +20,7 @@ export class PublicInboundFormController {
     @Get('client.js')
     @Header('Content-Type', 'application/javascript; charset=utf-8')
     @Header('Cache-Control', 'public, max-age=86400')
+    @Header('Cross-Origin-Resource-Policy', 'cross-origin')
     @ApiProduces('application/javascript')
     @ApiOkResponse({ schema: { type: 'string' } })
     getInboundFormClient(): string {

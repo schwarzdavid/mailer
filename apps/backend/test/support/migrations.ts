@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Sequelize, type QueryInterface } from 'sequelize'
+import { createUmzug } from '../../src/factories/umzug.factory.js'
 import type { E2eEnv } from './infrastructure.js'
 
 type MigrationStep = (params: { name: string; context: QueryInterface }) => Promise<unknown>
@@ -21,8 +22,8 @@ export async function listMigrationFiles(): Promise<string[]> {
     return (await readdir(migrationsDir)).filter((file) => file.endsWith('.ts')).sort()
 }
 
-// The umzug CLI runs under the tsx loader, which Vitest doesn't use, so the
-// migration modules are imported directly — the same schema, discovered dynamically.
+// Imported directly rather than through umzug because the per-migration e2e specs
+// need an individual up/down handle for each migration.
 export async function loadMigrations(): Promise<Migration[]> {
     const files = await listMigrationFiles()
 
@@ -54,11 +55,7 @@ export async function runMigrations(env: E2eEnv): Promise<void> {
     const sequelize = createConnection(env)
 
     try {
-        const queryInterface = sequelize.getQueryInterface()
-
-        for (const migration of await loadMigrations()) {
-            await migration.up({ name: migration.name, context: queryInterface })
-        }
+        await createUmzug(sequelize).up()
     } finally {
         await sequelize.close()
     }

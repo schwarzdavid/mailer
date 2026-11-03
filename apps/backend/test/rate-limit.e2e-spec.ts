@@ -1,9 +1,12 @@
 import { INestApplication } from '@nestjs/common'
+import type { Redis } from 'ioredis'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { resetThrottleCounters } from './support/throttle-counters.js'
+import { THROTTLER_REDIS_CLIENT } from '../src/modules/throttler-storage/throttler-storage.constants.js'
 import { LOGIN_THROTTLE_BLOCK_MS, LOGIN_THROTTLE_LIMIT } from '../src/modules/auth/auth.constants.js'
+import { SetupTokenService } from '../src/modules/setup/services/setup-token.service.js'
 
 const PUBLIC_FORM_LIMIT = 10
 const FORM_BUDGET = 5
@@ -113,5 +116,57 @@ describe('Rate limiting (e2e)', () => {
                 await request(appA.getHttpServer()).get('/api/public/form/client.js').expect(200)
             }
         })
+    })
+})
+
+describe('Rate limiting when Redis is unavailable (e2e)', () => {
+    let app: INestApplication<App>
+
+    let validRegistration: {
+        firstName: string
+        lastName: string
+        email: string
+        password: string
+        setupToken: string
+    }
+
+    const http = () => request(app.getHttpServer())
+
+    beforeAll(async () => {
+        process.env.TRUST_PROXY = ''
+        const { createTestApp } = await import('./support/app.js')
+        app = await createTestApp()
+        validRegistration = {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            email: 'rate-limit-outage@example.com',
+            password: 'correct-horse-battery-staple',
+            setupToken: app.get(SetupTokenService).token,
+        }
+        app.get<Redis>(THROTTLER_REDIS_CLIENT).disconnect()
+    })
+
+    afterAll(async () => {
+        await app.close()
+    })
+
+    it('refuses logins with 503 instead of skipping the limit', async () => {
+        const response = await http()
+            .post('/api/auth/login')
+            .send({ email: 'nobody@example.com', password: 'whatever-password' })
+
+        expect(response.status).toBe(503)
+    })
+
+    it('refuses first-user registration with 503', async () => {
+        const response = await http().post('/api/setup/user').send(validRegistration)
+
+        expect(response.status).toBe(503)
+    })
+
+    it('keeps public form routes available', async () => {
+        const response = await http().post('/api/public/form/unknown-slug').send({ data: {} })
+
+        expect(response.status).toBe(404)
     })
 })
