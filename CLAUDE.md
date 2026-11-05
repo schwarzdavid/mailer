@@ -11,7 +11,7 @@ These rules are set by the repository owner and take precedence over defaults:
 - **Keep tests in step with logic.** When you change business logic, update the corresponding tests and run them. If a change could plausibly break something elsewhere, or is large in scope, run the full test suite (`pnpm test`) to confirm nothing regressed.
 - **Never touch git.** Do not `git add`, stage, commit, push, or otherwise alter version-control state. Leave all git operations to the user.
 - **No comments.** Write self-explanatory code — clear names over explanatory comments. Existing comments in the tree explain non-obvious _why_ (workarounds, framework quirks); match that bar if a comment is truly unavoidable, but do not narrate _what_ the code does.
-- **Keep the operator docs in step.** Operator-facing documentation lives in `apps/docs`; a change to an environment variable, `deploy/compose.yml`, a public endpoint, a background job or an admin UI flow updates the matching page in the same change (the docs build and tests catch env drift, broken links and page-structure slips, and nothing about content accuracy), and the README holds developer content only.
+- **Keep the operator docs in step.** Operator-facing documentation lives in `apps/docs`; a change to an environment variable, `deploy/compose.yml`, a public endpoint, a background job or an admin UI flow updates the matching page in the same change (the docs build and tests catch env drift, broken links and page-structure slips, and nothing about content accuracy), the README is the project overview (what it does, tech stack, links, licence), and developer content (local setup, commands, CI and release pipeline) lives in `CONTRIBUTING.md`.
 
 ## Repository layout
 

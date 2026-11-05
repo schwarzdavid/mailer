@@ -6,7 +6,7 @@ This page is for people who change mailer or these docs rather than run it. It s
 
 These docs are written for operators. Everything about working on the code lives in the repository itself:
 
-- **[`README.md`](https://github.com/schwarzdavid/mailer#local-setup)**, section **Local setup**: the prerequisites (Node.js, pnpm, Docker), the local `.env`, the development services in the root `compose.yml`, `pnpm dev`, and the lint, typecheck and test commands. Its section **CI and release pipeline** describes how releases and images are built.
+- **[`CONTRIBUTING.md`](https://github.com/schwarzdavid/mailer/blob/main/CONTRIBUTING.md)**, section **Local setup**: the prerequisites (Node.js, pnpm, Docker), the local `.env`, the development services in the root `compose.yml`, `pnpm dev`, and the lint, typecheck and test commands. Its section **CI and release pipeline** describes how releases and images are built.
 - **[`CLAUDE.md`](https://github.com/schwarzdavid/mailer/blob/main/CLAUDE.md)**: the repository layout, the architecture of backend and admin UI, how the API client is generated from the backend, and the testing conventions.
 
 ## Run and build the docs
