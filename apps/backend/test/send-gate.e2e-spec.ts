@@ -4,7 +4,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { resetThrottleCounters } from './support/throttle-counters.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
 import { DomainDnsRecordStatus } from '../src/modules/domain/interfaces/domain-dns.interface.js'
@@ -93,7 +93,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
 
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
 
         const project = await http()
             .post('/api/project')

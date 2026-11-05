@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
 import { DomainDkimModel } from '../src/modules/domain/models/domain-dkim.model.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
@@ -25,7 +25,7 @@ describe('DomainController (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
     })
 
     afterAll(async () => {

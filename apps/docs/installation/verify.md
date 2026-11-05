@@ -125,7 +125,7 @@ Log in at `https://app.example.com` and look at the **Dashboard**:
 
 **Settings** shows the same records in detail. Click **Check again** to look them up right away instead of waiting for the next automatic check (every 15 minutes).
 
-**If it fails:** a record that stays **Invalid** for more than a day is missing or has a different value. Open it: **Found a different value** shows what DNS returns; **No record found at this host yet.** means there is no record at all. [First-run setup](/installation/first-run-setup#step-3-dns-records) lists the expected values.
+**If it fails:** a record that stays **Invalid** for more than a day is missing or has a different value. Open it: **Found a different value** shows what DNS returns; **No record found at this host yet.** means there is no record at all. [First-run setup](/installation/first-run-setup#step-2-dns-records) lists the expected values.
 
 ## Send a test mail
 

@@ -4,7 +4,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { globalRoleId, login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 
 describe('Permissions (e2e)', () => {
     let app: INestApplication<App>
@@ -47,7 +47,7 @@ describe('Permissions (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, superCredentials)
         superToken = await login(app, superCredentials)
-        await configureSendingDomain(app, superToken)
+        await ensureSendingDomain(app)
 
         const me = await http().get('/api/auth/user').set('Authorization', asSuper()).expect(200)
         superUserId = (me.body as { userId: number }).userId

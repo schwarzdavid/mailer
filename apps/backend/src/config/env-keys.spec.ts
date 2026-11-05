@@ -9,6 +9,6 @@ describe('listEnvKeys', () => {
         expect(new Set(keys).size).toBe(keys.length)
         expect(keys).toContain('MAIL_HOSTNAME')
         expect(keys).toContain('SEND_REQUIRE_VALID_DNS')
-        expect(keys).toHaveLength(41)
+        expect(keys).toHaveLength(43)
     })
 })

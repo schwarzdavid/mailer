@@ -69,7 +69,6 @@ describe('SetupController', () => {
 
     it.each([
         ['account', true],
-        ['sendingDomain', true],
         ['records', true],
         ['finished', false],
     ] as const)('reports the %s step with needsSetup=%s', async (step, needsSetup) => {

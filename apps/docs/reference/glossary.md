@@ -20,7 +20,7 @@ This page explains, in a sentence or two each, the terms used across the documen
 
 **IP warm-up.** Raising the number of mails a new IP address sends per day slowly over the first weeks, so large providers build trust in it instead of filing its mail as spam. See [Warm up the IP address](/installation/going-live#warm-up-the-ip-address).
 
-**MX record.** The DNS record that names the mail server accepting mail for a domain. `MAIL_HOSTNAME` points to itself, so bounce reports reach your server. See [Step 3: DNS records](/installation/first-run-setup#step-3-dns-records).
+**MX record.** The DNS record that names the mail server accepting mail for a domain. `MAIL_HOSTNAME` points to itself, so bounce reports reach your server. See [Step 2: DNS records](/installation/first-run-setup#step-2-dns-records).
 
 **PTR record, reverse DNS.** The record that maps your server's IP address back to a name, `MAIL_HOSTNAME`. You set it at your hosting provider, not in your DNS zone. See [Set the reverse DNS](/installation/prepare-server#set-the-reverse-dns-ptr-record).
 

@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { ProjectModel } from '../src/modules/project/models/project.model.js'
 import { ProjectPurgeService } from '../src/modules/project/services/project-purge.service.js'
 import { PROJECT_PURGE_AFTER_MS } from '../src/modules/project/project.constants.js'
@@ -73,7 +73,7 @@ describe('Project (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
     })
 
     afterAll(async () => {

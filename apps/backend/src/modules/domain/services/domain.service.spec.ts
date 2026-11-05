@@ -87,8 +87,6 @@ describe('DomainService', () => {
     const settings: Settings = {
         settingId: 1,
         sendingDomainId: 10,
-        serverIpv4: '203.0.113.10',
-        serverIpv6: null,
         setupFinishedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),

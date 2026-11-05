@@ -5,6 +5,8 @@ import { freePort, runCommand, startServer, waitForLogLine, type ServerProcess }
 
 export interface StackOptions {
     mailHostname: string
+    serverIpv4: string
+    serverIpv6?: string
     imapUser?: string
     imapPassword?: string
     log?: (message: string) => void
@@ -62,6 +64,8 @@ export async function startStack(options: StackOptions): Promise<RunningStack> {
         const [infrastructure] = await Promise.all([
             startInfrastructure({
                 mailHostname: options.mailHostname,
+                serverIpv4: options.serverIpv4,
+                serverIpv6: options.serverIpv6 ?? '',
                 imapUser: options.imapUser ?? 'bounce@example.com',
                 imapPassword: options.imapPassword ?? 'bounce',
             }).then((infra: Infrastructure) => {

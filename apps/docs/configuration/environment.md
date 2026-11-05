@@ -89,11 +89,15 @@ Both secrets must be at least 32 characters. Generate each with `openssl rand -b
 
 ### Mail server
 
-| Variable        | Required | Default | Set by compose | Description                                                                                                                                                                                                                                                 |
-| --------------- | -------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAIL_HOSTNAME` | yes      | –       | –              | The single sending domain of the platform, for example `mx.example.com`. It must be a fully qualified domain name (it contains a dot) and is lower-cased. The backend uses it as the sending domain, and the app asks you only for the server IP addresses. |
+| Variable           | Required | Default | Set by compose | Description                                                                                                                                                                                                                                                           |
+| ------------------ | -------- | ------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MAIL_HOSTNAME`    | yes      | –       | –              | The single sending domain of the platform, for example `mx.example.com`. It must be a fully qualified domain name (it contains a dot) and is lower-cased. The backend uses it as the sending domain.                                                                  |
+| `MAIL_SERVER_IPV4` | yes      | –       | –              | The public IPv4 address the server sends mail from, for example `203.0.113.10`. mailer puts it into the A, SPF and PTR records of the sending domain. The backend refuses to start when it is missing or not an IPv4 address.                                         |
+| `MAIL_SERVER_IPV6` | no       | unset   | –              | The public IPv6 address the server sends mail from, for example `2001:db8::10`. When set, mailer adds an AAAA record, an `ip6:` entry in the SPF record and a second PTR record. Leave it out if the server has no IPv6 address or you do not publish an AAAA record. |
 
-With Docker Compose this is the same variable as in the [compose variables](#compose-variables); you set it once, in `.env`. The compose file also derives the mail server's host name and the bounce mailbox from it.
+With Docker Compose `MAIL_HOSTNAME` is the same variable as in the [compose variables](#compose-variables); you set it once, in `.env`. The compose file also derives the mail server's host name and the bounce mailbox from it. `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6` go into the same `.env`; compose hands them to the backend unchanged.
+
+When the backend starts, it creates the sending domain from these three variables, or brings it in line with them: a changed `MAIL_HOSTNAME` replaces the sending domain (see [Change MAIL_HOSTNAME](/admin-guide/settings#change-mail-hostname)), changed addresses regenerate its DNS records and keep its DKIM key (see [Change the server IP addresses](/admin-guide/settings#change-the-server-ip-addresses)).
 
 ### SMTP
 

@@ -2,6 +2,7 @@ const SPEC_PLACEHOLDER_ENV: Record<string, string> = {
     BACKEND_JWT_SECRET: 'openapi-spec-placeholder-0123456789',
     BACKEND_ENCRYPTION_SECRET: 'openapi-spec-placeholder-0123456789',
     MAIL_HOSTNAME: 'mail.openapi-spec-placeholder.org',
+    MAIL_SERVER_IPV4: '192.0.2.1',
     SMTP_HOST: 'openapi-spec-placeholder',
     SMTP_PORT: '25',
     DB_USERNAME: 'openapi-spec-placeholder',

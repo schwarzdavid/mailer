@@ -44,7 +44,7 @@
     const emit = defineEmits<{ select: [step: SetupStepKey] }>()
 
     const { t } = useI18n()
-    const order: SetupStepKey[] = ['account', 'sendingDomain', 'records']
+    const order: SetupStepKey[] = ['account', 'records']
 
     const currentIndex = computed(() => order.indexOf(props.current))
     const currentTitle = computed(() => t(`module.setup.steps.${props.current}`))

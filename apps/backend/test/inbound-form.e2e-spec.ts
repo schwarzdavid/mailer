@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { resetThrottleCounters } from './support/throttle-counters.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -36,7 +36,7 @@ describe('InboundForm (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
 
         const domainResponse = await http()
             .post('/api/domain')

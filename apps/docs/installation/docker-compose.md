@@ -52,14 +52,21 @@ for key in DB_PASSWORD BACKEND_JWT_SECRET BACKEND_ENCRYPTION_SECRET MAIL_PASSWOR
 done
 ```
 
-### Set the names and the version
+### Set the names, the addresses and the version
 
-Set your two host names and the image version. Replace the example values with yours; `IMAGE_TAG` is the release tag without the leading `v`:
+Set your two host names, the server's public IP address and the image version. Replace the example values with yours; `IMAGE_TAG` is the release tag without the leading `v`:
 
 ```bash
 sed -i 's|^SITE_ADDRESS=.*|SITE_ADDRESS=app.example.com|' .env
 sed -i 's|^MAIL_HOSTNAME=.*|MAIL_HOSTNAME=mx.example.com|' .env
+sed -i 's|^MAIL_SERVER_IPV4=.*|MAIL_SERVER_IPV4=203.0.113.10|' .env
 sed -i 's|^IMAGE_TAG=.*|IMAGE_TAG=1.0.0|' .env
+```
+
+If the server has a public IPv6 address and you created the AAAA record for `mx.example.com`, add it as well:
+
+```bash
+echo 'MAIL_SERVER_IPV6=2001:db8::10' >> .env
 ```
 
 You can also edit the file by hand with `nano .env`.
@@ -76,6 +83,7 @@ You can also edit the file by hand with `nano .env`.
 | `BACKEND_JWT_SECRET`        | Required         | A generated secret of at least 32 characters. It signs the login sessions of the admin UI; changing it signs everybody out.                                                                                                                                                                   |
 | `BACKEND_ENCRYPTION_SECRET` | Required         | A generated secret of at least 32 characters, different from the JWT secret. It encrypts the DKIM private keys and reCAPTCHA secrets stored in the database. **Back it up now**, see below.                                                                                                   |
 | `MAIL_HOSTNAME`             | Required         | The name of the mail server and mailer's sending domain, for example `mx.example.com`. It must differ from `SITE_ADDRESS`. Compose refuses to start while it is empty.                                                                                                                        |
+| `MAIL_SERVER_IPV4`          | Required         | The public IPv4 address of the server, for example `203.0.113.10`: the address the A record of `mx.example.com` points to. mailer builds the A, SPF and PTR records of the sending domain from it. The backend refuses to start while it is empty.                                            |
 | `MAIL_PASSWORD`             | Required         | A generated secret: the password of the bounce mailbox `bounce@mx.example.com`. You create the mailbox with this password further down; compose passes it to the backend for sending and for reading bounces.                                                                                 |
 
 Everything else the backend needs (database host, Redis, the mail server connection) is set by `compose.yml` itself; a value for those keys in `.env` has no effect. [Environment variables](/configuration/environment) lists which.
@@ -98,6 +106,7 @@ BACKEND_JWT_SECRET=q9Lm…
 BACKEND_ENCRYPTION_SECRET=Hc4W…
 
 MAIL_HOSTNAME=mx.example.com
+MAIL_SERVER_IPV4=203.0.113.10
 MAIL_PASSWORD=Zr8k…
 ```
 

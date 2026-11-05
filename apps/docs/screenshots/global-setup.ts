@@ -4,6 +4,8 @@ import { startStack } from 'e2e-stack'
 export default async function globalSetup(): Promise<() => Promise<void>> {
     const stack = await startStack({
         mailHostname: 'mx.example.com',
+        serverIpv4: '203.0.113.10',
+        serverIpv6: '2001:db8::10',
         log: (message) => console.log(`[screenshots] ${message}`),
     })
     process.env.DOCS_BASE_URL = 'https://app.example.com'

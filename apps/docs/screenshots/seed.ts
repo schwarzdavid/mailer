@@ -11,7 +11,6 @@ import {
     ProjectApi,
     PublicFormApi,
     RoleApi,
-    SettingsApi,
     UserApi,
 } from 'api'
 import { client } from 'api/client'
@@ -105,8 +104,6 @@ export async function seedAfterOnboarding(apiUrl: string, greenmailSmtpPort: num
     client.setConfig({ baseUrl: apiUrl })
     const { token } = await AuthApi.login({ body: { email: admin.email, password: admin.password } })
     client.setConfig({ baseUrl: apiUrl, auth: () => token })
-
-    await SettingsApi.configureSendingDomain({ body: { serverIpv4: '203.0.113.10', serverIpv6: '2001:db8::10' } })
 
     const { projectId } = await ProjectApi.createProject({ body: { name: 'Acme Website' } })
     const { domainId } = await DomainApi.createDomain({ body: { fqdn: customerDomain } })

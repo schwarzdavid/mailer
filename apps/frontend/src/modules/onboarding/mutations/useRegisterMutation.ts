@@ -15,7 +15,7 @@ export function useRegisterMutation() {
         onSuccess({ user, token }) {
             jwt.value = token
             client.setQueryData(['auth.user'], user)
-            client.setQueryData(['setup.status'], { needsSetup: true, step: 'sendingDomain' } satisfies SetupStatusDto)
+            client.setQueryData(['setup.status'], { needsSetup: true, step: 'records' } satisfies SetupStatusDto)
         },
     })
 }

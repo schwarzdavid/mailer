@@ -6,7 +6,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './support/mailhog.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -129,7 +129,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         ownerToken = await login(app, ownerCredentials)
         viewerToken = await login(app, viewerCredentials)
         outsiderToken = await login(app, outsiderCredentials)
-        await configureSendingDomain(app, ownerToken)
+        await ensureSendingDomain(app)
 
         const domain = await http()
             .post('/api/domain')

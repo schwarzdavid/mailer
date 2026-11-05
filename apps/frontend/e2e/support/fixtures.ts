@@ -20,6 +20,7 @@ export const member = {
 } as const
 
 export const sendingDomain = 'mail.playwright-e2e.com'
+export const serverIpv4 = '203.0.113.10'
 export const senderDomain = 'forms.acme-e2e.com'
 export const projectName = 'Acme Website'
 export const formName = 'Contact Request'

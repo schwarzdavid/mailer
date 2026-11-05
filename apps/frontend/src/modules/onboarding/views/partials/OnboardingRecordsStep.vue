@@ -15,7 +15,6 @@
                 :text="errorMessage"
             />
             <div class="setup-finish__actions">
-                <VBtn variant="text" :text="t('cta.back')" @click="emit('back')" />
                 <VBtn
                     variant="flat"
                     color="primary"
@@ -38,7 +37,7 @@
     import SendingDomainRecordsCard from '@/modules/settings/components/SendingDomainRecordsCard.vue'
 
     const props = defineProps<{ sendingDomain: SendingDomainDto }>()
-    const emit = defineEmits<{ back: []; completed: [] }>()
+    const emit = defineEmits<{ completed: [] }>()
 
     const { t } = useI18n()
     const { mutateAsync, isPending } = useFinishSetupMutation()

@@ -7,7 +7,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, waitForMessagesTo } from './support/mailhog.js'
 import { BounceMailboxService } from '../src/modules/bounce/services/bounce-mailbox.service.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -173,7 +173,7 @@ describe('Bounce (e2e)', () => {
         superToken = await login(app, superCredentials)
         readerToken = await login(app, readerCredentials)
         memberToken = await login(app, memberCredentials)
-        await configureSendingDomain(app, superToken)
+        await ensureSendingDomain(app)
 
         const users = await http().get('/api/user').set('Authorization', bearer(superToken)).expect(200)
         const reader = (users.body as { userId: number; email: string }[]).find(

@@ -7,7 +7,7 @@ import { createTestApp } from './support/app.js'
 import { UserModel } from '../src/modules/user/models/user.model.js'
 import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { login, seedUser } from './support/session.js'
 import { SetupTokenService } from '../src/modules/setup/services/setup-token.service.js'
 
@@ -84,20 +84,20 @@ describe('SetupController (e2e)', () => {
         token = body.token
     })
 
-    it('asks for the sending domain once the account exists', async () => {
+    it('goes straight to the records step once the account exists', async () => {
         const response = await http().get('/api/setup/status').expect(200)
 
-        expect(response.body).toEqual({ needsSetup: true, step: 'sendingDomain' })
+        expect(response.body).toEqual({ needsSetup: true, step: 'records' })
     })
 
-    it('refuses to finish the setup before a sending domain is configured', async () => {
+    it('refuses to finish the setup before a sending domain exists', async () => {
         const response = await http().post('/api/setup/finish').set('Authorization', `Bearer ${token}`)
 
         expect(response.status).toBe(409)
     })
 
-    it('shows the records step once the sending domain is configured', async () => {
-        await configureSendingDomain(app, token)
+    it('keeps the records step once the sending domain exists', async () => {
+        await ensureSendingDomain(app)
 
         const response = await http().get('/api/setup/status').expect(200)
 

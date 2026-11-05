@@ -41,7 +41,9 @@ Most DNS providers ask only for the part before your domain in the host field: `
 Set both records to **DNS only** (the grey cloud in Cloudflare), not proxied. Mail on port 25 cannot pass through an HTTP proxy, and Caddy must be reachable directly to obtain its certificates. This applies to the installation; [Reverse proxy](/configuration/reverse-proxy#put-a-cdn-or-another-proxy-in-front-of-caddy) shows how to put a CDN in front of `SITE_ADDRESS` later.
 :::
 
-The IPv6 records are optional. If you create the AAAA record for `mx.example.com`, the setup wizard later pre-fills the IPv6 address from it, and mailer adds it to the SPF record of `mx.example.com` and lists an AAAA and an IPv6 PTR record among the records it checks. Leave all IPv6 records out if your server has no IPv6 address or you are unsure.
+Note the addresses you used here: they go into `.env` as `MAIL_SERVER_IPV4` and, if you use IPv6, `MAIL_SERVER_IPV6` on [Docker Compose](/installation/docker-compose), and mailer builds the records of the sending domain from them.
+
+The IPv6 records are optional. If you create the AAAA record for `mx.example.com` and set `MAIL_SERVER_IPV6`, mailer adds the address to the SPF record of `mx.example.com` and lists an AAAA and an IPv6 PTR record among the records it checks. Leave all IPv6 records and `MAIL_SERVER_IPV6` out if your server has no IPv6 address or you are unsure.
 
 ## Set the reverse DNS
 

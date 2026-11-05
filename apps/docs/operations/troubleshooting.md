@@ -71,7 +71,7 @@ docker compose exec mail postqueue -f
 
 **Symptom.** After `docker compose up -d`, `backend` shows `Restarting` or `unhealthy`, and the site answers `502`.
 
-**Cause.** Usually a database migration failed. The backend applies pending migrations when it starts and does not start if one fails. Less often, a value in `.env` is missing or invalid; the backend checks every setting at start and names the key it refuses.
+**Cause.** Usually a database migration failed. The backend applies pending migrations when it starts and does not start if one fails. Less often, a value in `.env` is missing or invalid; the backend checks every setting at start and names the key it refuses. A release that adds a required key does this until you add it: the release that moved the server addresses into `.env` needs `MAIL_SERVER_IPV4` (and `MAIL_SERVER_IPV6` if you used IPv6), the addresses you entered on **Settings** before.
 
 **Check.**
 
