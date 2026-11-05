@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { Expose, Type } from 'class-transformer'
+import { Expose, plainToInstance, Type } from 'class-transformer'
 import { SendingDomain } from '../interfaces/settings.interface.js'
 import { DomainDnsRecordDto } from '../../domain/dtos/domain-dns-record.dto.js'
 
@@ -22,4 +22,11 @@ export class SendingDomainDto implements Omit<SendingDomain, 'records'> {
     @Type(() => DomainDnsRecordDto)
     @ApiProperty({ type: [DomainDnsRecordDto] })
     records: DomainDnsRecordDto[] = []
+
+    static fromSendingDomain(sendingDomain: SendingDomain): SendingDomainDto {
+        return plainToInstance(SendingDomainDto, sendingDomain, {
+            excludeExtraneousValues: true,
+            exposeDefaultValues: true,
+        })
+    }
 }

@@ -28,6 +28,7 @@ export function dnsRecord(overrides: Partial<DomainDnsRecordDto> = {}): DomainDn
         type: 'txt',
         use: 'spf',
         value: 'v=spf1 include:mail.acme-mailer.com ~all',
+        priority: null,
         ...overrides,
     }
 }

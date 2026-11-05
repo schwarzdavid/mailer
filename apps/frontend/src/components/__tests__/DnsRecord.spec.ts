@@ -13,6 +13,7 @@ const valid: DomainDnsRecordDto = {
     type: 'txt',
     use: 'dmarc',
     value: 'v=DMARC1; p=none;',
+    priority: null,
 }
 
 const missing: DomainDnsRecordDto = {
@@ -23,6 +24,7 @@ const missing: DomainDnsRecordDto = {
     type: 'txt',
     use: 'dkim',
     value: 'v=DKIM1; k=rsa; p=MIIB',
+    priority: null,
 }
 
 const different: DomainDnsRecordDto = {
@@ -33,9 +35,41 @@ const different: DomainDnsRecordDto = {
     type: 'txt',
     use: 'spf',
     value: 'v=spf1 include:mail.acme-mailer.com ~all',
+    priority: null,
+}
+
+const mx: DomainDnsRecordDto = {
+    current: null,
+    issue: 'missing',
+    host: 'mx.example.com',
+    status: 'invalid',
+    type: 'mx',
+    use: 'mx',
+    value: 'mx.example.com',
+    priority: 10,
 }
 
 describe('DnsRecord', () => {
+    it('offers the priority of an MX record as its own copy field', () => {
+        const wrapper = mountView(DnsRecord, { props: { record: mx } })
+
+        const terms = wrapper.findAll('dt').map((term) => term.text())
+        expect(terms).toEqual(['Host', 'Priority', 'Value'])
+        const copyLabels = wrapper.findAll('button[aria-label]').map((button) => button.attributes('aria-label'))
+        expect(copyLabels).toContain('Copy priority for MX')
+        expect(wrapper.findAll('.copy-field__value').map((field) => field.text())).toEqual([
+            'mx.example.com',
+            '10',
+            'mx.example.com',
+        ])
+    })
+
+    it('shows no priority for records without one', () => {
+        const wrapper = mountView(DnsRecord, { props: { record: valid } })
+
+        expect(wrapper.findAll('dt').map((term) => term.text())).toEqual(['Host', 'Value'])
+    })
+
     it('shows name, type, purpose and status', () => {
         const wrapper = mountView(DnsRecord, { props: { record: valid } })
 

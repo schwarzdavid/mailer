@@ -55,7 +55,7 @@ _The second step, **Publish the DNS records**, lists every record with a copy bu
 
 The backend created these records when it started: a DKIM key for `MAIL_HOSTNAME` and one record set built from `MAIL_HOSTNAME`, `MAIL_SERVER_IPV4` and, if set, `MAIL_SERVER_IPV6`. The card is titled with the name, for example `mx.example.com`, and the **A** record shows the IPv4 address.
 
-Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each, and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
+Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each (the **MX** record also has a **Priority** with its own copy button, because DNS providers ask for it in a separate field), and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
 
 ::: tip Wrong name or address?
 Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `docker compose up -d` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name as on [DNS records](/installation/dns), change `MAIL_HOSTNAME` in `.env`, run `docker compose up -d`, create the bounce mailbox for the new name as on [Docker Compose](/installation/docker-compose#create-the-bounce-mailbox), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
@@ -67,7 +67,7 @@ Create the records in your DNS zone. With the example values, the full set looks
 | -------------------- | ------------------------------ | ------ | ----------------------------------------------- | ----------------------- |
 | **A**                | `mx.example.com`               | `A`    | `203.0.113.10`                                  | DNS zone (done already) |
 | **AAAA**             | `mx.example.com`               | `AAAA` | `2001:db8::10`                                  | DNS zone (done already) |
-| **MX**               | `mx.example.com`               | `MX`   | `10 mx.example.com`                             | DNS zone                |
+| **MX**               | `mx.example.com`               | `MX`   | `mx.example.com`, priority `10`                 | DNS zone                |
 | **SPF**              | `mx.example.com`               | `TXT`  | `v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 -all` | DNS zone                |
 | **DKIM**             | `s1._domainkey.mx.example.com` | `TXT`  | `v=DKIM1; k=rsa; p=<public key>`                | DNS zone                |
 | **DMARC**            | `_dmarc.mx.example.com`        | `TXT`  | `v=DMARC1; p=none;`                             | DNS zone                |
@@ -87,7 +87,7 @@ _dmarc.mx.example.com.         300  IN  TXT  "v=DMARC1; p=none;"
 
 What each record does:
 
-- **MX** sends mail addressed to `mx.example.com`, such as bounce reports to `bounce@mx.example.com`, to your server. In a DNS provider's form, the priority is `10` and the mail server is `mx.example.com`.
+- **MX** sends mail addressed to `mx.example.com`, such as bounce reports to `bounce@mx.example.com`, to your server. The wizard shows the priority `10` and the mail server `mx.example.com` as separate fields, as DNS provider forms ask for them; in a zone file they form one value, `10 mx.example.com.`.
 - **SPF** says that only your server's addresses may send mail with an envelope sender at `mx.example.com`, and that receivers should reject anything else (`-all`).
 - **DKIM** publishes the public half of the key the backend signs mail with. `s1` is the selector, the name of the key. The value is generated for your installation: copy it from the wizard with the copy button, never from this page. It is about 400 characters long; most DNS providers accept it in one piece, while zone files split it into several quoted strings of at most 255 characters, which is fine, because mailer joins them when it checks.
 - **DMARC** with `p=none` only observes: receivers take no action on mail that fails SPF and DKIM, and because the record names no report address, they send no reports either. [Going live](/installation/going-live) explains when to tighten it.

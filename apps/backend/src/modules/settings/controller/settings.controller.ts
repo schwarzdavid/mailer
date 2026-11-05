@@ -19,13 +19,13 @@ export class SettingsController {
     async getSettings(): Promise<SettingsDto> {
         const sendingDomain = await this.settingsService.getSendingDomain()
 
-        return { sendingDomain }
+        return { sendingDomain: sendingDomain && SendingDomainDto.fromSendingDomain(sendingDomain) }
     }
 
     @RequireAbility({ action: 'update', subject: 'Settings' })
     @ResponseDto(SendingDomainDto)
     @Post('sending-domain/refresh')
-    refreshSendingDomain(): Promise<SendingDomainDto> {
-        return this.settingsService.refreshSendingDomain()
+    async refreshSendingDomain(): Promise<SendingDomainDto> {
+        return SendingDomainDto.fromSendingDomain(await this.settingsService.refreshSendingDomain())
     }
 }

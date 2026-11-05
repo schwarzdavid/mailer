@@ -23,7 +23,7 @@ The card is read-only for everyone. The hint below the values says where they co
 
 ### The DNS records card
 
-**DNS records** lists every record the sending domain needs, with **Host**, **Value**, copy buttons and a status, as in the first-run setup: **A**, **MX**, **SPF**, **PTR (IPv4)**, **DKIM** and **DMARC**, plus **AAAA** and **PTR (IPv6)** when an IPv6 address is set. That is 8 records, or 6 without IPv6. [First-run setup](/installation/first-run-setup#step-2-dns-records) lists every record with example values and explains each one. The PTR records are set at your hosting provider, all others in your DNS zone.
+**DNS records** lists every record the sending domain needs, with **Host**, **Value** (for **MX** also **Priority**), copy buttons and a status, as in the first-run setup: **A**, **MX**, **SPF**, **PTR (IPv4)**, **DKIM** and **DMARC**, plus **AAAA** and **PTR (IPv6)** when an IPv6 address is set. That is 8 records, or 6 without IPv6. [First-run setup](/installation/first-run-setup#step-2-dns-records) lists every record with example values and explains each one. The PTR records are set at your hosting provider, all others in your DNS zone.
 
 mailer checks the records every 15 minutes. **Check again** looks them up right away. When every record is valid, the card shows **All 8 records are valid** with **mx.example.com is fully set up for reliable delivery.** DKIM, A, AAAA, MX and PTR must match the value in the card exactly; SPF and DMARC are checked by content ([Publish the three records](/admin-guide/domains#publish-the-three-records)).
 
