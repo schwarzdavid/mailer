@@ -45,7 +45,7 @@ pnpm install
 
 ### 2. Configure the environment
 
-Copy the template to a root `.env`. The defaults already match the local Docker services.
+Copy the template to a root `.env`. It holds only the required keys and the values where local development differs from the backend's defaults (`apps/backend/src/config/env.schema.ts`); together they already match the local Docker services.
 
 ```bash
 cp .env.example .env
@@ -55,7 +55,7 @@ Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial v
 
 `DB_USERNAME`, `DB_PASSWORD` and `DB_DATABASE` are required and have no defaults, and `DB_PORT` defaults to 5432. `DB_POOL_MAX` (default 10) caps the connections the backend keeps open to Postgres, so keep it below the server's `max_connections` divided by the number of backend instances. `DB_SSL` (default `false`) makes the backend connect to Postgres over TLS, which the local Docker database does not need. `DB_SSL_REJECT_UNAUTHORIZED` (default `true`) only has an effect when `DB_SSL` is set.
 
-`REDIS_HOST` (default `127.0.0.1`) and `REDIS_PORT` (default 6379) locate Redis. The local Docker Redis needs no login or TLS, so `REDIS_USERNAME`, `REDIS_PASSWORD` and `REDIS_TLS_SERVERNAME` stay empty and `REDIS_TLS` stays `false`.
+`REDIS_HOST` (default `127.0.0.1`) and `REDIS_PORT` (default 6379) locate Redis. The local Docker Redis needs no login or TLS, so the template leaves out every `REDIS_*` key.
 
 `LOG_LEVEL` (default `info`; `.env.example` sets `debug` for local work) sets the backend's log level, see [Logging](https://schwarzdavid.github.io/mailer/configuration/logging).
 
@@ -64,7 +64,7 @@ Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial v
 ### 3. Start the infrastructure
 
 ```bash
-docker compose -f dev/docker-compose.yml up -d
+docker compose up -d
 ```
 
 | Service    | Purpose                            | Ports                                           |

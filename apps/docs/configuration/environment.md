@@ -7,7 +7,9 @@ This page lists every setting mailer reads from its environment: what it does, w
 All settings are plain `KEY=value` lines in one file named `.env`.
 
 - **Production (Docker Compose):** `.env` sits next to `compose.yml`, for example in `/opt/mailer/.env`. You create it by copying `deploy/.env.example`. Compose reads it for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on.
-- **Local development:** `.env` sits in the repository root. You create it by copying `.env.example`, whose values already match the Docker services that `dev/docker-compose.yml` starts.
+- **Local development:** `.env` sits in the repository root. You create it by copying `.env.example`, whose values already match the Docker services that the root `compose.yml` starts.
+
+Both templates hold only the required variables and the values that differ from the backend's defaults. Every other variable on this page can be added to `.env` when you need it.
 
 Every table has the same columns.
 
@@ -37,7 +39,7 @@ These variables are read by `compose.yml` itself, not by the backend. They exist
 
 ## Backend variables
 
-The tables below follow the groups of `.env.example`. Every one of these variables is read by the backend.
+The tables below group the variables by topic. Every one of these variables is read by the backend.
 
 ### General
 
@@ -221,7 +223,7 @@ When a domain is not ready:
 
 No mail is recorded on **Sent mail** while the gate refuses it. [Domains](/admin-guide/domains#sending-needs-valid-records) describes how to get a domain ready.
 
-Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why `.env.example` and the test stacks set it to `false`, while `deploy/.env.example` lists it as `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
+Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why `.env.example` and the test stacks set it to `false`, while `deploy/.env.example` leaves it out and so keeps the default `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
 
 ## LOG_LEVEL
 

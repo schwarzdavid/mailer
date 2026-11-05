@@ -268,10 +268,7 @@ describe('mail submission, relay and bounces', () => {
     })
 
     it('the DSN delivered on port 25 is ingested over IMAP into the bounce table', async () => {
-        const raw = await readFile(
-            fileURLToPath(new URL('../../dev/fixtures/dsn-permanent.eml', import.meta.url)),
-            'utf8',
-        )
+        const raw = await readFile(fileURLToPath(new URL('./fixtures/dsn-permanent.eml', import.meta.url)), 'utf8')
         await deliverDsn(SMTP_PORT, 'bounce@' + MAIL_HOSTNAME, raw)
         await expect
             .poll(async () => Number(await compose.psql('select count(*) from bounce')), {

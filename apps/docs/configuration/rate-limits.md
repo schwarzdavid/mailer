@@ -35,11 +35,11 @@ A few details the table leaves out:
 
 Only the send API and form limits are configurable. Each is a pair of a count (`…_LIMIT`) and a window in milliseconds (`…_TTL`); both must be positive whole numbers. The full descriptions are on [Environment variables](/configuration/environment#rate-limits).
 
-1. Edit the pair in `/opt/mailer/.env`; the template from the installation already contains all six keys. For example, to allow 300 sends per key and minute:
+1. Set the key in `/opt/mailer/.env`. The template from the installation leaves the six keys out, so the defaults apply until you add them. For example, to allow 300 sends per key and minute, replace the line or add it when it is not there yet:
 
     ```bash
     cd /opt/mailer
-    sed -i 's|^PUBLIC_API_RATE_LIMIT=.*|PUBLIC_API_RATE_LIMIT=300|' .env
+    grep -q '^PUBLIC_API_RATE_LIMIT=' .env && sed -i 's|^PUBLIC_API_RATE_LIMIT=.*|PUBLIC_API_RATE_LIMIT=300|' .env || echo 'PUBLIC_API_RATE_LIMIT=300' >> .env
     ```
 
 2. Recreate the backend so it reads the new value:

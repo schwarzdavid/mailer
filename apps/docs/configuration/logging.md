@@ -104,11 +104,11 @@ The `mail` service additionally writes its own log files into the volume `mail-l
 
 `LOG_LEVEL` picks the lowest severity that is written. The values, from quietest to most verbose, are `silent` (nothing), `fatal`, `error`, `warn`, `info` (the default), `debug` and `trace`. See [LOG_LEVEL](/configuration/environment#log-level) on the variable reference.
 
-The template `.env` from the installation already contains `LOG_LEVEL=info`. To log more while you look for a problem:
+The template `.env` from the installation leaves `LOG_LEVEL` out, so the backend logs at `info`. To log more while you look for a problem, set the key, or add it when it is not there yet:
 
 ```bash
 cd /opt/mailer
-sed -i 's|^LOG_LEVEL=.*|LOG_LEVEL=debug|' .env
+grep -q '^LOG_LEVEL=' .env && sed -i 's|^LOG_LEVEL=.*|LOG_LEVEL=debug|' .env || echo 'LOG_LEVEL=debug' >> .env
 docker compose up -d backend
 ```
 

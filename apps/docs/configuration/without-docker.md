@@ -93,7 +93,7 @@ IMAP_USER=bounce@mx.example.com
 IMAP_PASSWORD=the-mailbox-password
 ```
 
-Generate each of the two secrets with `openssl rand -base64 48`, and use two different values. Remove the line `SMTP_REQUIRE_TLS=false` that the template contains for local development, or set it to `true` as above.
+Generate each of the two secrets with `openssl rand -base64 48`, and use two different values. Remove the lines `SMTP_REQUIRE_TLS=false` and `SEND_REQUIRE_VALID_DNS=false` that the template contains for local development, or set both to `true`.
 
 The lines in detail:
 
@@ -247,7 +247,7 @@ cp -r apps/frontend/dist apps/backend/public
 systemctl start mailer
 ```
 
-Compare `.env.example` of the new release with your `.env` for new or renamed variables before you start.
+Compare `.env.example` of the new release with your `.env` for new required or renamed variables before you start. The template lists only required variables and development values; new optional settings are on [Environment variables](/configuration/environment).
 
 ## How you know it worked
 

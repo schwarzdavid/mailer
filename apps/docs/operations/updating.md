@@ -86,7 +86,7 @@ diff <(grep -o '^[A-Z_0-9]*=' .env | sort) <(grep -o '^[A-Z_0-9]*=' .env.example
 
 - No output: the template has no new keys.
 - A line starting with `>` is a key that is new in the release, for example `> NEW_SETTING=`. Add it to `.env` with a value; [Environment variables](/configuration/environment) describes every key.
-- A line starting with `<` is a key that your `.env` has and the template does not. That is normal for optional keys you added yourself, such as `DB_SSL` or `NODE_EXTRA_CA_CERTS`. If the release notes say a key was renamed, rename it in `.env`.
+- A line starting with `<` is a key that your `.env` has and the template does not. That is normal for optional keys you added yourself, such as `DB_SSL` or `NODE_EXTRA_CA_CERTS`, and for optional keys that older templates listed, such as `LOG_LEVEL` or the rate limits; they keep working. If the release notes say a key was renamed, rename it in `.env`.
 
 ## Pin the new version
 
