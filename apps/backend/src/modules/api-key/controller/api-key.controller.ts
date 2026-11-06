@@ -16,7 +16,7 @@ import { Principal } from '../../auth/decorators/Principal.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import type { AppAbility } from '../../permission/interfaces/app-ability.js'
 import type { UserWithRole } from '../../user/interfaces/user.interface.js'
-import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { ApiKeyService } from '../services/api-key.service.js'
 import { ApiKeyCreatedDto, ApiKeyDto } from '../dtos/api-key.dto.js'
 import { ApiKeyCreateDto } from '../dtos/api-key-create.dto.js'
@@ -38,7 +38,7 @@ export class ApiKeyController {
         return apiKeys.map((apiKey) => ApiKeyDto.fromApiKey(apiKey))
     }
 
-    @ResponseDto(ApiKeyCreatedDto)
+    @CreatedResponseDto(ApiKeyCreatedDto)
     @Post()
     async createApiKey(
         @Param('projectId', ParseIntPipe) projectId: number,

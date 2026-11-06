@@ -17,6 +17,7 @@ import { DomainCreateDto } from '../dtos/domain-create.dto.js'
 import { DomainDetailDto, DomainDto } from '../dtos/domain.dto.js'
 import { DomainService } from '../services/domain.service.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { DomainDnsDto } from '../dtos/domain-dns.dto.js'
 import { DomainDnsService } from '../services/domain-dns.service.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
@@ -32,7 +33,7 @@ export class DomainController {
     ) {}
 
     @RequireAbility({ action: 'create', subject: 'Domain' })
-    @ResponseDto(DomainDto)
+    @CreatedResponseDto(DomainDto)
     @Post()
     async createDomain(@Body() { fqdn }: DomainCreateDto): Promise<DomainDto> {
         const domain = await this.domainService.createDomain(fqdn)

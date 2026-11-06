@@ -4,6 +4,7 @@ import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../decorators/RequireAbility.js'
 import { CurrentAbility } from '../decorators/CurrentAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { RoleService } from '../services/role.service.js'
 import { RoleDto } from '../dtos/role.dto.js'
 import { RoleCreateDto, RoleUpdateDto } from '../dtos/role-create.dto.js'
@@ -30,7 +31,7 @@ export class RoleController {
     }
 
     @RequireAbility({ action: 'create', subject: 'Role' })
-    @ResponseDto(RoleDto)
+    @CreatedResponseDto(RoleDto)
     @Post()
     async createRole(@Body() body: RoleCreateDto, @CurrentAbility() ability: AppAbility): Promise<RoleDto> {
         return await this.roleService.createRole(

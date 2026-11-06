@@ -18,6 +18,7 @@ import { Principal } from '../../auth/decorators/Principal.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { ProjectService } from '../services/project.service.js'
 import { ProjectMemberService } from '../../permission/services/project-member.service.js'
 import { ProjectCreateDto, ProjectUpdateDto } from '../dtos/project-create.dto.js'
@@ -42,7 +43,7 @@ export class ProjectController {
     ) {}
 
     @RequireAbility({ action: 'create', subject: 'Project' })
-    @ResponseDto(ProjectDto)
+    @CreatedResponseDto(ProjectDto)
     @Post()
     async createProject(@Body() body: ProjectCreateDto, @Principal() principal: UserWithRole): Promise<ProjectDto> {
         const project = await this.projectService.createProject(body.name, principal)
