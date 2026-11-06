@@ -15,14 +15,14 @@ async function updateViolations(plain: object): Promise<string[]> {
 }
 
 describe('InboundFormCreateDto', () => {
-    const valid = { name: 'Contact', slug: 'contact-form-2', domainId: 3, projectId: 1 }
+    const valid = { name: 'Contact', domainId: 3, projectId: 1 }
 
     it('accepts a complete form', async () => {
         await expect(createViolations(valid)).resolves.toEqual([])
     })
 
     it('defaults the domain to null when omitted', async () => {
-        const withoutDomain = { name: valid.name, slug: valid.slug, projectId: valid.projectId }
+        const withoutDomain = { name: valid.name, projectId: valid.projectId }
 
         await expect(createViolations(withoutDomain)).resolves.toEqual([])
         expect(plainToInstance(InboundFormCreateDto, withoutDomain, { exposeDefaultValues: true }).domainId).toBeNull()
@@ -30,22 +30,6 @@ describe('InboundFormCreateDto', () => {
 
     it('accepts an explicit null domain', async () => {
         await expect(createViolations({ ...valid, domainId: null })).resolves.toEqual([])
-    })
-
-    it.each([
-        ['an uppercase slug', 'Contact'],
-        ['a slug with spaces', 'contact form'],
-        ['a slug with a leading hyphen', '-contact'],
-        ['a slug with a trailing hyphen', 'contact-'],
-        ['a slug with consecutive hyphens', 'contact--form'],
-        ['a slug with path characters', '../admin'],
-        ['an empty slug', ''],
-    ])('rejects %s', async (_, slug) => {
-        await expect(createViolations({ ...valid, slug })).resolves.toEqual(['slug'])
-    })
-
-    it('rejects a slug longer than 255 characters', async () => {
-        await expect(createViolations({ ...valid, slug: 'a'.repeat(256) })).resolves.toEqual(['slug'])
     })
 
     it('rejects an empty or overlong name', async () => {
@@ -71,10 +55,6 @@ describe('InboundFormUpdateDto', () => {
 
     it('accepts a partial patch', async () => {
         await expect(updateViolations({ isActive: false, domainId: null })).resolves.toEqual([])
-    })
-
-    it('applies the slug rules to a renamed slug', async () => {
-        await expect(updateViolations({ slug: 'Not A Slug' })).resolves.toEqual(['slug'])
     })
 
     it('rejects an empty name and a non-boolean active flag', async () => {

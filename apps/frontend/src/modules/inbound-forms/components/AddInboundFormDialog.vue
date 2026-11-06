@@ -17,19 +17,8 @@
             :error-messages="errors.name"
             aria-required="true"
         />
-        <VTextField
-            v-model="slug"
-            name="slug"
-            class="mono-field"
-            :label="requiredLabel(t('field.slug'))"
-            :prefix="SLUG_PREFIX"
-            :hint="t('module.inboundForms.add.slugHint')"
-            persistent-hint
-            :error-messages="errors.slug"
-            aria-required="true"
-            @update:model-value="slugTouched = true"
-        />
         <VSelect
+            v-if="!soleDomain"
             v-model="domainId"
             name="domainId"
             :label="t('module.inboundForms.field.senderDomain')"
@@ -45,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-    import { ref, watch } from 'vue'
+    import { computed, ref, watch } from 'vue'
     import { useForm } from 'vee-validate'
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
@@ -58,14 +47,13 @@
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { useProjectQuery } from '@/modules/projects/queries/useProjectQuery.ts'
     import { useInboundFormCreateMutation } from '@/modules/inbound-forms/mutations/useInboundFormCreateMutation.ts'
-    import { SLUG_PATTERN, SLUG_PREFIX, slugify } from '@/modules/inbound-forms/helpers/slug.ts'
+    import { soleProjectDomain } from '@/modules/inbound-forms/helpers/soleProjectDomain.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
 
     const props = defineProps<{ projectId: number }>()
     const model = defineModel<boolean>({ required: true })
 
-    const slugTouched = ref(false)
     const errorMessage = ref<string | null>(null)
     const { t } = useI18n()
     const requiredLabel = useRequiredLabel()
@@ -73,44 +61,28 @@
     const { data: project } = useQuery(useProjectQuery(() => props.projectId))
     const { mutateAsync, isPending } = useInboundFormCreateMutation()
     const router = useRouter()
+    const soleDomain = computed(() => soleProjectDomain(project.value))
 
     const { defineField, handleSubmit, errors, resetForm, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 name: z.string().trim().min(1).max(255),
-                slug: z
-                    .string()
-                    .min(1)
-                    .max(255)
-                    .regex(SLUG_PATTERN, { error: () => t('module.inboundForms.validation.slug') }),
                 domainId: z.number().nullable().optional(),
             }),
         ),
     })
 
     const [name] = defineField('name')
-    const [slug] = defineField('slug')
     const [domainId] = defineField('domainId')
 
     const changed = useFormChanged(values, () => meta.value.initialValues)
-
-    watch(name, (value) => {
-        if (!slugTouched.value) {
-            slug.value = slugify(value ?? '')
-        }
-    })
 
     watch(
         model,
         (open) => {
             if (open) {
                 errorMessage.value = null
-                slugTouched.value = false
-                resetForm({
-                    values: {
-                        domainId: project.value?.domains.length === 1 ? project.value.domains[0]!.domainId : null,
-                    },
-                })
+                resetForm({ values: { domainId: null } })
             }
         },
         { immediate: true },
@@ -121,8 +93,7 @@
         try {
             const { inboundFormId } = await mutateAsync({
                 name: values.name,
-                slug: values.slug,
-                domainId: values.domainId ?? null,
+                domainId: soleDomain.value?.domainId ?? values.domainId ?? null,
                 projectId: props.projectId,
             })
             model.value = false

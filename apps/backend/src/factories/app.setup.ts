@@ -20,7 +20,7 @@ import { MAX_BODY_LENGTH } from '../modules/api-key/dtos/public-send.dto.js'
 export const API_PREFIX = 'api'
 
 const PUBLIC_SEND_PATH = `/${API_PREFIX}/v1/send`
-const PUBLIC_FORM_PATH_PREFIX = `/${API_PREFIX}/public/form/`
+const PUBLIC_FORM_PATH_PREFIX = `/${API_PREFIX}/v1/forms/`
 const PUBLIC_SEND_BODY_FIELDS = 2
 const MAX_UTF8_BYTES_PER_CHAR = 4
 const JSON_ENVELOPE_BYTES = 64 * 1024

@@ -21,5 +21,5 @@ export function formThrottleKind(context: ExecutionContext): FormThrottleKind | 
 }
 
 export function formThrottleTracker(request: FormThrottleRequest): string {
-    return `form:${request.params?.slug ?? 'unknown'}:${request.ip ?? 'unknown'}`
+    return `form:${request.params?.formKey ?? 'unknown'}:${request.ip ?? 'unknown'}`
 }

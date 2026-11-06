@@ -44,6 +44,8 @@ This page explains, in a sentence or two each, the terms used across the documen
 
 **Delivery.** One e-mail for one receiver of one form submission. It is `pending` until mailer's mail server accepts it (`sent`) or mailer gives up (`failed`). See [Deliveries](/admin-guide/inbound-forms/deliveries).
 
+**Form key.** The random value at the end of a form's endpoint URL, for example `Xk3_a-9QpLm2Zr7Tb1Wv0c` in `/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c`. mailer sets it when the form is created; it cannot be changed. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
+
 **Honeypot.** A form input that people never see and leave empty, while bots fill it in; mailer treats a filled-in honeypot as spam. See [Honeypot](/admin-guide/inbound-forms/security#honeypot).
 
 **Inbound form.** mailer's side of a contact form on a website: a public endpoint the website posts to, with fields, security checks and receivers. See [Create a form](/admin-guide/inbound-forms/create).
@@ -59,8 +61,6 @@ This page explains, in a sentence or two each, the terms used across the documen
 **Send API.** The endpoint `POST /api/v1/send`, through which your own server sends one mail per request with an API key. See [Send API](/admin-guide/send-api).
 
 **Setup token.** A one-time value the backend writes to its log while no user exists; the setup wizard asks for it before it creates the first account. See [Read the setup token](/installation/first-run-setup#read-the-setup-token).
-
-**Slug.** The short name at the end of a form's endpoint URL, for example `contact` in `/api/public/form/contact`. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
 
 **Template.** The subject and HTML body of a receiver's e-mail, written in Handlebars, with placeholders for the submitted fields. See [Write the template](/admin-guide/inbound-forms/receivers-and-templates#write-the-template).
 

@@ -33,7 +33,7 @@ function mockApis(overrides: { projects?: boolean; forms?: ReturnType<typeof for
             formListItem({
                 inboundFormId: 10,
                 name: 'Newsletter',
-                slug: 'newsletter',
+                formKey: 'Nw5_b-2RqKn8Ys4Uc6Xz1d',
                 isActive: false,
                 receivers: [
                     receiver({ inboundFormReceiverId: 2, emailReceiver: 'crm@acme.com', publishedVersion: null }),
@@ -97,7 +97,7 @@ describe('DashboardView', () => {
         const wrapper = mountInApp(DashboardView)
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('Every form you can open, by project.'))
-        expect(wrapper.text()).toContain('contact-request')
+        expect(wrapper.text()).toContain('Contact request')
         expect(wrapper.text()).toContain('Acme Website')
     })
 
@@ -105,7 +105,7 @@ describe('DashboardView', () => {
         mockApis({ forms: [formListItem({ allowedHostnames: [] })] })
         const wrapper = mountInApp(DashboardView)
 
-        await vi.waitFor(() => expect(wrapper.text()).toContain('contact-request'))
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
         expect(wrapper.text()).toContain('Any website')
     })
 
@@ -113,7 +113,7 @@ describe('DashboardView', () => {
         mockApis({ forms: [formListItem({ allowedHostnames: ['kunde.at'] })] })
         const wrapper = mountInApp(DashboardView)
 
-        await vi.waitFor(() => expect(wrapper.text()).toContain('contact-request'))
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
         expect(wrapper.text()).not.toContain('Any website')
     })
 

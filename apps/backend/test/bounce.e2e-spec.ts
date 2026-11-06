@@ -82,7 +82,7 @@ describe('Bounce (e2e)', () => {
     let inboundFormId: number
 
     const env = inject('e2eEnv')
-    const slug = 'e2e-bounce-contact'
+    let formKey = ''
     const permanentAddress = 'gone@bounce-e2e.test'
     const transientAddress = 'busy@bounce-e2e.test'
     const password = 'correct-horse-battery-staple'
@@ -138,7 +138,7 @@ describe('Bounce (e2e)', () => {
 
     async function submitForm(): Promise<void> {
         await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({ data: { message: 'Hello there' } })
             .expect(201)
     }
@@ -208,9 +208,10 @@ describe('Bounce (e2e)', () => {
         const form = await http()
             .post('/api/inbound-form')
             .set('Authorization', bearer(superToken))
-            .send({ name: 'E2E Bounce Contact', slug, domainId, projectId })
+            .send({ name: 'E2E Bounce Contact', domainId, projectId })
             .expect(201)
         inboundFormId = (form.body as { inboundFormId: number }).inboundFormId
+        formKey = (form.body as { formKey: string }).formKey
 
         await http()
             .put(`/api/inbound-form/${inboundFormId}/fields`)

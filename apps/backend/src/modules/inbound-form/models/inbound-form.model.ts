@@ -21,6 +21,7 @@ import { InboundFormReceiverModel } from './inbound-form-receiver.model.js'
 import { InboundFormSecurityModel } from './inbound-form-security.model.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import type { Relation } from '../../../types/relation.js'
+import { FORM_KEY_LENGTH } from '../helpers/form-key.js'
 import { ALLOWED_HOSTNAMES_COMMENT, MAX_HOSTNAME_LENGTH } from '../helpers/hostname.js'
 
 @Table({
@@ -50,8 +51,8 @@ export class InboundFormModel extends Model<InboundForm, InboundFormCreate> impl
 
     @Unique
     @AllowNull(false)
-    @Column(DataType.STRING(255))
-    declare slug: string
+    @Column(DataType.STRING(FORM_KEY_LENGTH))
+    declare formKey: string
 
     @Default(true)
     @AllowNull(false)

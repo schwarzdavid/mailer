@@ -96,7 +96,7 @@ const formFull: InboundFormFull = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: 'contact-form-key-00001',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date(),
@@ -210,11 +210,13 @@ describe('InboundFormSubmissionService', () => {
         vi.restoreAllMocks()
     })
 
-    it('throws NotFoundException for an unknown or inactive slug', async () => {
+    it('throws NotFoundException for an unknown or inactive form key', async () => {
         mockForm(null)
 
         await expect(service.submitForm('nope', submission, {}, {}, '')).rejects.toThrow(NotFoundException)
-        expect(formFindOne).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: 'nope', isActive: true } }))
+        expect(formFindOne).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { formKey: 'nope', isActive: true } }),
+        )
     })
 
     it('requires a live project on the form lookup', async () => {
@@ -225,7 +227,7 @@ describe('InboundFormSubmissionService', () => {
         )
 
         expect(formFindOne).toHaveBeenCalledWith({
-            where: { slug: 'contact', isActive: true },
+            where: { formKey: 'contact', isActive: true },
             include: [
                 InboundFormFieldModel,
                 InboundFormSecurityModel,
@@ -586,12 +588,12 @@ describe('InboundFormSubmissionService', () => {
                 await expect(service.issueToken('contact', kundeOrigin, '203.0.113.7')).resolves.toEqual(issued)
                 expect(issue).toHaveBeenCalledWith(1, '203.0.113.7', timedTokenConfig)
                 expect(formFindOne).toHaveBeenCalledWith({
-                    where: { slug: 'contact', isActive: true },
+                    where: { formKey: 'contact', isActive: true },
                     include: [InboundFormSecurityModel, { model: ProjectModel, required: true }],
                 })
             })
 
-            it('rejects an unknown or inactive slug', async () => {
+            it('rejects an unknown or inactive form key', async () => {
                 mockForm(null)
 
                 await expect(service.issueToken('nope', kundeOrigin, '203.0.113.7')).rejects.toThrow(

@@ -1,8 +1,16 @@
 <template>
     <SectionCard :title="title ?? t('dns.title')" :description="description ?? t('dns.instruction')" flush>
-        <template v-if="canCheck" #actions>
+        <template #actions>
+            <span v-if="checkedAt" class="dns-records__checked text-label-medium">
+                <i18n-t keypath="dns.checkedAt" tag="span" scope="global">
+                    <template #time><RelativeTime :value="checkedAt" /></template>
+                </i18n-t>
+            </span>
+            <span v-else class="dns-records__checked text-label-medium">{{ t('dns.neverChecked') }}</span>
             <VBtn
+                v-if="canCheck"
                 size="small"
+                class="ms-1"
                 :prepend-icon="mdiRefresh"
                 :text="t('dns.checkAgain')"
                 :loading="checking"
@@ -16,12 +24,6 @@
                 <span class="dns-records__count">{{
                     t('dns.summary', { valid: validCount, total: records.length })
                 }}</span>
-                <span v-if="checkedAt" class="dns-records__checked">
-                    <i18n-t keypath="dns.checkedAt" tag="span">
-                        <template #time><RelativeTime :value="checkedAt" /></template>
-                    </i18n-t>
-                </span>
-                <span v-else class="dns-records__checked">{{ t('dns.neverChecked') }}</span>
             </div>
         </div>
         <DnsRecord

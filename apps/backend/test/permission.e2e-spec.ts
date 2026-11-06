@@ -162,13 +162,13 @@ describe('Permissions (e2e)', () => {
         const visibleForm = await http()
             .post('/api/inbound-form')
             .set('Authorization', asSuper())
-            .send({ name: 'Perm Visible', slug: 'perm-visible-form', domainId: null, projectId })
+            .send({ name: 'Perm Visible', domainId: null, projectId })
             .expect(201)
         visibleFormId = (visibleForm.body as { inboundFormId: number }).inboundFormId
         const hiddenForm = await http()
             .post('/api/inbound-form')
             .set('Authorization', asSuper())
-            .send({ name: 'Perm Hidden', slug: 'perm-hidden-form', domainId: null, projectId: hiddenProjectId })
+            .send({ name: 'Perm Hidden', domainId: null, projectId: hiddenProjectId })
             .expect(201)
         hiddenFormId = (hiddenForm.body as { inboundFormId: number }).inboundFormId
 

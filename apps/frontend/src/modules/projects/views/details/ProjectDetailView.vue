@@ -41,11 +41,11 @@
             :title="t('module.projects.details.readOnlyAlert.title')"
             :text="t('module.projects.details.readOnlyAlert.text')"
         />
+        <ProjectGeneralCard :project="project" :can-update="canUpdate" />
         <ProjectFormsCard :project="project" :can-update="canManageForms" />
         <ProjectDomainsCard v-if="canReadDomains" :project="project" :can-update="canUpdate" />
-        <ProjectMembersCard v-if="canManageMembers" :project="project" />
         <ProjectApiKeysCard :project="project" :can-update="canManageApiKeys" />
-        <ProjectGeneralCard :project="project" :can-update="canUpdate" />
+        <ProjectMembersCard v-if="canManageMembers" :project="project" />
         <ProjectDangerZone v-if="canDelete" :project="project" :form-count="forms?.length ?? 0" />
     </div>
 </template>

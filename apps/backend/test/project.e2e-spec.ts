@@ -41,7 +41,7 @@ describe('Project (e2e)', () => {
     let otherProjectId: number
     let domainId: number
     let inboundFormId: number
-    const slug = 'e2e-project-contact'
+    let formKey = ''
 
     const credentials: Credentials = {
         email: 'project.user@example.com',
@@ -144,16 +144,17 @@ describe('Project (e2e)', () => {
         const blockedResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', auth())
-            .send({ name: 'Blocked', slug: 'e2e-project-blocked', domainId, projectId: otherProjectId })
+            .send({ name: 'Blocked', domainId, projectId: otherProjectId })
 
         expect(blockedResponse.status).toBe(400)
 
         const formResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', auth())
-            .send({ name: 'Project Contact', slug, domainId, projectId })
+            .send({ name: 'Project Contact', domainId, projectId })
             .expect(201)
         inboundFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+        formKey = (formResponse.body as { formKey: string }).formKey
     })
 
     it('reports member counts and domain health in the project list', async () => {
@@ -244,7 +245,7 @@ describe('Project (e2e)', () => {
     })
 
     it('soft deletes the project and hides its forms publicly', async () => {
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
 
         await http().delete(`/api/project/${projectId}`).set('Authorization', auth()).expect(200)
 
@@ -256,7 +257,7 @@ describe('Project (e2e)', () => {
             expect.objectContaining({ projectId, name: 'E2E Project', purgeAt: expect.any(String) as string }),
         ])
 
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(404)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(404)
 
         expect((await listForms()).map((form) => form.inboundFormId)).not.toContain(inboundFormId)
         const scoped = await http()
@@ -281,7 +282,7 @@ describe('Project (e2e)', () => {
 
         expect(restoreResponse.status).toBe(201)
 
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
         expect((await listForms()).map((form) => form.inboundFormId)).toContain(inboundFormId)
     })
 

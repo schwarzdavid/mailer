@@ -51,7 +51,7 @@
     const { mutateAsync, isPending } = useInboundFormUpdateMutation()
     const isActive = ref(props.form.isActive)
 
-    const endpointUrl = computed(() => formEndpointUrl(props.form.slug))
+    const endpointUrl = computed(() => formEndpointUrl(props.form.formKey))
     const example = computed(() => exampleRequest(endpointUrl.value, props.form.fields))
 
     watch(

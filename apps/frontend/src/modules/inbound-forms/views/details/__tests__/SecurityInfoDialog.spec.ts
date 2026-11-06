@@ -15,7 +15,7 @@ function scheme(overrides: Partial<InboundFormSecurityDto>): InboundFormSecurity
 }
 
 async function openInfo(security: InboundFormSecurityDto) {
-    mountDialog(SecurityInfoDialog, { scheme: security, form: formDetail({ slug: 'kontakt' }) })
+    mountDialog(SecurityInfoDialog, { scheme: security, form: formDetail({ formKey: 'Kt7_c-4SrLp9Zt5Vd2Ya3e' }) })
     await vi.waitFor(() => expect(overlayText()).toContain('integration'))
 }
 
@@ -43,11 +43,11 @@ describe('SecurityInfoDialog', () => {
         expect(overlayText()).toContain("'x-captcha': token")
     })
 
-    it('shows the client script and the token call for the form slug', async () => {
+    it('shows the client script and the token call for the form key', async () => {
         await openInfo(scheme({ type: 'timed-token', location: 'query', key: 'formToken' }))
 
-        expect(overlayText()).toContain('/api/public/form/client.js')
-        expect(overlayText()).toContain("InboundForm.getToken('kontakt')")
+        expect(overlayText()).toContain('/api/v1/forms/client.js')
+        expect(overlayText()).toContain("InboundForm.getToken('Kt7_c-4SrLp9Zt5Vd2Ya3e')")
         expect(overlayText()).toContain('?formToken=${encodeURIComponent(token)}')
     })
 })

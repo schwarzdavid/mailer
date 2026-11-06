@@ -18,13 +18,13 @@ function contextFor(handler: () => void): ExecutionContext {
 }
 
 describe('formThrottleTracker', () => {
-    it('keys the budget by slug and ip', () => {
-        expect(formThrottleTracker({ ip: '1.2.3.4', params: { slug: 'kontakt' } })).toBe('form:kontakt:1.2.3.4')
+    it('keys the budget by form key and ip', () => {
+        expect(formThrottleTracker({ ip: '1.2.3.4', params: { formKey: 'kontakt' } })).toBe('form:kontakt:1.2.3.4')
     })
 
-    it('separates slugs for the same ip', () => {
-        const first = formThrottleTracker({ ip: '1.2.3.4', params: { slug: 'a' } })
-        const second = formThrottleTracker({ ip: '1.2.3.4', params: { slug: 'b' } })
+    it('separates form keys for the same ip', () => {
+        const first = formThrottleTracker({ ip: '1.2.3.4', params: { formKey: 'a' } })
+        const second = formThrottleTracker({ ip: '1.2.3.4', params: { formKey: 'b' } })
 
         expect(first).not.toBe(second)
     })

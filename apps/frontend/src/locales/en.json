@@ -56,7 +56,6 @@
         "domain": "Domain name",
         "name": "Name",
         "project": "Project",
-        "slug": "Slug",
         "firstName": "First name",
         "lastName": "Last name",
         "role": "Role",
@@ -761,7 +760,6 @@
                 "senderDomain": "Sender domain"
             },
             "validation": {
-                "slug": "Use lowercase letters, numbers and single hyphens, like contact-request.",
                 "key": "Use letters, numbers, hyphens and underscores only.",
                 "keyTaken": "Another field already uses this key.",
                 "pattern": "This isn't a valid regular expression.",
@@ -782,7 +780,6 @@
                 "title": "New inbound form",
                 "intro": "Creates a public endpoint your website's form can post to. Fields and receivers come next.",
                 "namePlaceholder": "e.g. Contact request",
-                "slugHint": "Generated from the name until you edit it.",
                 "domainHint": "Only domains assigned to {project}.",
                 "submit": "Create form",
                 "success": "Form created",
@@ -807,7 +804,6 @@
                 },
                 "general": {
                     "title": "General",
-                    "slugHint": "Changing it changes the endpoint URL.",
                     "saved": "Form saved"
                 },
                 "fields": {

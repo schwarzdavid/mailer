@@ -9,7 +9,7 @@ const form: InboundFormListDto = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: 'Xk3_a-9QpLm2Zr7Tb1Wv0c',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

@@ -25,7 +25,7 @@ const form: InboundForm = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: 'contact-form-key-00001',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date(),

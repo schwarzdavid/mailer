@@ -24,7 +24,6 @@ export const serverIpv4 = '203.0.113.10'
 export const senderDomain = 'forms.acme-e2e.com'
 export const projectName = 'Acme Website'
 export const formName = 'Contact Request'
-export const formSlug = 'contact-request'
 export const receiverAddress = 'inbox@acme-e2e.com'
 
 export function requireEnv(key: 'E2E_API_URL' | 'E2E_MAILHOG_URL' | 'E2E_SETUP_TOKEN'): string {

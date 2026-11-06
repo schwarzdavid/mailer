@@ -18,7 +18,7 @@ describe('InboundForm (e2e)', () => {
     let inboundFormReceiverId: number
     let domainId: number
     let projectId: number
-    const slug = 'e2e-contact'
+    let formKey = ''
     const mailhogUrl = inject('e2eEnv').MAILHOG_URL
 
     const credentials: Credentials = {
@@ -61,9 +61,10 @@ describe('InboundForm (e2e)', () => {
         const formResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', `Bearer ${token}`)
-            .send({ name: 'E2E Contact', slug, domainId, projectId })
+            .send({ name: 'E2E Contact', domainId, projectId })
             .expect(201)
         inboundFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+        formKey = (formResponse.body as { formKey: string }).formKey
 
         await http()
             .put(`/api/inbound-form/${inboundFormId}/fields`)
@@ -115,7 +116,7 @@ describe('InboundForm (e2e)', () => {
 
     it('accepts a public submission, stores it and delivers a dkim-signed mail', async () => {
         const response = await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({
                 security: { website: null },
                 data: { firstName: 'Max', email: 'max@example.com' },
@@ -155,7 +156,7 @@ describe('InboundForm (e2e)', () => {
         const messagesBefore = (await fetchMessages()).total
 
         await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({
                 security: { website: 'http://spam.example' },
                 data: { firstName: 'Bot', email: 'bot@example.com' },
@@ -174,14 +175,14 @@ describe('InboundForm (e2e)', () => {
         expect((await fetchMessages()).total).toBe(messagesBefore)
     })
 
-    it('rejects an unknown slug with 404', async () => {
-        const response = await http().post('/api/public/form/does-not-exist').send({ data: {} })
+    it('rejects an unknown form key with 404', async () => {
+        const response = await http().post('/api/v1/forms/does-not-exist').send({ data: {} })
         expect(response.status).toBe(404)
     })
 
     it('rejects invalid data with 400', async () => {
         const response = await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({ security: { website: null }, data: { firstName: 'Max', email: 'broken' } })
         expect(response.status).toBe(400)
     })
@@ -190,7 +191,7 @@ describe('InboundForm (e2e)', () => {
         const formResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', `Bearer ${token}`)
-            .send({ name: 'E2E Ordering', slug: 'e2e-ordering', domainId, projectId })
+            .send({ name: 'E2E Ordering', domainId, projectId })
             .expect(201)
         const orderingFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
         const field = (key: string) => ({ key, label: key, type: 'text' })
@@ -234,7 +235,7 @@ describe('InboundForm (e2e)', () => {
 
     it('renders the mail subject without html escaping', async () => {
         await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({
                 security: { website: null },
                 data: { firstName: "O'Brien & Co", email: 'obrien@example.com' },
@@ -257,7 +258,7 @@ describe('InboundForm (e2e)', () => {
     describe('allowed hostnames', () => {
         const submit = () =>
             http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({ security: { website: null }, data: { firstName: 'Max', email: 'max@example.com' } })
 
         const setHostnames = async (allowedHostnames: string[]) => {
@@ -298,7 +299,7 @@ describe('InboundForm (e2e)', () => {
     })
 
     describe('timed token', () => {
-        const timedSlug = 'e2e-timed-token'
+        let timedFormKey = ''
         const origin = 'https://kunde.at'
         const validData = { firstName: 'Max', email: 'max@example.com' }
 
@@ -309,7 +310,7 @@ describe('InboundForm (e2e)', () => {
             waitMs: number
         }
 
-        const requestToken = () => http().post(`/api/public/form/${timedSlug}/token`).set('Origin', origin)
+        const requestToken = () => http().post(`/api/v1/forms/${timedFormKey}/token`).set('Origin', origin)
 
         const fetchToken = async (): Promise<IssuedToken> => {
             const response = await requestToken().expect(201)
@@ -325,7 +326,7 @@ describe('InboundForm (e2e)', () => {
         }
 
         const submit = (formToken: string, data: Record<string, unknown>) =>
-            http().post(`/api/public/form/${timedSlug}`).set('Origin', origin).send({ security: { formToken }, data })
+            http().post(`/api/v1/forms/${timedFormKey}`).set('Origin', origin).send({ security: { formToken }, data })
 
         beforeAll(async () => {
             await resetThrottleCounters()
@@ -333,9 +334,10 @@ describe('InboundForm (e2e)', () => {
             const formResponse = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', `Bearer ${token}`)
-                .send({ name: 'E2E Timed Token', slug: timedSlug, domainId, projectId })
+                .send({ name: 'E2E Timed Token', domainId, projectId })
                 .expect(201)
             const timedFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+            timedFormKey = (formResponse.body as { formKey: string }).formKey
 
             await http()
                 .patch(`/api/inbound-form/${timedFormId}`)
@@ -381,12 +383,12 @@ describe('InboundForm (e2e)', () => {
         })
 
         it('refuses a token to a foreign origin', async () => {
-            const response = await http().post(`/api/public/form/${timedSlug}/token`).set('Origin', 'https://evil.at')
+            const response = await http().post(`/api/v1/forms/${timedFormKey}/token`).set('Origin', 'https://evil.at')
             expect(response.status).toBe(403)
         })
 
         it('refuses a token for a form without the timed token scheme', async () => {
-            const response = await http().post(`/api/public/form/${slug}/token`).set('Origin', origin)
+            const response = await http().post(`/api/v1/forms/${formKey}/token`).set('Origin', origin)
             expect(response.status).toBe(404)
         })
 
@@ -424,7 +426,7 @@ describe('InboundForm (e2e)', () => {
         })
 
         it('serves the client script', async () => {
-            const response = await http().get('/api/public/form/client.js').buffer(true).expect(200)
+            const response = await http().get('/api/v1/forms/client.js').buffer(true).expect(200)
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')

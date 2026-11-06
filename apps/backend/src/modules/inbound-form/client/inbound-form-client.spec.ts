@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { installInboundFormClient } from './inbound-form-client.js'
 
 interface InboundFormGlobal {
-    getToken(slug: string): Promise<string>
+    getToken(formKey: string): Promise<string>
 }
 
 interface ClientTarget {
@@ -14,8 +14,8 @@ interface ClientTarget {
 
 type Installer = (target: ClientTarget, scriptSrc: string | null | undefined) => void
 
-const scriptSrc = 'https://api.example.com/api/public/form/client.js'
-const tokenUrl = 'https://api.example.com/api/public/form/kontakt/token'
+const scriptSrc = 'https://api.example.com/api/v1/forms/client.js'
+const tokenUrl = 'https://api.example.com/api/v1/forms/kontakt/token'
 
 function tokenResponse(token: string, waitMs: number): Response {
     return new Response(JSON.stringify({ token, notBefore: '', expiresAt: '', waitMs }), {
@@ -155,7 +155,7 @@ describe.each<[string, () => Installer]>([
         expect(fetchMock).toHaveBeenCalledWith(tokenUrl, expect.anything())
     })
 
-    it('encodes the slug in the token url', async () => {
+    it('encodes the form key in the token url', async () => {
         fetchMock.mockResolvedValueOnce(tokenResponse('t1', 0))
         const client = install()
 
@@ -163,6 +163,6 @@ describe.each<[string, () => Installer]>([
         await vi.runAllTimersAsync()
 
         await expect(token).resolves.toBe('t1')
-        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/api/public/form/a%2Fb/token', expect.anything())
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/api/v1/forms/a%2Fb/token', expect.anything())
     })
 })

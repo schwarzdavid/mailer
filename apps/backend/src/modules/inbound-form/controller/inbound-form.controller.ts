@@ -49,7 +49,6 @@ export class InboundFormController {
         const form = await this.inboundFormService.createForm(
             {
                 name: body.name,
-                slug: body.slug,
                 domainId: body.domainId,
                 projectId: body.projectId,
             },

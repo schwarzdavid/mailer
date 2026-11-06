@@ -31,7 +31,6 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
         password: 'correct-horse-battery-staple',
     }
     const sendFrom = 'news@send.gate-example.com'
-    const formSlug = 'send-gate-contact'
 
     const http = () => request(app.getHttpServer())
     const asOwner = () => `Bearer ${token}`
@@ -56,11 +55,11 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
         return domainId
     }
 
-    async function createPublishedForm(domainId: number): Promise<number> {
+    async function createPublishedForm(domainId: number): Promise<string> {
         const form = await http()
             .post('/api/inbound-form')
             .set('Authorization', asOwner())
-            .send({ name: 'Send Gate Contact', slug: formSlug, domainId, projectId })
+            .send({ name: 'Send Gate Contact', domainId, projectId })
             .expect(201)
         const inboundFormId = (form.body as { inboundFormId: number }).inboundFormId
         const receiver = await http()
@@ -75,7 +74,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
             .send({ subject: 'Gate submission', template: '<p>Someone wrote in.</p>' })
             .expect(200)
         await http().post(`${templatePath}/publish`).set('Authorization', asOwner()).expect(201)
-        return inboundFormId
+        return (form.body as { formKey: string }).formKey
     }
 
     beforeAll(async () => {
@@ -148,14 +147,14 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
     })
 
     it('keeps a form delivery pending until the domain records are valid, then sends it', async () => {
-        await createPublishedForm(formDomainId)
-        await http().post(`/api/public/form/${formSlug}`).send({ data: {} }).expect(201)
+        const formKey = await createPublishedForm(formDomainId)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
 
         const submissionModel = app.get<typeof InboundFormSubmissionModel>(getModelToken(InboundFormSubmissionModel))
         const deliveryModel = app.get<typeof InboundFormDeliveryModel>(getModelToken(InboundFormDeliveryModel))
         const submission = await submissionModel.findOne({
             where: { status: 'accepted' },
-            include: [{ association: 'inboundForm', where: { slug: formSlug } }],
+            include: [{ association: 'inboundForm', where: { formKey } }],
             rejectOnEmpty: true,
         })
         const delivery = await deliveryModel.findOne({

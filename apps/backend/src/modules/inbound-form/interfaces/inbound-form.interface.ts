@@ -7,7 +7,7 @@ export interface InboundForm {
     projectId: number
     domainId: number | null
     name: string
-    slug: string
+    formKey: string
     isActive: boolean
     allowedHostnames: string[]
     createdAt: Date

@@ -27,9 +27,9 @@ describe('Rate limiting (e2e)', () => {
         await appB.close()
     })
 
-    function submitForm(app: INestApplication<App>, forwardedFor: string, slug = 'rate-limit-unknown-form') {
+    function submitForm(app: INestApplication<App>, forwardedFor: string, formKey = 'rate-limit-unknown-form') {
         return request(app.getHttpServer())
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .set('X-Forwarded-For', forwardedFor)
             .send({ data: {} })
     }
@@ -80,16 +80,16 @@ describe('Rate limiting (e2e)', () => {
         expect(response.headers['x-ratelimit-remaining']).toBe(String(LOGIN_THROTTLE_LIMIT - 1))
     })
 
-    describe('inbound form budgets per ip and slug', () => {
+    describe('inbound form budgets per ip and form key', () => {
         beforeEach(async () => {
             await resetThrottleCounters()
         })
 
-        function requestToken(slug: string) {
-            return request(appA.getHttpServer()).post(`/api/public/form/${slug}/token`)
+        function requestToken(formKey: string) {
+            return request(appA.getHttpServer()).post(`/api/v1/forms/${formKey}/token`)
         }
 
-        it('limits token requests per slug and keeps other slugs independent', async () => {
+        it('limits token requests per form key and keeps other form keys independent', async () => {
             for (let attempt = 0; attempt < FORM_BUDGET; attempt++) {
                 const response = await requestToken('rate-limit-token-a')
                 expect(response.status).not.toBe(429)
@@ -100,7 +100,7 @@ describe('Rate limiting (e2e)', () => {
             expect(other.status).not.toBe(429)
         })
 
-        it('limits submissions per slug and keeps other slugs independent', async () => {
+        it('limits submissions per form key and keeps other form keys independent', async () => {
             for (let attempt = 0; attempt < FORM_BUDGET; attempt++) {
                 const response = await submitForm(appA, '198.51.100.1', 'rate-limit-submit-a')
                 expect(response.status).not.toBe(429)
@@ -113,7 +113,7 @@ describe('Rate limiting (e2e)', () => {
 
         it('does not throttle the client script with the form budgets', async () => {
             for (let attempt = 0; attempt < FORM_BUDGET + 1; attempt++) {
-                await request(appA.getHttpServer()).get('/api/public/form/client.js').expect(200)
+                await request(appA.getHttpServer()).get('/api/v1/forms/client.js').expect(200)
             }
         })
     })
@@ -165,7 +165,7 @@ describe('Rate limiting when Redis is unavailable (e2e)', () => {
     })
 
     it('keeps public form routes available', async () => {
-        const response = await http().post('/api/public/form/unknown-slug').send({ data: {} })
+        const response = await http().post('/api/v1/forms/unknown-form-key').send({ data: {} })
 
         expect(response.status).toBe(404)
     })

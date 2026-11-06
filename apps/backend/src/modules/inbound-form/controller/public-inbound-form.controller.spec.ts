@@ -88,7 +88,7 @@ describe('PublicInboundFormController', () => {
         })
 
         it('serves the client script', async () => {
-            const response = await request(app.getHttpServer()).get('/public/form/client.js').buffer(true).expect(200)
+            const response = await request(app.getHttpServer()).get('/v1/forms/client.js').buffer(true).expect(200)
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')

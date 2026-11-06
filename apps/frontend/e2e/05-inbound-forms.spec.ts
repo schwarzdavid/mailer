@@ -4,7 +4,6 @@ import {
     card,
     dialog,
     formName,
-    formSlug,
     input,
     login,
     projectName,
@@ -62,16 +61,17 @@ test('an administrator creates an inbound form with fields and a receiver', asyn
     const newForm = dialog(page)
     await expect(newForm.getByText('New inbound form')).toBeVisible()
     await input(newForm, 'name').fill(formName)
-    await expect(input(newForm, 'slug')).toHaveValue(formSlug)
+    await expect(newForm.getByRole('combobox', { name: /^Sender domain/ })).toHaveCount(0)
     await newForm.getByRole('button', { name: 'Create form' }).click()
 
     await expect(page).toHaveURL(/\/forms\/\d+$/)
     await expect(page.getByRole('heading', { name: formName, level: 1 })).toBeVisible()
     await expect(card(page, 'Endpoint').locator('.copy-field__value').first()).toHaveText(
-        new RegExp(`/api/public/form/${formSlug}$`),
+        /\/api\/v1\/forms\/[A-Za-z0-9_-]{22}$/,
     )
     await expect(page.getByRole('navigation', { name: 'Breadcrumbs' })).toContainText(projectName)
-    await expect(card(page, 'General').getByText(senderDomain, { exact: true })).toBeVisible()
+    await expect(page.locator('.page-header')).toContainText(senderDomain)
+    await expect(card(page, 'General').getByRole('combobox', { name: /^Sender domain/ })).toHaveCount(0)
 
     for (const field of fields) {
         await addField(page, field)

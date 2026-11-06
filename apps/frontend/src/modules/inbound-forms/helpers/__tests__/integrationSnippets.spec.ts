@@ -4,7 +4,7 @@ import type { InboundFormFieldDto } from 'api'
 import { buildSampleData } from '../sampleData.ts'
 import { exampleRequest, scriptTag, securityPlacement } from '../integrationSnippets.ts'
 
-const endpoint = 'https://mail.example.com/api/public/form/kontakt'
+const endpoint = 'https://mail.example.com/api/v1/forms/Kt7_c-4SrLp9Zt5Vd2Ya3e'
 
 const fields: InboundFormFieldDto[] = [
     { inboundFormFieldId: 1, key: 'name', label: 'Name', type: 'text', defaultValue: null, validation: null },

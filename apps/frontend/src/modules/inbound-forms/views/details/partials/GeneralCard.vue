@@ -9,18 +9,8 @@
                 :error-messages="errors.name"
                 aria-required="true"
             />
-            <VTextField
-                v-model="slug"
-                name="slug"
-                class="mono-field"
-                :label="requiredLabel(t('field.slug'))"
-                :prefix="SLUG_PREFIX"
-                :hint="t('module.inboundForms.details.general.slugHint')"
-                persistent-hint
-                :error-messages="errors.slug"
-                aria-required="true"
-            />
             <VSelect
+                v-if="!fixedDomain"
                 v-model="domainId"
                 name="domainId"
                 :label="t('module.inboundForms.field.senderDomain')"
@@ -35,7 +25,6 @@
         </form>
         <div v-else class="form-grid">
             <ReadonlyValue :label="t('field.name')" :value="form.name" />
-            <ReadonlyValue :label="t('field.slug')" :value="form.slug" mono />
             <ReadonlyValue :label="t('module.inboundForms.field.senderDomain')" :value="domainName" mono />
         </div>
         <template v-if="canUpdate" #footer>
@@ -59,7 +48,7 @@
     import { useNotify } from '@/composables/useNotify.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
     import { apiErrorMessage } from '@/helper/apiErrorMessage.ts'
-    import { SLUG_PATTERN, SLUG_PREFIX } from '@/modules/inbound-forms/helpers/slug.ts'
+    import { soleProjectDomain } from '@/modules/inbound-forms/helpers/soleProjectDomain.ts'
     import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
 
     const props = withDefaults(
@@ -78,19 +67,19 @@
         () => props.project?.domains.find((domain) => domain.domainId === props.form.domainId)?.fqdn ?? null,
     )
 
+    const fixedDomain = computed(() => {
+        const sole = soleProjectDomain(props.project)
+        return sole !== null && (props.form.domainId === null || props.form.domainId === sole.domainId) ? sole : null
+    })
+
     function initialValues(form: InboundFormDetailDto) {
-        return { name: form.name, slug: form.slug, domainId: form.domainId }
+        return { name: form.name, domainId: form.domainId }
     }
 
     const { defineField, handleSubmit, errors, meta, resetForm } = useForm({
         validationSchema: toTypedSchema(
             z.object({
                 name: z.string().trim().min(1).max(255),
-                slug: z
-                    .string()
-                    .min(1)
-                    .max(255)
-                    .regex(SLUG_PATTERN, { error: () => t('module.inboundForms.validation.slug') }),
                 domainId: z.number().nullable().optional(),
             }),
         ),
@@ -98,7 +87,6 @@
     })
 
     const [name] = defineField('name')
-    const [slug] = defineField('slug')
     const [domainId] = defineField('domainId')
 
     useDirtyGuard(() => meta.value.dirty)
@@ -122,7 +110,7 @@
         try {
             const updated = await mutateAsync({
                 inboundFormId: props.form.inboundFormId,
-                update: { name: values.name, slug: values.slug, domainId: values.domainId ?? null },
+                update: { name: values.name, domainId: fixedDomain.value?.domainId ?? values.domainId ?? null },
             })
             resetForm({ values: initialValues(updated) })
             notify.success(t('module.inboundForms.details.general.saved'))

@@ -1,10 +1,10 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import {
     admin,
     card,
     formName,
-    formSlug,
     input,
+    jwt,
     login,
     projectName,
     receiverAddress,
@@ -51,12 +51,32 @@ async function latestMailTo(recipient: string): Promise<MailhogMessage> {
     return mail
 }
 
-const submitUrl = (slug: string) => new URL(`/api/public/form/${slug}`, requireEnv('E2E_API_URL')).href
+const submitUrl = (formKey: string) => new URL(`/api/v1/forms/${formKey}`, requireEnv('E2E_API_URL')).href
+
+let resolvedFormKey: string | null = null
+
+async function contactFormKey(page: Page, request: APIRequestContext): Promise<string> {
+    if (resolvedFormKey === null) {
+        await login(page, admin)
+        const response = await request.get(new URL('/api/inbound-form', requireEnv('E2E_API_URL')).href, {
+            headers: { Authorization: `Bearer ${await jwt(page)}` },
+        })
+        const forms = (await response.json()) as { name: string; formKey: string }[]
+        const form = forms.find((candidate) => candidate.name === formName)
+        if (!form) {
+            throw new Error(`The form "${formName}" from the inbound form spec does not exist`)
+        }
+        resolvedFormKey = form.formKey
+    }
+    return resolvedFormKey
+}
 
 test.describe.configure({ mode: 'serial' })
 
-test('a public submission is rejected when required fields are missing', async ({ request }) => {
-    const response = await request.post(submitUrl(formSlug), { data: { data: { name: 'Jane Doe' } } })
+test('a public submission is rejected when required fields are missing', async ({ page, request }) => {
+    const response = await request.post(submitUrl(await contactFormKey(page, request)), {
+        data: { data: { name: 'Jane Doe' } },
+    })
     expect(response.status()).toBe(400)
     expect(JSON.stringify(await response.json())).toContain('email')
 })
@@ -66,8 +86,8 @@ test('a public submission for an unknown form is not found', async ({ request })
     expect(response.status()).toBe(404)
 })
 
-test('a public submission delivers the rendered template to the receiver', async ({ request }) => {
-    const response = await request.post(submitUrl(formSlug), {
+test('a public submission delivers the rendered template to the receiver', async ({ page, request }) => {
+    const response = await request.post(submitUrl(await contactFormKey(page, request)), {
         data: {
             data: {
                 name: 'Jane Doe',
@@ -93,8 +113,8 @@ test('a public submission delivers the rendered template to the receiver', async
     expect(body).toContain('<p id="message">I would like a quote for 3 widgets.</p>')
 })
 
-test('submitted values are HTML-escaped in the delivered mail', async ({ request }) => {
-    await request.post(submitUrl(formSlug), {
+test('submitted values are HTML-escaped in the delivered mail', async ({ page, request }) => {
+    await request.post(submitUrl(await contactFormKey(page, request)), {
         data: { data: { name: '<script>alert(1)</script>', email: 'x@example.org', message: 'hi' } },
     })
 
@@ -118,7 +138,7 @@ test('deactivating the form in the UI closes the public endpoint', async ({ page
     expect((await saved).ok()).toBe(true)
     await expect(page.getByText('Form deactivated')).toBeVisible()
 
-    const response = await request.post(submitUrl(formSlug), {
+    const response = await request.post(submitUrl(await contactFormKey(page, request)), {
         data: { data: { name: 'Jane Doe', email: 'jane.doe@example.org' } },
     })
     expect(response.status()).toBe(404)

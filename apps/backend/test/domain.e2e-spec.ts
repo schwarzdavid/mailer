@@ -254,7 +254,7 @@ describe('DomainController (e2e)', () => {
             await http()
                 .post('/api/inbound-form')
                 .set('Authorization', `Bearer ${token}`)
-                .send({ name: 'Uses domain', slug: 'e2e-domain-delete-in-use', domainId, projectId })
+                .send({ name: 'Uses domain', domainId, projectId })
                 .expect(201)
 
             const response = await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`)

@@ -25,7 +25,7 @@
         const action = props.scheme.config?.expectedAction || 'submit'
         return `const token = await grecaptcha.execute('SITE_KEY', { action: '${action}' })`
     })
-    const send = computed(() => securityPlacement(formEndpointUrl(props.form.slug), props.scheme, 'token'))
+    const send = computed(() => securityPlacement(formEndpointUrl(props.form.formKey), props.scheme, 'token'))
 </script>
 
 <style scoped>

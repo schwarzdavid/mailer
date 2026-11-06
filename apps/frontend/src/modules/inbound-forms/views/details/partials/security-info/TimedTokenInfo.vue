@@ -21,8 +21,8 @@
     const { t } = useI18n()
 
     const importTag = scriptTag(formClientScriptUrl())
-    const token = computed(() => `const token = await InboundForm.getToken('${props.form.slug}')`)
-    const send = computed(() => securityPlacement(formEndpointUrl(props.form.slug), props.scheme, 'token'))
+    const token = computed(() => `const token = await InboundForm.getToken('${props.form.formKey}')`)
+    const send = computed(() => securityPlacement(formEndpointUrl(props.form.formKey), props.scheme, 'token'))
 </script>
 
 <style scoped>

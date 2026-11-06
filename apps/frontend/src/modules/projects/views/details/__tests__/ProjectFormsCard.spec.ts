@@ -12,13 +12,13 @@ afterEach(() => {
 })
 
 describe('ProjectFormsCard', () => {
-    it('links every form with its slug, receivers and status', async () => {
+    it('links every form with its name, receivers and status', async () => {
         vi.spyOn(InboundFormApi, 'getInboundForms').mockResolvedValue([
             formListItem(),
             formListItem({
                 inboundFormId: 10,
                 name: 'Newsletter',
-                slug: 'newsletter',
+                formKey: 'Nw5_b-2RqKn8Ys4Uc6Xz1d',
                 isActive: false,
                 receivers: [receiver(), receiver({ inboundFormReceiverId: 2, publishedVersion: null })],
             }),
@@ -28,7 +28,7 @@ describe('ProjectFormsCard', () => {
         await vi.waitFor(() => expect(wrapper.text()).toContain('Newsletter'))
         const rows = wrapper.findAll('a.list-row')
         expect(rows).toHaveLength(2)
-        expect(rows[0]!.text()).toContain('contact-request')
+        expect(rows[0]!.text()).toContain('Contact request')
         expect(rows[0]!.text()).toContain('1 receiver')
         expect(rows[0]!.text()).toContain('Active')
         expect(rows[1]!.text()).toContain('2 receivers')
