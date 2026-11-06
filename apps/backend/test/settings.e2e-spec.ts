@@ -186,7 +186,7 @@ describe('SettingsController (e2e)', () => {
         const response = await http()
             .post('/api/settings/sending-domain/refresh')
             .set('Authorization', `Bearer ${token}`)
-            .expect(201)
+            .expect(200)
         const body = response.body as { lastCheckedAt: string | null }
 
         expect(body.lastCheckedAt).not.toBeNull()

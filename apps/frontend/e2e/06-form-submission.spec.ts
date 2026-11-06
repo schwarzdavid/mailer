@@ -96,7 +96,7 @@ test('a public submission delivers the rendered template to the receiver', async
             },
         },
     })
-    expect(response.status()).toBe(201)
+    expect(response.status()).toBe(202)
     expect(await response.json()).toEqual({ status: 'accepted' })
 
     await expect.poll(async () => (await mailsTo(receiverAddress)).length, { timeout: 15_000 }).toBe(1)

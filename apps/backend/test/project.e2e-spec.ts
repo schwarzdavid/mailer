@@ -109,7 +109,7 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const detail = await http().get(`/api/project/${projectId}`).set('Authorization', auth()).expect(200)
         expect((detail.body as { domains: { domainId: number }[] }).domains).toEqual([
@@ -213,7 +213,7 @@ describe('Project (e2e)', () => {
         await http()
             .post(`/api/inbound-form/${inboundFormId}/receiver/${inboundFormReceiverId}/template/publish`)
             .set('Authorization', auth())
-            .expect(201)
+            .expect(200)
 
         const published = (await listForms()).find((form) => form.inboundFormId === inboundFormId)
         expect(published?.receivers[0]).toMatchObject({ draftVersion: null, publishedVersion: 1 })
@@ -245,7 +245,7 @@ describe('Project (e2e)', () => {
     })
 
     it('soft deletes the project and hides its forms publicly', async () => {
-        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
 
         await http().delete(`/api/project/${projectId}`).set('Authorization', auth()).expect(200)
 
@@ -280,9 +280,9 @@ describe('Project (e2e)', () => {
     it('restores the project and re-enables its forms', async () => {
         const restoreResponse = await http().post(`/api/project/${projectId}/restore`).set('Authorization', auth())
 
-        expect(restoreResponse.status).toBe(201)
+        expect(restoreResponse.status).toBe(200)
 
-        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
         expect((await listForms()).map((form) => form.inboundFormId)).toContain(inboundFormId)
     })
 
@@ -323,14 +323,14 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${trashedProjectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId: heldDomainId })
-            .expect(201)
+            .expect(204)
 
         await http().delete(`/api/domain/${heldDomainId}`).set('Authorization', auth()).expect(409)
 
         await http().delete(`/api/project/${trashedProjectId}`).set('Authorization', auth()).expect(200)
         await http().delete(`/api/domain/${heldDomainId}`).set('Authorization', auth()).expect(200)
 
-        await http().post(`/api/project/${trashedProjectId}/restore`).set('Authorization', auth()).expect(201)
+        await http().post(`/api/project/${trashedProjectId}/restore`).set('Authorization', auth()).expect(200)
         const restored = await http().get(`/api/project/${trashedProjectId}`).set('Authorization', auth()).expect(200)
         expect((restored.body as { domains: unknown[] }).domains).toEqual([])
     })
@@ -444,7 +444,7 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${otherProjectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId: unusedDomainId })
-            .expect(201)
+            .expect(204)
         await http()
             .delete(`/api/project/${otherProjectId}/domains/${unusedDomainId}`)
             .set('Authorization', auth())

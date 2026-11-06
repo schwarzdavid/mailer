@@ -51,7 +51,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
         return domainId
     }
 
@@ -73,7 +73,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
             .set('Authorization', asOwner())
             .send({ subject: 'Gate submission', template: '<p>Someone wrote in.</p>' })
             .expect(200)
-        await http().post(`${templatePath}/publish`).set('Authorization', asOwner()).expect(201)
+        await http().post(`${templatePath}/publish`).set('Authorization', asOwner()).expect(200)
         return (form.body as { formKey: string }).formKey
     }
 
@@ -148,7 +148,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
 
     it('keeps a form delivery pending until the domain records are valid, then sends it', async () => {
         const formKey = await createPublishedForm(formDomainId)
-        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
 
         const submissionModel = app.get<typeof InboundFormSubmissionModel>(getModelToken(InboundFormSubmissionModel))
         const deliveryModel = app.get<typeof InboundFormDeliveryModel>(getModelToken(InboundFormDeliveryModel))

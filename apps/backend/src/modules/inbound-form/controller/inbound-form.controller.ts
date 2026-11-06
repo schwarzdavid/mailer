@@ -3,6 +3,8 @@ import {
     Controller,
     Delete,
     Get,
+    HttpCode,
+    HttpStatus,
     Param,
     ParseIntPipe,
     Patch,
@@ -207,6 +209,7 @@ export class InboundFormController {
     }
 
     @ResponseDto(InboundFormTemplateDto)
+    @HttpCode(HttpStatus.OK)
     @Post(':inboundFormId/receiver/:inboundFormReceiverId/template/publish')
     async publishInboundFormTemplate(
         @Param('inboundFormId', ParseIntPipe) inboundFormId: number,

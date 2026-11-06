@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Header, Param, Post, Req, UseGuards } from '@nestjs/common'
-import { ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
+import {
+    Body,
+    Controller,
+    Get,
+    Header,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Post,
+    Req,
+    SerializeOptions,
+    UseGuards,
+} from '@nestjs/common'
+import { ApiAcceptedResponse, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
 import { SkipThrottle } from '@nestjs/throttler'
 import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import type { Request } from 'express'
@@ -28,6 +40,7 @@ export class PublicInboundFormController {
     }
 
     @ResponseDto(InboundFormTokenDto)
+    @HttpCode(HttpStatus.OK)
     @FormThrottle('token')
     @Post(':formKey/token')
     async issueInboundFormToken(
@@ -39,7 +52,9 @@ export class PublicInboundFormController {
         return InboundFormTokenDto.fromIssuedToken(issued)
     }
 
-    @ResponseDto(InboundFormSubmitResultDto)
+    @HttpCode(HttpStatus.ACCEPTED)
+    @SerializeOptions({ type: InboundFormSubmitResultDto })
+    @ApiAcceptedResponse({ type: InboundFormSubmitResultDto })
     @FormThrottle('submit')
     @Post(':formKey')
     async submitInboundForm(

@@ -56,7 +56,7 @@ describe('InboundForm (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', `Bearer ${token}`)
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const formResponse = await http()
             .post('/api/inbound-form')
@@ -103,7 +103,7 @@ describe('InboundForm (e2e)', () => {
         await http()
             .post(`/api/inbound-form/${inboundFormId}/receiver/${inboundFormReceiverId}/template/publish`)
             .set('Authorization', `Bearer ${token}`)
-            .expect(201)
+            .expect(200)
     })
 
     beforeEach(async () => {
@@ -121,7 +121,7 @@ describe('InboundForm (e2e)', () => {
                 security: { website: null },
                 data: { firstName: 'Max', email: 'max@example.com' },
             })
-            .expect(201)
+            .expect(202)
 
         expect(response.body).toEqual({ status: 'accepted' })
 
@@ -161,7 +161,7 @@ describe('InboundForm (e2e)', () => {
                 security: { website: 'http://spam.example' },
                 data: { firstName: 'Bot', email: 'bot@example.com' },
             })
-            .expect(201)
+            .expect(202)
 
         const submissionModel = app.get<typeof InboundFormSubmissionModel>(getModelToken(InboundFormSubmissionModel))
         const spam = await submissionModel.findOne({ where: { inboundFormId, status: 'spam' } })
@@ -240,7 +240,7 @@ describe('InboundForm (e2e)', () => {
                 security: { website: null },
                 data: { firstName: "O'Brien & Co", email: 'obrien@example.com' },
             })
-            .expect(201)
+            .expect(202)
 
         const subject = await vi.waitFor(
             async () => {
@@ -279,7 +279,7 @@ describe('InboundForm (e2e)', () => {
 
         it('accepts a listed origin with port and uppercase', async () => {
             const response = await submit().set('Origin', 'https://Kunde.at:8443')
-            expect(response.status).toBe(201)
+            expect(response.status).toBe(202)
         })
 
         it('rejects a foreign origin', async () => {
@@ -313,7 +313,7 @@ describe('InboundForm (e2e)', () => {
         const requestToken = () => http().post(`/api/v1/forms/${timedFormKey}/token`).set('Origin', origin)
 
         const fetchToken = async (): Promise<IssuedToken> => {
-            const response = await requestToken().expect(201)
+            const response = await requestToken().expect(200)
             return response.body as IssuedToken
         }
 
@@ -408,7 +408,7 @@ describe('InboundForm (e2e)', () => {
         it('accepts a token once after its delay and rejects its reuse', async () => {
             const formToken = await fetchUsableToken()
 
-            await submit(formToken, validData).expect(201)
+            await submit(formToken, validData).expect(202)
             const reuse = await submit(formToken, validData)
 
             expect(reuse.status).toBe(403)
@@ -422,7 +422,7 @@ describe('InboundForm (e2e)', () => {
             const retry = await submit(formToken, validData)
 
             expect(invalid.status).toBe(400)
-            expect(retry.status).toBe(201)
+            expect(retry.status).toBe(202)
         })
 
         it('serves the client script', async () => {

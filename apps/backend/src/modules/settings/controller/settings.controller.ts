@@ -1,4 +1,4 @@
-import { Controller, Get, Post } from '@nestjs/common'
+import { Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
@@ -24,6 +24,7 @@ export class SettingsController {
 
     @RequireAbility({ action: 'update', subject: 'Settings' })
     @ResponseDto(SendingDomainDto)
+    @HttpCode(HttpStatus.OK)
     @Post('sending-domain/refresh')
     async refreshSendingDomain(): Promise<SendingDomainDto> {
         return SendingDomainDto.fromSendingDomain(await this.settingsService.refreshSendingDomain())

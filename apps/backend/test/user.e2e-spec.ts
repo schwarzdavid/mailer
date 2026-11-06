@@ -288,7 +288,7 @@ describe('User + Role (e2e)', () => {
             await http()
                 .post(`/api/project/${secondProjectId}/restore`)
                 .set('Authorization', bearer(superToken))
-                .expect(201)
+                .expect(200)
             expect(await membershipCount(managedUserId)).toBe(2)
 
             for (const projectId of [firstProjectId, secondProjectId]) {

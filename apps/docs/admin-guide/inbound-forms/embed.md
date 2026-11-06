@@ -294,7 +294,7 @@ If the form has no timed token, remove the `client.js` tag, `requestToken`, the 
 
 ## Responses
 
-A successful submission answers `200` with exactly this body:
+A successful submission answers `202 Accepted` with exactly this body:
 
 ```json
 { "status": "accepted" }
@@ -347,6 +347,6 @@ The token endpoint `https://app.example.com/api/v1/forms/<form-key>/token` answe
 
 2. Within a few seconds the receiver's e-mail arrives, in the example at `inbox@example.org`, with the subject of its template.
 3. In the admin UI, open the project's **Sent mail** page (see [Projects](/admin-guide/projects#sent-mail)). The newest row has the **Source** **Form** and the **Status** **Sent**.
-4. Open the page on the website, fill in the form and send it. In the browser's developer tools, the **Network** tab shows the `POST` to `/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c` with status `200` and the answer `{"status":"accepted"}`, and a second row appears on **Sent mail**.
+4. Open the page on the website, fill in the form and send it. In the browser's developer tools, the **Network** tab shows the `POST` to `/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c` with status `202` and the answer `{"status":"accepted"}`, and a second row appears on **Sent mail**.
 
 If step 1 prints an error instead, the table under [Responses](#responses) names the cause. If it prints `accepted` but no e-mail arrives, see [Deliveries](/admin-guide/inbound-forms/deliveries#when-no-e-mail-arrives).

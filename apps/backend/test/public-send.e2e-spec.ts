@@ -55,7 +55,7 @@ describe('Public send API (e2e)', () => {
             .post(`/api/project/${id}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId: (domain.body as { domainId: number }).domainId })
-            .expect(201)
+            .expect(204)
         return id
     }
 
@@ -299,7 +299,7 @@ describe('Public send API (e2e)', () => {
                 ).status,
             ).toBe(401)
 
-            await http().post(`/api/project/${trashed}/restore`).set('Authorization', asOwner()).expect(201)
+            await http().post(`/api/project/${trashed}/restore`).set('Authorization', asOwner()).expect(200)
         })
     })
 

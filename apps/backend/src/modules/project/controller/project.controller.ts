@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, SerializeOptions } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Patch,
+    Post,
+    Put,
+    SerializeOptions,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { Principal } from '../../auth/decorators/Principal.js'
@@ -85,6 +98,7 @@ export class ProjectController {
     }
 
     @ResponseDto(ProjectDto)
+    @HttpCode(HttpStatus.OK)
     @Post(':projectId/restore')
     async restoreProject(
         @Param('projectId', ParseIntPipe) projectId: number,
@@ -95,6 +109,7 @@ export class ProjectController {
         return ProjectDto.fromProject(project)
     }
 
+    @HttpCode(HttpStatus.NO_CONTENT)
     @Post(':projectId/domains')
     async assignProjectDomain(
         @Param('projectId', ParseIntPipe) projectId: number,

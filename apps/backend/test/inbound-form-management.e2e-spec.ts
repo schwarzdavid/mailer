@@ -117,7 +117,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         const response = await http()
             .post(`/api/inbound-form/${formId}/receiver/${receiverId}/template/publish`)
             .set('Authorization', asOwner())
-            .expect(201)
+            .expect(200)
         return response.body as TemplateBody
     }
 
@@ -149,7 +149,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const users = await http().get('/api/user').set('Authorization', asOwner()).expect(200)
         const viewer = (users.body as { userId: number; email: string }[]).find(
@@ -506,7 +506,7 @@ describe('InboundForm management + delivery (e2e)', () => {
                         ignored: 'dropped',
                     },
                 })
-                .expect(201)
+                .expect(202)
             expect(response.body).toEqual({ status: 'accepted' })
 
             const submission = await latestSubmission(formId)
@@ -559,7 +559,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             await http()
                 .post(`/api/v1/forms/${formKey}`)
                 .send({ security: { trap: 'gotcha' }, data: { name: 'Bot', email: 'bot@ifm-submitter.test' } })
-                .expect(201)
+                .expect(202)
 
             const submission = await latestSubmission(formId)
             expect(submission?.status).toBe('spam')
@@ -952,7 +952,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             await http()
                 .post(`/api/v1/forms/${captchaFormKey}`)
                 .send({ security: { trap: 'filled' }, data: {} })
-                .expect(201)
+                .expect(202)
 
             expect((await latestSubmission(captchaFormId))?.status).toBe('spam')
         })

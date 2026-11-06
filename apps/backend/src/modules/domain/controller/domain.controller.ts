@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, SerializeOptions } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Post,
+    SerializeOptions,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
@@ -62,6 +73,7 @@ export class DomainController {
 
     @RequireAbility({ action: 'update', subject: 'Domain' })
     @ResponseDto(DomainDto)
+    @HttpCode(HttpStatus.OK)
     @Post(':domainId/refresh')
     async refreshDomainRecords(@Param('domainId', ParseIntPipe) domainId: number): Promise<DomainDto> {
         const domain = await this.domainDnsService.reloadDnsRecords(domainId)

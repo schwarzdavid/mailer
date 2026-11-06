@@ -77,7 +77,7 @@ On the website, add the input and hide it with CSS, not with `type="hidden"`, wh
 
 and send its value in the `security` object (`security: { website: "" }`), as the examples on [Embed the form](/admin-guide/inbound-forms/embed) do.
 
-What happens when it is filled in: mailer answers `200` with `{ "status": "accepted" }` like for a real submission, so the bot learns nothing, stores the submission marked as spam, sends no e-mail and logs the warning `Honeypot "website" triggered for form <id>`. An empty value or a missing key passes.
+What happens when it is filled in: mailer answers `202` with `{ "status": "accepted" }` like for a real submission, so the bot learns nothing, stores the submission marked as spam, sends no e-mail and logs the warning `Honeypot "website" triggered for form <id>`. An empty value or a missing key passes.
 
 ## Timed token
 

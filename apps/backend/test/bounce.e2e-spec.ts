@@ -140,7 +140,7 @@ describe('Bounce (e2e)', () => {
         await http()
             .post(`/api/v1/forms/${formKey}`)
             .send({ data: { message: 'Hello there' } })
-            .expect(201)
+            .expect(202)
     }
 
     async function latestDeliveryTo(address: string): Promise<InboundFormDeliveryModel> {
@@ -203,7 +203,7 @@ describe('Bounce (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', bearer(superToken))
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const form = await http()
             .post('/api/inbound-form')
@@ -234,7 +234,7 @@ describe('Bounce (e2e)', () => {
         await http()
             .post(`/api/inbound-form/${inboundFormId}/receiver/${receiverId}/template/publish`)
             .set('Authorization', bearer(superToken))
-            .expect(201)
+            .expect(200)
     })
 
     afterAll(async () => {

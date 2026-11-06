@@ -249,8 +249,8 @@ describe('Permissions (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asMember())
             .send({ domainId })
-            .expect(201)
-        expect(allowed.status).toBe(201)
+            .expect(204)
+        expect(allowed.status).toBe(204)
     })
 
     it('only names the projects of a domain the caller can read', async () => {
@@ -258,7 +258,7 @@ describe('Permissions (e2e)', () => {
             .post(`/api/project/${hiddenProjectId}/domains`)
             .set('Authorization', asSuper())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const asMemberDetail = await http().get(`/api/domain/${domainId}`).set('Authorization', asMember()).expect(200)
         expect((asMemberDetail.body as { projects: unknown[] }).projects).toEqual([
