@@ -28,7 +28,7 @@ A few details the table leaves out:
 
 - **Login** counts every attempt, successful or not, because the limit is checked before the password. The counter is kept per pair of client IP and e-mail address (trimmed and lower-cased), so one visitor guessing passwords for one account is blocked without locking that account out for everyone else. The 11th attempt within a minute starts a block of 5 minutes for that pair.
 - **The send API** counts per key only when the request carries something shaped like an API key (`sdm_…`), in the `Authorization: Bearer` header or the `key` query parameter. A request without one is counted per client IP in its place. The limit is checked before the key itself, so requests with wrong keys count too.
-- **Forms** are counted per form, identified by its form key in the URL, and per client IP. The token request and the submission each have their own counter. The general limit of 10 per minute per client IP counts each of the two routes separately, across all forms.
+- **Forms** are counted per form, identified by its form key in the URL in any casing, and per client IP. The token request and the submission each have their own counter. The general limit of 10 per minute per client IP counts each of the two routes separately, across all forms.
 - **Client IP** means the address the backend sees after applying `TRUST_PROXY`. Behind a proxy that is not counted correctly, every visitor shares the proxy's address and therefore one counter; see [Reverse proxy](/configuration/reverse-proxy#trust-proxy). For IPv6 visitors, the per-IP counters of the send API, of first-user registration and the general limit count the whole `/64` network, which is what one household or one server usually gets.
 
 ## Change a limit

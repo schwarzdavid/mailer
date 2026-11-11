@@ -44,7 +44,7 @@ This page explains, in a sentence or two each, the terms used across the documen
 
 **Delivery.** One e-mail for one receiver of one form submission. It is `pending` until mailer's mail server accepts it (`sent`) or mailer gives up (`failed`). See [Deliveries](/admin-guide/inbound-forms/deliveries).
 
-**Form key.** The random value at the end of a form's endpoint URL, for example `Xk3_a-9QpLm2Zr7Tb1Wv0c` in `/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c`. mailer sets it when the form is created; it cannot be changed. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
+**Form key.** The random value at the end of a form's endpoint URL, for example `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` in `/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c`. mailer sets it when the form is created; it cannot be changed, and its casing in the URL does not matter. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
 
 **Honeypot.** A form input that people never see and leave empty, while bots fill it in; mailer treats a filled-in honeypot as spam. See [Honeypot](/admin-guide/inbound-forms/security#honeypot).
 

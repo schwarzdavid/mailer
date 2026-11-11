@@ -29,6 +29,13 @@ describe('formThrottleTracker', () => {
         expect(first).not.toBe(second)
     })
 
+    it('shares one budget across every casing of a form key', () => {
+        const lower = formThrottleTracker({ ip: '1.2.3.4', params: { formKey: 'abc123' } })
+        const upper = formThrottleTracker({ ip: '1.2.3.4', params: { formKey: 'ABC123' } })
+
+        expect(upper).toBe(lower)
+    })
+
     it('falls back to unknown parts', () => {
         expect(formThrottleTracker({})).toBe('form:unknown:unknown')
     })

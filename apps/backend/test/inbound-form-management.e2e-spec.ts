@@ -200,7 +200,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             formId = body.inboundFormId
             formKey = body.formKey
             expect(body).toMatchObject({ name: 'IFM Contact', domainId, projectId, isActive: true })
-            expect(body.formKey).toMatch(/^[A-Za-z0-9_-]{22}$/)
+            expect(body.formKey).toMatch(/^[0-9a-f]{32}$/)
         })
 
         it.each([

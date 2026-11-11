@@ -219,6 +219,15 @@ describe('InboundFormSubmissionService', () => {
         )
     })
 
+    it('looks the form up by the lowercased key', async () => {
+        mockForm(null)
+
+        await expect(service.submitForm('CoNtAcT', submission, {}, {}, '')).rejects.toThrow(NotFoundException)
+        expect(formFindOne).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { formKey: 'contact', isActive: true } }),
+        )
+    })
+
     it('requires a live project on the form lookup', async () => {
         formFindOne.mockResolvedValue(null)
 
@@ -591,6 +600,17 @@ describe('InboundFormSubmissionService', () => {
                     where: { formKey: 'contact', isActive: true },
                     include: [InboundFormSecurityModel, { model: ProjectModel, required: true }],
                 })
+            })
+
+            it('looks the form up by the lowercased key', async () => {
+                mockForm(null)
+
+                await expect(service.issueToken('CONTACT', kundeOrigin, '203.0.113.7')).rejects.toThrow(
+                    NotFoundException,
+                )
+                expect(formFindOne).toHaveBeenCalledWith(
+                    expect.objectContaining({ where: { formKey: 'contact', isActive: true } }),
+                )
             })
 
             it('rejects an unknown or inactive form key', async () => {

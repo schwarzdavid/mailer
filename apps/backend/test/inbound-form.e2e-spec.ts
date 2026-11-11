@@ -180,6 +180,13 @@ describe('InboundForm (e2e)', () => {
         expect(response.status).toBe(404)
     })
 
+    it('finds the form whatever the casing of the form key in the url', async () => {
+        const response = await http()
+            .post(`/api/v1/forms/${formKey.toUpperCase()}`)
+            .send({ security: { website: null }, data: { firstName: 'Max', email: 'broken' } })
+        expect(response.status).toBe(400)
+    })
+
     it('rejects invalid data with 400', async () => {
         const response = await http()
             .post(`/api/v1/forms/${formKey}`)

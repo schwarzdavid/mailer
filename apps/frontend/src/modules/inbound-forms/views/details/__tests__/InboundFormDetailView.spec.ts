@@ -48,7 +48,7 @@ describe('InboundFormDetailView', () => {
         await vi.waitFor(() => expect(wrapper.get('.page-header').text()).toContain('Acme Website'))
         expect(wrapper.get('.page-header').text()).toContain('forms.acme.com')
         expect(wrapper.get('.page-header').text()).toContain('1 receiver')
-        expect(wrapper.text()).toContain('/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c')
+        expect(wrapper.text()).toContain('/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
         const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
         expect(titles).toEqual(['Endpoint', 'General', 'Fields', 'Security', 'Receivers', 'Delete form'])
     })
@@ -228,7 +228,7 @@ describe('InboundFormDetailView', () => {
         expect(findButton(wrapper, 'Add field')).toBeUndefined()
         expect(findButton(wrapper, 'View template')).toBeDefined()
         expect(wrapper.text()).not.toContain('Delete form')
-        expect(wrapper.text()).toContain('/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c')
+        expect(wrapper.text()).toContain('/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
     })
 
     it('warns when no domains are allowed', async () => {

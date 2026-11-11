@@ -1,6 +1,6 @@
 # Create a form
 
-This page walks you through creating an inbound form: its name, the sender domain its mail comes from, whether it accepts submissions, and which websites may post to it. At the end the form has a public endpoint such as `https://app.example.com/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c` that your website's contact form can post to.
+This page walks you through creating an inbound form: its name, the sender domain its mail comes from, whether it accepts submissions, and which websites may post to it. At the end the form has a public endpoint such as `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that your website's contact form can post to.
 
 An **inbound form** is mailer's side of a contact form on a website. The website keeps its own HTML form; when a visitor submits it, the browser sends the values to the form's public endpoint, mailer checks them and e-mails them to the addresses you configure. The website needs no backend of its own.
 
@@ -33,9 +33,9 @@ Setting up a form takes five steps, each on its own page of this guide:
 
 mailer opens the form's page and shows **Form created**.
 
-mailer gives every form a **form key**, a random 22-character value such as `Xk3_a-9QpLm2Zr7Tb1Wv0c` that forms the last part of the endpoint URL. You cannot choose or change it, so two forms never collide, even in different projects, and nobody can guess a form's URL from its name.
+mailer gives every form a **form key**, a random 32-character value of lowercase letters and digits such as `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that forms the last part of the endpoint URL. Its casing does not matter: `/api/v1/forms/3F9A0C1E…` reaches the same form. Forms created before this format keep their shorter key, now in lowercase, and their old URLs keep working. You cannot choose or change it, so two forms never collide, even in different projects, and nobody can guess a form's URL from its name.
 
-![The page of the form Contact form: the Endpoint card with the URL https://app.example.com/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c and the Accept submissions switch, and below it the General card with the name](/screenshots/admin-guide/form-detail.png)
+![The page of the form Contact form: the Endpoint card with the URL https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c and the Accept submissions switch, and below it the General card with the name](/screenshots/admin-guide/form-detail.png)
 
 _The form's page. The **Endpoint** card shows the public URL; **General** holds the name and, when the project has more than one domain, the sender domain._
 
@@ -51,7 +51,7 @@ The **Endpoint** card shows the URL your website posts to, with a copy button:
 https://app.example.com/api/v1/forms/<form-key>
 ```
 
-With the form key `Xk3_a-9QpLm2Zr7Tb1Wv0c` that is `https://app.example.com/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c`. The URL stays the same for the life of the form. The admin UI builds the URL from the address you opened it under, so it shows your own `SITE_ADDRESS`.
+With the form key `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that is `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c`. The URL stays the same for the life of the form. The admin UI builds the URL from the address you opened it under, so it shows your own `SITE_ADDRESS`.
 
 **Example request** opens a ready-made JavaScript `fetch` call with sample values for the form's fields. [Embed the form](/admin-guide/inbound-forms/embed) has complete examples.
 

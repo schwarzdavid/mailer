@@ -36,11 +36,11 @@ Each check in the list has three buttons:
 
 Every check has a **Key**: the name under which the website sends the check's value. With the **Location** you choose where in the request mailer looks for it:
 
-| Location            | Where the website puts the value                           | Example with the key `formToken`                                          |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Body**            | In the `security` object of the submission, next to `data` | `{ "data": { … }, "security": { "formToken": "…" } }`                     |
-| **Header**          | In an HTTP header with that name (case does not matter)    | `formToken: …`                                                            |
-| **Query parameter** | In the query string of the endpoint URL                    | `https://app.example.com/api/v1/forms/Xk3_a-9QpLm2Zr7Tb1Wv0c?formToken=…` |
+| Location            | Where the website puts the value                           | Example with the key `formToken`                                                    |
+| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Body**            | In the `security` object of the submission, next to `data` | `{ "data": { … }, "security": { "formToken": "…" } }`                               |
+| **Header**          | In an HTTP header with that name (case does not matter)    | `formToken: …`                                                                      |
+| **Query parameter** | In the query string of the endpoint URL                    | `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c?formToken=…` |
 
 Security values never go into `data`: mailer looks for them only in the place you chose. **Body** is the simplest choice and the only one a plain HTML form can use.
 

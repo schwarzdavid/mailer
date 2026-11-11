@@ -15,7 +15,10 @@ function scheme(overrides: Partial<InboundFormSecurityDto>): InboundFormSecurity
 }
 
 async function openInfo(security: InboundFormSecurityDto) {
-    mountDialog(SecurityInfoDialog, { scheme: security, form: formDetail({ formKey: 'Kt7_c-4SrLp9Zt5Vd2Ya3e' }) })
+    mountDialog(SecurityInfoDialog, {
+        scheme: security,
+        form: formDetail({ formKey: 'c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b' }),
+    })
     await vi.waitFor(() => expect(overlayText()).toContain('integration'))
 }
 
@@ -47,7 +50,7 @@ describe('SecurityInfoDialog', () => {
         await openInfo(scheme({ type: 'timed-token', location: 'query', key: 'formToken' }))
 
         expect(overlayText()).toContain('/api/v1/forms/client.js')
-        expect(overlayText()).toContain("InboundForm.getToken('Kt7_c-4SrLp9Zt5Vd2Ya3e')")
+        expect(overlayText()).toContain("InboundForm.getToken('c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b')")
         expect(overlayText()).toContain('?formToken=${encodeURIComponent(token)}')
     })
 })
