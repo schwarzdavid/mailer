@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { ProjectModel } from '../src/modules/project/models/project.model.js'
 import { ProjectPurgeService } from '../src/modules/project/services/project-purge.service.js'
 import { PROJECT_PURGE_AFTER_MS } from '../src/modules/project/project.constants.js'
@@ -41,7 +41,7 @@ describe('Project (e2e)', () => {
     let otherProjectId: number
     let domainId: number
     let inboundFormId: number
-    const slug = 'e2e-project-contact'
+    let formKey = ''
 
     const credentials: Credentials = {
         email: 'project.user@example.com',
@@ -73,7 +73,7 @@ describe('Project (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
     })
 
     afterAll(async () => {
@@ -109,7 +109,7 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const detail = await http().get(`/api/project/${projectId}`).set('Authorization', auth()).expect(200)
         expect((detail.body as { domains: { domainId: number }[] }).domains).toEqual([
@@ -144,16 +144,17 @@ describe('Project (e2e)', () => {
         const blockedResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', auth())
-            .send({ name: 'Blocked', slug: 'e2e-project-blocked', domainId, projectId: otherProjectId })
+            .send({ name: 'Blocked', domainId, projectId: otherProjectId })
 
         expect(blockedResponse.status).toBe(400)
 
         const formResponse = await http()
             .post('/api/inbound-form')
             .set('Authorization', auth())
-            .send({ name: 'Project Contact', slug, domainId, projectId })
+            .send({ name: 'Project Contact', domainId, projectId })
             .expect(201)
         inboundFormId = (formResponse.body as { inboundFormId: number }).inboundFormId
+        formKey = (formResponse.body as { formKey: string }).formKey
     })
 
     it('reports member counts and domain health in the project list', async () => {
@@ -212,7 +213,7 @@ describe('Project (e2e)', () => {
         await http()
             .post(`/api/inbound-form/${inboundFormId}/receiver/${inboundFormReceiverId}/template/publish`)
             .set('Authorization', auth())
-            .expect(201)
+            .expect(200)
 
         const published = (await listForms()).find((form) => form.inboundFormId === inboundFormId)
         expect(published?.receivers[0]).toMatchObject({ draftVersion: null, publishedVersion: 1 })
@@ -244,7 +245,7 @@ describe('Project (e2e)', () => {
     })
 
     it('soft deletes the project and hides its forms publicly', async () => {
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
 
         await http().delete(`/api/project/${projectId}`).set('Authorization', auth()).expect(200)
 
@@ -256,7 +257,7 @@ describe('Project (e2e)', () => {
             expect.objectContaining({ projectId, name: 'E2E Project', purgeAt: expect.any(String) as string }),
         ])
 
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(404)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(404)
 
         expect((await listForms()).map((form) => form.inboundFormId)).not.toContain(inboundFormId)
         const scoped = await http()
@@ -279,9 +280,9 @@ describe('Project (e2e)', () => {
     it('restores the project and re-enables its forms', async () => {
         const restoreResponse = await http().post(`/api/project/${projectId}/restore`).set('Authorization', auth())
 
-        expect(restoreResponse.status).toBe(201)
+        expect(restoreResponse.status).toBe(200)
 
-        await http().post(`/api/public/form/${slug}`).send({ data: {} }).expect(201)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
         expect((await listForms()).map((form) => form.inboundFormId)).toContain(inboundFormId)
     })
 
@@ -322,14 +323,14 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${trashedProjectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId: heldDomainId })
-            .expect(201)
+            .expect(204)
 
         await http().delete(`/api/domain/${heldDomainId}`).set('Authorization', auth()).expect(409)
 
         await http().delete(`/api/project/${trashedProjectId}`).set('Authorization', auth()).expect(200)
         await http().delete(`/api/domain/${heldDomainId}`).set('Authorization', auth()).expect(200)
 
-        await http().post(`/api/project/${trashedProjectId}/restore`).set('Authorization', auth()).expect(201)
+        await http().post(`/api/project/${trashedProjectId}/restore`).set('Authorization', auth()).expect(200)
         const restored = await http().get(`/api/project/${trashedProjectId}`).set('Authorization', auth()).expect(200)
         expect((restored.body as { domains: unknown[] }).domains).toEqual([])
     })
@@ -443,7 +444,7 @@ describe('Project (e2e)', () => {
             .post(`/api/project/${otherProjectId}/domains`)
             .set('Authorization', auth())
             .send({ domainId: unusedDomainId })
-            .expect(201)
+            .expect(204)
         await http()
             .delete(`/api/project/${otherProjectId}/domains/${unusedDomainId}`)
             .set('Authorization', auth())

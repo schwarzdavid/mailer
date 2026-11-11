@@ -3,6 +3,8 @@ import {
     Controller,
     Delete,
     Get,
+    HttpCode,
+    HttpStatus,
     Param,
     ParseIntPipe,
     Patch,
@@ -16,6 +18,7 @@ import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { Principal } from '../../auth/decorators/Principal.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { InboundFormService } from '../services/inbound-form.service.js'
 import { InboundFormTemplateService } from '../services/inbound-form-template.service.js'
 import { InboundFormCreateDto, InboundFormUpdateDto } from '../dtos/inbound-form-create.dto.js'
@@ -40,7 +43,7 @@ export class InboundFormController {
         private readonly templateService: InboundFormTemplateService,
     ) {}
 
-    @ResponseDto(InboundFormDto)
+    @CreatedResponseDto(InboundFormDto)
     @Post()
     async createInboundForm(
         @Body() body: InboundFormCreateDto,
@@ -49,7 +52,6 @@ export class InboundFormController {
         const form = await this.inboundFormService.createForm(
             {
                 name: body.name,
-                slug: body.slug,
                 domainId: body.domainId,
                 projectId: body.projectId,
             },
@@ -131,7 +133,7 @@ export class InboundFormController {
         return security.map((scheme) => InboundFormSecurityDto.fromSecurity(scheme))
     }
 
-    @ResponseDto(InboundFormReceiverDto)
+    @CreatedResponseDto(InboundFormReceiverDto)
     @Post(':inboundFormId/receiver')
     async createInboundFormReceiver(
         @Param('inboundFormId', ParseIntPipe) inboundFormId: number,
@@ -208,6 +210,7 @@ export class InboundFormController {
     }
 
     @ResponseDto(InboundFormTemplateDto)
+    @HttpCode(HttpStatus.OK)
     @Post(':inboundFormId/receiver/:inboundFormReceiverId/template/publish')
     async publishInboundFormTemplate(
         @Param('inboundFormId', ParseIntPipe) inboundFormId: number,

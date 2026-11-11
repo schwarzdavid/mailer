@@ -1,18 +1,6 @@
 import { Expose } from 'class-transformer'
-import {
-    ArrayMaxSize,
-    IsArray,
-    IsBoolean,
-    IsInt,
-    IsNotEmpty,
-    IsOptional,
-    IsString,
-    Matches,
-    MaxLength,
-} from 'class-validator'
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export class InboundFormCreateDto {
     @Expose()
@@ -20,12 +8,6 @@ export class InboundFormCreateDto {
     @IsNotEmpty()
     @MaxLength(255)
     name!: string
-
-    @Expose()
-    @IsString()
-    @Matches(SLUG_PATTERN)
-    @MaxLength(255)
-    slug!: string
 
     @Expose()
     @ApiProperty({ type: Number, nullable: true, required: false })
@@ -45,13 +27,6 @@ export class InboundFormUpdateDto {
     @IsNotEmpty()
     @MaxLength(255)
     name?: string
-
-    @Expose()
-    @IsOptional()
-    @IsString()
-    @Matches(SLUG_PATTERN)
-    @MaxLength(255)
-    slug?: string
 
     @Expose()
     @ApiProperty({ type: Number, nullable: true, required: false })

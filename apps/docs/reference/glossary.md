@@ -20,7 +20,7 @@ This page explains, in a sentence or two each, the terms used across the documen
 
 **IP warm-up.** Raising the number of mails a new IP address sends per day slowly over the first weeks, so large providers build trust in it instead of filing its mail as spam. See [Warm up the IP address](/installation/going-live#warm-up-the-ip-address).
 
-**MX record.** The DNS record that names the mail server accepting mail for a domain. `MAIL_HOSTNAME` points to itself, so bounce reports reach your server. See [Step 3: DNS records](/installation/first-run-setup#step-3-dns-records).
+**MX record.** The DNS record that names the mail server accepting mail for a domain. `MAIL_HOSTNAME` points to itself, so bounce reports reach your server. See [Step 2: DNS records](/installation/first-run-setup#step-2-dns-records).
 
 **PTR record, reverse DNS.** The record that maps your server's IP address back to a name, `MAIL_HOSTNAME`. You set it at your hosting provider, not in your DNS zone. See [Set the reverse DNS](/installation/prepare-server#set-the-reverse-dns-ptr-record).
 
@@ -44,6 +44,8 @@ This page explains, in a sentence or two each, the terms used across the documen
 
 **Delivery.** One e-mail for one receiver of one form submission. It is `pending` until mailer's mail server accepts it (`sent`) or mailer gives up (`failed`). See [Deliveries](/admin-guide/inbound-forms/deliveries).
 
+**Form key.** The random value at the end of a form's endpoint URL, for example `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` in `/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c`. mailer sets it when the form is created; it cannot be changed, and its casing in the URL does not matter. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
+
 **Honeypot.** A form input that people never see and leave empty, while bots fill it in; mailer treats a filled-in honeypot as spam. See [Honeypot](/admin-guide/inbound-forms/security#honeypot).
 
 **Inbound form.** mailer's side of a contact form on a website: a public endpoint the website posts to, with fields, security checks and receivers. See [Create a form](/admin-guide/inbound-forms/create).
@@ -59,8 +61,6 @@ This page explains, in a sentence or two each, the terms used across the documen
 **Send API.** The endpoint `POST /api/v1/send`, through which your own server sends one mail per request with an API key. See [Send API](/admin-guide/send-api).
 
 **Setup token.** A one-time value the backend writes to its log while no user exists; the setup wizard asks for it before it creates the first account. See [Read the setup token](/installation/first-run-setup#read-the-setup-token).
-
-**Slug.** The short name at the end of a form's endpoint URL, for example `contact` in `/api/public/form/contact`. See [Create the form](/admin-guide/inbound-forms/create#create-the-form).
 
 **Template.** The subject and HTML body of a receiver's e-mail, written in Handlebars, with placeholders for the submitted fields. See [Write the template](/admin-guide/inbound-forms/receivers-and-templates#write-the-template).
 

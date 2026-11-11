@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
-import { admin, input, requireEnv, sendingDomain } from './support/fixtures.ts'
+import { admin, input, requireEnv, sendingDomain, serverIpv4 } from './support/fixtures.ts'
 
-test('a fresh installation sets up the first administrator and the sending domain', async ({ page }) => {
+test('a fresh installation sets up the first administrator and shows the sending domain records', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveURL(/\/setup$/)
     await expect(page.getByRole('heading', { name: 'Welcome to Mail Admin' })).toBeVisible()
@@ -17,18 +17,10 @@ test('a fresh installation sets up the first administrator and the sending domai
     await input(page, 'password').fill(admin.password)
     await page.getByRole('button', { name: 'Create account' }).click()
 
-    await expect(page.getByRole('heading', { name: 'Where does this server send from?' })).toBeVisible()
-    await expect(page.getByText(`Signed in as ${admin.firstName} ${admin.lastName}`)).toBeVisible()
-    await expect(page.getByText(sendingDomain, { exact: true })).toBeVisible()
-    await expect(input(page, 'fqdn')).toHaveCount(0)
-    await input(page, 'serverIpv4').fill('999.1.1.1')
-    await input(page, 'serverIpv4').blur()
-    await expect(page.getByText('Enter an IPv4 address, like 203.0.113.10.')).toBeVisible()
-
-    await input(page, 'serverIpv4').fill('203.0.113.10')
-    await page.getByRole('button', { name: 'Save and continue' }).click()
-
     await expect(page.getByRole('heading', { name: 'Publish the DNS records' })).toBeVisible()
+    await expect(page.getByText(`Signed in as ${admin.firstName} ${admin.lastName}`)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sending domain' })).toHaveCount(0)
+    await expect(input(page, 'serverIpv4')).toHaveCount(0)
     for (const record of ['A', 'MX', 'SPF', 'DKIM', 'DMARC', 'PTR (IPv4)']) {
         await expect(
             page.getByRole('heading', { level: 3, name: new RegExp(`^${record.replace(/[()]/g, '\\$&')}`) }).first(),
@@ -36,13 +28,9 @@ test('a fresh installation sets up the first administrator and the sending domai
     }
     const values = await page.locator('.copy-field__value').allTextContents()
     expect(values).toContain(sendingDomain)
-    expect(values).toContain('203.0.113.10')
+    expect(values).toContain(serverIpv4)
+    expect(values).toContain(`v=spf1 ip4:${serverIpv4} -all`)
     expect(values.some((value) => value.startsWith('v=DKIM1'))).toBe(true)
-
-    await page.getByRole('button', { name: 'Sending domain' }).click()
-    await expect(input(page, 'serverIpv4')).toHaveValue('203.0.113.10')
-    await expect(page.getByText(sendingDomain, { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'DNS records' }).click()
 
     await page.getByRole('button', { name: 'Finish setup' }).click()
     await expect(page).toHaveURL(/\/$/)

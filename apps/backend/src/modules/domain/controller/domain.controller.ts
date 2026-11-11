@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, SerializeOptions } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Post,
+    SerializeOptions,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { JwtAuth } from '../../auth/decorators/JwtAuth.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
@@ -6,6 +17,7 @@ import { DomainCreateDto } from '../dtos/domain-create.dto.js'
 import { DomainDetailDto, DomainDto } from '../dtos/domain.dto.js'
 import { DomainService } from '../services/domain.service.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { DomainDnsDto } from '../dtos/domain-dns.dto.js'
 import { DomainDnsService } from '../services/domain-dns.service.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
@@ -21,7 +33,7 @@ export class DomainController {
     ) {}
 
     @RequireAbility({ action: 'create', subject: 'Domain' })
-    @ResponseDto(DomainDto)
+    @CreatedResponseDto(DomainDto)
     @Post()
     async createDomain(@Body() { fqdn }: DomainCreateDto): Promise<DomainDto> {
         const domain = await this.domainService.createDomain(fqdn)
@@ -62,6 +74,7 @@ export class DomainController {
 
     @RequireAbility({ action: 'update', subject: 'Domain' })
     @ResponseDto(DomainDto)
+    @HttpCode(HttpStatus.OK)
     @Post(':domainId/refresh')
     async refreshDomainRecords(@Param('domainId', ParseIntPipe) domainId: number): Promise<DomainDto> {
         const domain = await this.domainDnsService.reloadDnsRecords(domainId)

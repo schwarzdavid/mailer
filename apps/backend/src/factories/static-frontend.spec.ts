@@ -12,6 +12,7 @@ const requiredEnv = {
     BACKEND_JWT_SECRET: 'jwt-secret-for-unit-tests-0123456789',
     BACKEND_ENCRYPTION_SECRET: 'encryption-secret-for-unit-tests-0123',
     MAIL_HOSTNAME: 'mail.example.com',
+    MAIL_SERVER_IPV4: '203.0.113.10',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',
     DB_USERNAME: 'mailer',

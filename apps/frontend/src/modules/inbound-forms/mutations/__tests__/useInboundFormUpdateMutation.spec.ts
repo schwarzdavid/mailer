@@ -14,7 +14,7 @@ const detail: InboundFormDetailDto = {
     projectId: 5,
     domainId: null,
     name: 'Contact',
-    slug: 'contact',
+    formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -23,7 +23,7 @@ const detail: InboundFormDetailDto = {
     receivers: [],
 }
 
-const updated: InboundFormDetailDto = { ...detail, name: 'Support', slug: 'support', domainId: 3, isActive: false }
+const updated: InboundFormDetailDto = { ...detail, name: 'Support', domainId: 3, isActive: false }
 
 afterEach(() => {
     vi.restoreAllMocks()
@@ -37,12 +37,12 @@ describe('useInboundFormUpdateMutation', () => {
 
         await result.mutateAsync({
             inboundFormId: 1,
-            update: { name: 'Support', slug: 'support', domainId: 3, isActive: false },
+            update: { name: 'Support', domainId: 3, isActive: false },
         })
 
         expect(updateSpy).toHaveBeenCalledWith({
             path: { inboundFormId: 1 },
-            body: { name: 'Support', slug: 'support', domainId: 3, isActive: false },
+            body: { name: 'Support', domainId: 3, isActive: false },
         })
         expect(queryClient.getQueryData(['inboundForms', 1])).toEqual(updated)
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] })
@@ -65,11 +65,13 @@ describe('useInboundFormUpdateMutation', () => {
     })
 
     it('leaves the cache untouched when the update fails', async () => {
-        vi.spyOn(InboundFormApi, 'updateInboundForm').mockRejectedValue(new Error('Slug taken'))
+        vi.spyOn(InboundFormApi, 'updateInboundForm').mockRejectedValue(new Error('Unknown domain'))
         const { result, queryClient, unmount } = withVueQuery(() => useInboundFormUpdateMutation())
         queryClient.setQueryData(['inboundForms', 1], detail)
 
-        await expect(result.mutateAsync({ inboundFormId: 1, update: { slug: 'taken' } })).rejects.toThrow('Slug taken')
+        await expect(result.mutateAsync({ inboundFormId: 1, update: { domainId: 99 } })).rejects.toThrow(
+            'Unknown domain',
+        )
 
         expect(queryClient.getQueryData(['inboundForms', 1])).toEqual(detail)
         unmount()

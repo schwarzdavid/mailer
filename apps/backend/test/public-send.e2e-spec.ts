@@ -4,7 +4,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { waitForMessagesTo } from './support/mailhog.js'
 import { EmailBlockService } from '../src/modules/bounce/services/email-block.service.js'
 import { MailMessageService } from '../src/modules/mail/services/mail-message.service.js'
@@ -55,7 +55,7 @@ describe('Public send API (e2e)', () => {
             .post(`/api/project/${id}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId: (domain.body as { domainId: number }).domainId })
-            .expect(201)
+            .expect(204)
         return id
     }
 
@@ -86,7 +86,7 @@ describe('Public send API (e2e)', () => {
         await seedUser(app, readerCredentials, 'user')
         ownerToken = await login(app, ownerCredentials)
         readerToken = await login(app, readerCredentials)
-        await configureSendingDomain(app, ownerToken)
+        await ensureSendingDomain(app)
 
         projectId = await createProjectWithDomain('E2E Public Send', 'send.psa-example.com')
         otherProjectId = await createProjectWithDomain('E2E Public Send Other', 'mail.psa-other.org')
@@ -299,7 +299,7 @@ describe('Public send API (e2e)', () => {
                 ).status,
             ).toBe(401)
 
-            await http().post(`/api/project/${trashed}/restore`).set('Authorization', asOwner()).expect(201)
+            await http().post(`/api/project/${trashed}/restore`).set('Authorization', asOwner()).expect(200)
         })
     })
 

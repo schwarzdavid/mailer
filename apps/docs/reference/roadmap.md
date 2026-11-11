@@ -38,7 +38,7 @@ _Planned, not current behaviour._ Colours and a logo for the admin UI and the se
 
 ### First-run setup from the command line
 
-_Planned, not current behaviour._ A command run inside the backend container would create the first Super admin and set the sending domain's IP addresses without the web wizard, so the web setup and its setup token could be switched off in production.
+_Planned, not current behaviour._ A command run inside the backend container would create the first Super admin without the web wizard, so the web setup and its setup token could be switched off in production.
 
 Today: the backend logs a setup token while no user exists, and the first account is created in the browser ([First-run setup](/installation/first-run-setup#read-the-setup-token)). Run a single backend instance until then.
 

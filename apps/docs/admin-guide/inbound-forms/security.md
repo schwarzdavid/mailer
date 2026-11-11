@@ -36,11 +36,11 @@ Each check in the list has three buttons:
 
 Every check has a **Key**: the name under which the website sends the check's value. With the **Location** you choose where in the request mailer looks for it:
 
-| Location            | Where the website puts the value                           | Example with the key `formToken`                              |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
-| **Body**            | In the `security` object of the submission, next to `data` | `{ "data": { … }, "security": { "formToken": "…" } }`         |
-| **Header**          | In an HTTP header with that name (case does not matter)    | `formToken: …`                                                |
-| **Query parameter** | In the query string of the endpoint URL                    | `https://app.example.com/api/public/form/contact?formToken=…` |
+| Location            | Where the website puts the value                           | Example with the key `formToken`                                                    |
+| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Body**            | In the `security` object of the submission, next to `data` | `{ "data": { … }, "security": { "formToken": "…" } }`                               |
+| **Header**          | In an HTTP header with that name (case does not matter)    | `formToken: …`                                                                      |
+| **Query parameter** | In the query string of the endpoint URL                    | `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c?formToken=…` |
 
 Security values never go into `data`: mailer looks for them only in the place you chose. **Body** is the simplest choice and the only one a plain HTML form can use.
 
@@ -77,7 +77,7 @@ On the website, add the input and hide it with CSS, not with `type="hidden"`, wh
 
 and send its value in the `security` object (`security: { website: "" }`), as the examples on [Embed the form](/admin-guide/inbound-forms/embed) do.
 
-What happens when it is filled in: mailer answers `200` with `{ "status": "accepted" }` like for a real submission, so the bot learns nothing, stores the submission marked as spam, sends no e-mail and logs the warning `Honeypot "website" triggered for form <id>`. An empty value or a missing key passes.
+What happens when it is filled in: mailer answers `202` with `{ "status": "accepted" }` like for a real submission, so the bot learns nothing, stores the submission marked as spam, sends no e-mail and logs the warning `Honeypot "website" triggered for form <id>`. An empty value or a missing key passes.
 
 ## Timed token
 
@@ -105,7 +105,7 @@ Settings:
 The website requests a token from the token endpoint, a `POST` without a body:
 
 ```text
-https://app.example.com/api/public/form/<slug>/token
+https://app.example.com/api/v1/forms/<form-key>/token
 ```
 
 It answers:
@@ -123,7 +123,7 @@ It answers:
 - `notBefore` and `expiresAt` are the times from which and until which it is accepted.
 - `waitMs` is how many milliseconds the website still has to wait until `notBefore`.
 
-You do not have to handle this yourself. mailer serves a small script, `https://app.example.com/api/public/form/client.js`, that provides `InboundForm.getToken('<slug>')`: it requests the token, waits `waitMs`, and then returns the token. Load the script with a normal `<script src="…">` tag (not `type="module"`), because it finds the endpoint through its own URL. [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
+You do not have to handle this yourself. mailer serves a small script, `https://app.example.com/api/v1/forms/client.js`, that provides `InboundForm.getToken('<form-key>')`: it requests the token, waits `waitMs`, and then returns the token. Load the script with a normal `<script src="…">` tag (not `type="module"`), because it finds the endpoint through its own URL. [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
 
 The token endpoint also checks the allowed domains. It answers `403` `Origin not allowed` when the request comes from another website, and `404` `Unknown form` when the form does not exist, does not accept submissions or has no timed token.
 

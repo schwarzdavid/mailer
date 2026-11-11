@@ -29,8 +29,6 @@ describe('SetupService', () => {
     const settings: Settings = {
         settingId: 1,
         sendingDomainId: 10,
-        serverIpv4: '203.0.113.10',
-        serverIpv6: null,
         setupFinishedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -101,17 +99,17 @@ describe('SetupService', () => {
             expect(getSettings).not.toHaveBeenCalled()
         })
 
-        it('asks for the sending domain once a user exists but no settings row does', async () => {
+        it('shows the records once a user exists, even before a settings row does', async () => {
             count.mockResolvedValue(1)
 
-            await expect(service.getStep()).resolves.toBe('sendingDomain')
+            await expect(service.getStep()).resolves.toBe('records')
         })
 
-        it('asks for the sending domain while the settings carry none', async () => {
+        it('shows the records while the settings carry no sending domain', async () => {
             count.mockResolvedValue(1)
             getSettings.mockResolvedValue({ ...settings, sendingDomainId: null })
 
-            await expect(service.getStep()).resolves.toBe('sendingDomain')
+            await expect(service.getStep()).resolves.toBe('records')
         })
 
         it('shows the records until the setup is finished', async () => {

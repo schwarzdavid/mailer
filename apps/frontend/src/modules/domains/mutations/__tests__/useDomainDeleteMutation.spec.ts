@@ -16,6 +16,7 @@ const record: DomainDnsRecordDto = {
     type: 'txt',
     use: 'spf',
     value: 'v=spf1 include:sending-domain.org -all',
+    priority: null,
 }
 
 const domain: DomainDetailDto = {

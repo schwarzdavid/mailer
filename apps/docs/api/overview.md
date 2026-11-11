@@ -80,7 +80,7 @@ The rate-limit variables are described on [Environment variables](../configurati
 
 ## CORS
 
-Browsers only call endpoints on a different origin if the server allows it. mailer sends no CORS headers anywhere, because the admin UI is served from the same origin, with one exception: everything under `/api/public/form/` is open to every origin (`Access-Control-Allow-Origin: *`, no credentials). That is what lets the embedded form script run on your websites. The send endpoint is for server-to-server use and cannot be called from a browser on another origin.
+Browsers only call endpoints on a different origin if the server allows it. mailer sends no CORS headers anywhere, because the admin UI is served from the same origin, with one exception: everything under `/api/v1/forms/` is open to every origin (`Access-Control-Allow-Origin: *`, no credentials). That is what lets the embedded form script run on your websites. The send endpoint is for server-to-server use and cannot be called from a browser on another origin.
 
 ## The OpenAPI document
 

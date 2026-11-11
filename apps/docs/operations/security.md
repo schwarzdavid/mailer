@@ -56,12 +56,12 @@ curl -sI https://app.example.com/ | grep -iE '^(content-security-policy|strict-t
 
 CORS (Cross-Origin Resource Sharing) decides whether JavaScript on another website may read the answers of an endpoint. mailer answers differently per surface:
 
-| Surface                                     | CORS                                                               | Why                                                                                                                        |
-| ------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Public form endpoints, `/api/public/form/…` | `Access-Control-Allow-Origin: *`, without credentials (no cookies) | Forms are embedded on any website. Each form can restrict itself to **Allowed domains**.                                   |
-| `client.js` of a form                       | As above, plus `Cross-Origin-Resource-Policy: cross-origin`        | Websites load the script from mailer.                                                                                      |
-| Send API, `/api/v1/send`                    | No CORS headers                                                    | Browsers on other sites cannot read its answers. Call it from a server, never from a browser, so the API key stays secret. |
-| Admin API and admin UI, everything else     | No CORS headers                                                    | The admin UI is served from the same origin and needs none.                                                                |
+| Surface                                  | CORS                                                               | Why                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Public form endpoints, `/api/v1/forms/…` | `Access-Control-Allow-Origin: *`, without credentials (no cookies) | Forms are embedded on any website. Each form can restrict itself to **Allowed domains**.                                   |
+| `client.js` of a form                    | As above, plus `Cross-Origin-Resource-Policy: cross-origin`        | Websites load the script from mailer.                                                                                      |
+| Send API, `/api/v1/send`                 | No CORS headers                                                    | Browsers on other sites cannot read its answers. Call it from a server, never from a browser, so the API key stays secret. |
+| Admin API and admin UI, everything else  | No CORS headers                                                    | The admin UI is served from the same origin and needs none.                                                                |
 
 Restricting a form to its websites is the form's job, not CORS's: see [Allowed domains](/admin-guide/inbound-forms/create#allowed-domains) and [CORS and browser security](/admin-guide/inbound-forms/embed#cors-and-browser-security).
 

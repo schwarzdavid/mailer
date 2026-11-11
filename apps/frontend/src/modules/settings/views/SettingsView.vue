@@ -15,13 +15,9 @@
             <DnsRecordSkeleton />
         </SectionCard>
     </div>
-    <div v-else-if="settings" class="page-stack">
-        <SendingDomainCard :sending-domain="settings.sendingDomain" :can-update="canUpdate" />
-        <SendingDomainRecordsCard
-            v-if="settings.sendingDomain"
-            :sending-domain="settings.sendingDomain"
-            :can-check="canUpdate"
-        />
+    <div v-else-if="settings?.sendingDomain" class="page-stack">
+        <SendingDomainCard :sending-domain="settings.sendingDomain" />
+        <SendingDomainRecordsCard :sending-domain="settings.sendingDomain" :can-check="canUpdate" />
     </div>
 </template>
 

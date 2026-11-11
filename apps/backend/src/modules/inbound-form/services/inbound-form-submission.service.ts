@@ -24,6 +24,7 @@ import { isOriginAllowed } from '../helpers/origin.js'
 import { isTimedTokenConfig } from '../helpers/security-config.js'
 import { InboundFormSecurityType } from '../interfaces/inbound-form-security.interface.js'
 import { IssuedFormToken } from '../interfaces/inbound-form-token.interface.js'
+import { normalizeFormKey } from '../helpers/form-key.js'
 
 export interface PublicSubmission {
     security?: Record<string, unknown>
@@ -47,9 +48,9 @@ export class InboundFormSubmissionService {
         private readonly deliveryQueueService: InboundFormDeliveryQueueService,
     ) {}
 
-    async issueToken(slug: string, headers: Record<string, unknown>, ip: string): Promise<IssuedFormToken> {
+    async issueToken(formKey: string, headers: Record<string, unknown>, ip: string): Promise<IssuedFormToken> {
         const form = await this.formModel.findOne({
-            where: { slug, isActive: true },
+            where: { formKey: normalizeFormKey(formKey), isActive: true },
             include: [InboundFormSecurityModel, { model: ProjectModel, required: true }],
         })
         const scheme = form?.inboundFormSecurity
@@ -67,14 +68,14 @@ export class InboundFormSubmissionService {
     }
 
     async submitForm(
-        slug: string,
+        formKey: string,
         submission: PublicSubmission,
         headers: Record<string, unknown>,
         query: Record<string, unknown>,
         ip: string,
     ): Promise<void> {
         const form = await this.formModel.findOne({
-            where: { slug, isActive: true },
+            where: { formKey: normalizeFormKey(formKey), isActive: true },
             include: [
                 InboundFormFieldModel,
                 InboundFormSecurityModel,

@@ -40,7 +40,7 @@ You meet these terms throughout the installation. Each one is a DNS record or a 
 
 ## The life of a form submission
 
-1. A visitor submits the contact form on your website. The browser posts it to `https://app.example.com/api/public/form/<slug>`, where `<slug>` is the form's short name.
+1. A visitor submits the contact form on your website. The browser posts it to `https://app.example.com/api/v1/forms/<form-key>`, where `<form-key>` is the random key mailer gave the form.
 2. The backend checks the form's security settings, validates the fields and stores the submission together with one `pending` delivery per receiver, in one database transaction.
 3. Each delivery is put on the queue in Redis, and the endpoint answers right away. The visitor does not wait for any mail server.
 4. The queue worker inside the backend picks up the delivery, renders the receiver's template, signs the mail with the DKIM key of the receiver's sender domain and submits it to the `mail` service on port 587.

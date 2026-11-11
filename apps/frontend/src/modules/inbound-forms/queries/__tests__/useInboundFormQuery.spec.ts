@@ -11,7 +11,7 @@ const detail: InboundFormDetailDto = {
     projectId: 5,
     domainId: null,
     name: 'Contact',
-    slug: 'contact',
+    formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

@@ -5,6 +5,7 @@ import { Principal } from '../../auth/decorators/Principal.js'
 import { RequireAbility } from '../../permission/decorators/RequireAbility.js'
 import { CurrentAbility } from '../../permission/decorators/CurrentAbility.js'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
+import { CreatedResponseDto } from '../../../decorators/CreatedResponseDto.js'
 import { UserService } from '../services/user.service.js'
 import { UserDetailDto, UserDto, UserListDto } from '../dtos/user.dto.js'
 import { UserCreateDto, UserPermissionsPutDto, UserUpdateDto } from '../dtos/user-create.dto.js'
@@ -25,7 +26,7 @@ export class UserController {
     }
 
     @RequireAbility({ action: 'create', subject: 'User' })
-    @ResponseDto(UserDto)
+    @CreatedResponseDto(UserDto)
     @Post()
     async createUser(
         @Body() body: UserCreateDto,

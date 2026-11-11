@@ -7,6 +7,7 @@ const requiredEnv = {
     BACKEND_JWT_SECRET: 'jwt-secret-for-unit-tests-0123456789',
     BACKEND_ENCRYPTION_SECRET: 'encryption-secret-for-unit-tests-0123',
     MAIL_HOSTNAME: 'mail.example.com',
+    MAIL_SERVER_IPV4: '203.0.113.10',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '587',
     DB_USERNAME: 'mailer',
@@ -34,7 +35,10 @@ describe('shouldServeApiDocs', () => {
 
 describe('corsOptionsFor', () => {
     it('allows every origin on public form routes without credentials', () => {
-        expect(corsOptionsFor('/api/public/form/contact/token')).toEqual({ origin: '*', credentials: false })
+        expect(corsOptionsFor('/api/v1/forms/contact-form-key-00001/token')).toEqual({
+            origin: '*',
+            credentials: false,
+        })
     })
 
     it('turns CORS off everywhere else', () => {
@@ -43,7 +47,7 @@ describe('corsOptionsFor', () => {
     })
 
     it('does not treat a path that merely starts like the public prefix as public', () => {
-        expect(corsOptionsFor('/api/public/formular')).toEqual({ origin: false })
+        expect(corsOptionsFor('/api/v1/formsx')).toEqual({ origin: false })
     })
 })
 

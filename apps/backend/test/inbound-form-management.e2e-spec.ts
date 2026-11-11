@@ -6,7 +6,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, parseMessage, waitForMessagesTo } from './support/mailhog.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -26,7 +26,7 @@ interface FormBody {
     projectId: number
     domainId: number | null
     name: string
-    slug: string
+    formKey: string
     isActive: boolean
 }
 
@@ -69,8 +69,8 @@ describe('InboundForm management + delivery (e2e)', () => {
 
     const mailhogUrl = inject('e2eEnv').MAILHOG_URL
     const encryptionSecret = inject('e2eEnv').BACKEND_ENCRYPTION_SECRET
-    const slug = 'e2e-ifm-contact'
-    const captchaSlug = 'e2e-ifm-captcha'
+    let formKey = ''
+    let captchaFormKey = ''
     const ownerAddress = 'owner@ifm-e2e.test'
     const inactiveAddress = 'inactive@ifm-e2e.test'
     const unpublishedAddress = 'unpublished@ifm-e2e.test'
@@ -117,7 +117,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         const response = await http()
             .post(`/api/inbound-form/${formId}/receiver/${receiverId}/template/publish`)
             .set('Authorization', asOwner())
-            .expect(201)
+            .expect(200)
         return response.body as TemplateBody
     }
 
@@ -129,7 +129,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         ownerToken = await login(app, ownerCredentials)
         viewerToken = await login(app, viewerCredentials)
         outsiderToken = await login(app, outsiderCredentials)
-        await configureSendingDomain(app, ownerToken)
+        await ensureSendingDomain(app)
 
         const domain = await http()
             .post('/api/domain')
@@ -149,7 +149,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const users = await http().get('/api/user').set('Authorization', asOwner()).expect(200)
         const viewer = (users.body as { userId: number; email: string }[]).find(
@@ -193,18 +193,20 @@ describe('InboundForm management + delivery (e2e)', () => {
             const response = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', asOwner())
-                .send({ name: 'IFM Contact', slug, domainId, projectId })
+                .send({ name: 'IFM Contact', domainId, projectId })
                 .expect(201)
             const body = response.body as FormBody
 
             formId = body.inboundFormId
-            expect(body).toMatchObject({ name: 'IFM Contact', slug, domainId, projectId, isActive: true })
+            formKey = body.formKey
+            expect(body).toMatchObject({ name: 'IFM Contact', domainId, projectId, isActive: true })
+            expect(body.formKey).toMatch(/^[0-9a-f]{32}$/)
         })
 
         it.each([
-            ['an invalid slug', { name: 'Bad', slug: 'Not A Slug!' }],
-            ['a missing name', { slug: 'e2e-ifm-noname' }],
-            ['a missing project', { name: 'No project', slug: 'e2e-ifm-noproject', projectId: undefined }],
+            ['a client-chosen form key', { name: 'Bad', formKey: 'chosen-by-client' }],
+            ['a missing name', {}],
+            ['a missing project', { name: 'No project', projectId: undefined }],
         ])('rejects %s with 400', async (_case, overrides) => {
             const response = await http()
                 .post('/api/inbound-form')
@@ -214,16 +216,23 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(response.status).toBe(400)
         })
 
-        it('rejects a duplicate slug and an unknown project with 400', async () => {
-            await http()
+        it('gives two forms with the same name different form keys', async () => {
+            const response = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', asOwner())
-                .send({ name: 'Dup', slug, domainId, projectId })
-                .expect(400)
+                .send({ name: 'IFM Contact', domainId, projectId })
+                .expect(201)
+            const twin = response.body as FormBody
+
+            expect(twin.formKey).not.toBe(formKey)
+            await http().delete(`/api/inbound-form/${twin.inboundFormId}`).set('Authorization', asOwner()).expect(200)
+        })
+
+        it('rejects an unknown project with 400', async () => {
             const unknownProject = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', asOwner())
-                .send({ name: 'Ghost', slug: 'e2e-ifm-ghost', domainId, projectId: 999_999 })
+                .send({ name: 'Ghost', domainId, projectId: 999_999 })
             expect(unknownProject.status).toBe(400)
         })
 
@@ -231,7 +240,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             const response = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', bearer(viewerToken))
-                .send({ name: 'Viewer form', slug: 'e2e-ifm-viewer', domainId, projectId })
+                .send({ name: 'Viewer form', domainId, projectId })
 
             expect(response.status).toBe(403)
         })
@@ -487,7 +496,7 @@ describe('InboundForm management + delivery (e2e)', () => {
     describe('public submission delivery', () => {
         it('renders and delivers the published template to every active receiver', async () => {
             const response = await http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({
                     data: {
                         name: 'Grace',
@@ -497,7 +506,7 @@ describe('InboundForm management + delivery (e2e)', () => {
                         ignored: 'dropped',
                     },
                 })
-                .expect(201)
+                .expect(202)
             expect(response.body).toEqual({ status: 'accepted' })
 
             const submission = await latestSubmission(formId)
@@ -548,9 +557,9 @@ describe('InboundForm management + delivery (e2e)', () => {
 
         it('treats a filled body honeypot as spam', async () => {
             await http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({ security: { trap: 'gotcha' }, data: { name: 'Bot', email: 'bot@ifm-submitter.test' } })
-                .expect(201)
+                .expect(202)
 
             const submission = await latestSubmission(formId)
             expect(submission?.status).toBe('spam')
@@ -565,7 +574,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             const before = await submissionModel().count({ where: { inboundFormId: formId } })
 
             await http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({ data: { name: 'Teen', email: 'teen@ifm-submitter.test', age: 12 } })
                 .expect(400)
 
@@ -681,7 +690,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             expect(response.body).toMatchObject({ isActive: false, name: 'IFM Contact (paused)' })
 
             await http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({ data: { name: 'Late', email: 'late@ifm-submitter.test' } })
                 .expect(404)
 
@@ -701,7 +710,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             await http()
                 .patch(`/api/inbound-form/${formId}`)
                 .set('Authorization', asOwner())
-                .send({ slug: 'Invalid Slug' })
+                .send({ formKey: 'chosen-by-client' })
                 .expect(400)
             const unknown = await http()
                 .patch('/api/inbound-form/999999')
@@ -766,7 +775,7 @@ describe('InboundForm management + delivery (e2e)', () => {
             const victimForm = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', asOwner())
-                .send({ name: 'Victim', slug: 'e2e-ifm-victim', domainId: null, projectId: victimProjectId })
+                .send({ name: 'Victim', domainId: null, projectId: victimProjectId })
                 .expect(201)
             const victimFormId = (victimForm.body as FormBody).inboundFormId
 
@@ -823,7 +832,7 @@ describe('InboundForm management + delivery (e2e)', () => {
 
             await http().get(`/api/inbound-form/${formId}`).set('Authorization', asOwner()).expect(404)
             const submission = await http()
-                .post(`/api/public/form/${slug}`)
+                .post(`/api/v1/forms/${formKey}`)
                 .send({ data: { name: 'After', email: 'after@ifm-submitter.test' } })
             expect(submission.status).toBe(404)
         })
@@ -860,9 +869,10 @@ describe('InboundForm management + delivery (e2e)', () => {
             const form = await http()
                 .post('/api/inbound-form')
                 .set('Authorization', asOwner())
-                .send({ name: 'IFM Captcha', slug: captchaSlug, domainId, projectId })
+                .send({ name: 'IFM Captcha', domainId, projectId })
                 .expect(201)
             captchaFormId = (form.body as FormBody).inboundFormId
+            captchaFormKey = (form.body as FormBody).formKey
 
             await http()
                 .put(`/api/inbound-form/${captchaFormId}/security`)
@@ -932,7 +942,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         })
 
         it('rejects a submission without a captcha token', async () => {
-            const response = await http().post(`/api/public/form/${captchaSlug}`).send({ data: {} })
+            const response = await http().post(`/api/v1/forms/${captchaFormKey}`).send({ data: {} })
 
             expect(response.status).toBe(403)
             expect(await latestSubmission(captchaFormId)).toBeNull()
@@ -940,9 +950,9 @@ describe('InboundForm management + delivery (e2e)', () => {
 
         it('classifies a body honeypot hit as spam before checking the captcha', async () => {
             await http()
-                .post(`/api/public/form/${captchaSlug}`)
+                .post(`/api/v1/forms/${captchaFormKey}`)
                 .send({ security: { trap: 'filled' }, data: {} })
-                .expect(201)
+                .expect(202)
 
             expect((await latestSubmission(captchaFormId))?.status).toBe('spam')
         })
@@ -969,7 +979,7 @@ describe('InboundForm management + delivery (e2e)', () => {
         it('throttles excessive public submissions', async () => {
             const statuses: number[] = []
             for (let attempt = 0; attempt < 12; attempt++) {
-                const response = await http().post('/api/public/form/e2e-ifm-unknown').send({ data: {} })
+                const response = await http().post('/api/v1/forms/e2e-ifm-unknown').send({ data: {} })
                 statuses.push(response.status)
             }
 

@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SettingsController } from './settings.controller.js'
 import { SettingsService } from '../services/settings.service.js'
 import { PoliciesGuard } from '../../permission/guards/policies.guard.js'
-import { SendingDomain, SendingDomainProposal } from '../interfaces/settings.interface.js'
+import { SendingDomain } from '../interfaces/settings.interface.js'
 import { SettingsDto } from '../dtos/settings.dto.js'
+import { SendingDomainDto } from '../dtos/sending-domain.dto.js'
 import {
     DomainDnsRecordStatus,
     DomainDnsRecordType,
@@ -32,26 +33,58 @@ const sendingDomain: SendingDomain = {
             createdAt: new Date(),
             updatedAt: new Date(),
         },
+        {
+            dnsId: 2,
+            domainId: 10,
+            type: DomainDnsRecordType.MX,
+            use: DomainDnsRecordUse.MX,
+            status: DomainDnsRecordStatus.VALID,
+            host: 'mail.sending-domain.org',
+            value: '10 mail.sending-domain.org',
+            current: '10 mail.sending-domain.org',
+            issue: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        },
     ],
 }
 
-const proposal: SendingDomainProposal = {
+const serializedSendingDomain = {
     fqdn: 'mail.sending-domain.org',
     serverIpv4: '203.0.113.10',
     serverIpv6: null,
+    lastCheckedAt: null,
+    records: [
+        {
+            type: DomainDnsRecordType.TXT,
+            use: DomainDnsRecordUse.SPF,
+            status: DomainDnsRecordStatus.VALID,
+            host: 'mail.sending-domain.org',
+            value: 'v=spf1 ip4:203.0.113.10 -all',
+            current: 'v=spf1 ip4:203.0.113.10 -all',
+            issue: null,
+            priority: null,
+        },
+        {
+            type: DomainDnsRecordType.MX,
+            use: DomainDnsRecordUse.MX,
+            status: DomainDnsRecordStatus.VALID,
+            host: 'mail.sending-domain.org',
+            value: 'mail.sending-domain.org',
+            priority: 10,
+            current: '10 mail.sending-domain.org',
+            issue: null,
+        },
+    ],
 }
 
 describe('SettingsController', () => {
     let controller: SettingsController
     let getSendingDomain: Mock<SettingsService['getSendingDomain']>
-    let getSendingDomainProposal: Mock<SettingsService['getSendingDomainProposal']>
-    let configureSendingDomain: Mock<SettingsService['configureSendingDomain']>
     let refreshSendingDomain: Mock<SettingsService['refreshSendingDomain']>
 
     beforeEach(async () => {
         getSendingDomain = vi.fn<typeof getSendingDomain>().mockResolvedValue(sendingDomain)
-        getSendingDomainProposal = vi.fn<typeof getSendingDomainProposal>().mockResolvedValue(proposal)
-        configureSendingDomain = vi.fn<typeof configureSendingDomain>().mockResolvedValue(sendingDomain)
         refreshSendingDomain = vi.fn<typeof refreshSendingDomain>().mockResolvedValue(sendingDomain)
 
         const module: TestingModule = await Test.createTestingModule({
@@ -61,8 +94,6 @@ describe('SettingsController', () => {
                     provide: SettingsService,
                     useValue: {
                         getSendingDomain,
-                        getSendingDomainProposal,
-                        configureSendingDomain,
                         refreshSendingDomain,
                     },
                 },
@@ -76,8 +107,11 @@ describe('SettingsController', () => {
     })
 
     describe('getSettings', () => {
-        it('wraps the configured sending domain', async () => {
-            await expect(controller.getSettings()).resolves.toEqual({ sendingDomain })
+        it('wraps the configured sending domain as its response DTO', async () => {
+            const settings = await controller.getSettings()
+
+            expect(settings.sendingDomain).toBeInstanceOf(SendingDomainDto)
+            expect(settings.sendingDomain?.fqdn).toBe(sendingDomain.fqdn)
         })
 
         it('reports a null sending domain before one is configured', async () => {
@@ -94,61 +128,16 @@ describe('SettingsController', () => {
                 { excludeExtraneousValues: true },
             )
 
-            expect(serialized).toEqual({
-                sendingDomain: {
-                    fqdn: 'mail.sending-domain.org',
-                    serverIpv4: '203.0.113.10',
-                    serverIpv6: null,
-                    lastCheckedAt: null,
-                    records: [
-                        {
-                            type: DomainDnsRecordType.TXT,
-                            use: DomainDnsRecordUse.SPF,
-                            status: DomainDnsRecordStatus.VALID,
-                            host: 'mail.sending-domain.org',
-                            value: 'v=spf1 ip4:203.0.113.10 -all',
-                            current: 'v=spf1 ip4:203.0.113.10 -all',
-                            issue: null,
-                        },
-                    ],
-                },
-            })
-        })
-    })
-
-    describe('getSendingDomainProposal', () => {
-        it('returns the proposal from the service', async () => {
-            await expect(controller.getSendingDomainProposal()).resolves.toBe(proposal)
-        })
-    })
-
-    describe('configureSendingDomain', () => {
-        it('passes the server addresses through to the service', async () => {
-            const result = await controller.configureSendingDomain({
-                serverIpv4: '203.0.113.10',
-                serverIpv6: '2001:db8::10',
-            })
-
-            expect(configureSendingDomain).toHaveBeenCalledWith({
-                serverIpv4: '203.0.113.10',
-                serverIpv6: '2001:db8::10',
-            })
-            expect(result).toBe(sendingDomain)
-        })
-
-        it('normalizes an omitted IPv6 address to null', async () => {
-            await controller.configureSendingDomain({ serverIpv4: '203.0.113.10' })
-
-            expect(configureSendingDomain).toHaveBeenCalledWith({
-                serverIpv4: '203.0.113.10',
-                serverIpv6: null,
-            })
+            expect(serialized).toEqual({ sendingDomain: serializedSendingDomain })
         })
     })
 
     describe('refreshSendingDomain', () => {
-        it('returns the refreshed sending domain', async () => {
-            await expect(controller.refreshSendingDomain()).resolves.toBe(sendingDomain)
+        it('returns the refreshed sending domain as its response DTO', async () => {
+            const refreshed = await controller.refreshSendingDomain()
+
+            expect(refreshed).toBeInstanceOf(SendingDomainDto)
+            expect(instanceToPlain(refreshed, { excludeExtraneousValues: true })).toEqual(serializedSendingDomain)
             expect(refreshSendingDomain).toHaveBeenCalledOnce()
         })
 

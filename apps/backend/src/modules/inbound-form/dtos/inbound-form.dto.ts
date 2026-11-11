@@ -21,7 +21,7 @@ export class InboundFormDto {
     name!: string
 
     @Expose()
-    slug!: string
+    formKey!: string
 
     @Expose()
     @ApiProperty({ type: Boolean })
@@ -40,7 +40,7 @@ export class InboundFormDto {
             projectId: form.projectId,
             domainId: form.domainId,
             name: form.name,
-            slug: form.slug,
+            formKey: form.formKey,
             isActive: form.isActive,
             allowedHostnames: form.allowedHostnames,
             createdAt: form.createdAt,

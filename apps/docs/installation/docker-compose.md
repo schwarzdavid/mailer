@@ -30,11 +30,11 @@ chmod 600 .env
 
 `chmod 600` makes `.env` readable only by `root`, because it is about to hold your secrets.
 
-The image itself, `ghcr.io/schwarzdavid/mailer-backend`, is public; you do not need to log in to any registry.
+The image itself, `ghcr.io/schwarzdavid/mailer`, is public; you do not need to log in to any registry.
 
 ## Fill in `.env`
 
-`.env` holds every setting compose and the backend need. The template contains the keys below, in this order. Required keys must have a value before the first start; the others can keep the value the template already has. The full list of settings, including optional ones the template leaves out, is on [Environment variables](/configuration/environment).
+`.env` holds every setting compose and the backend need. The template contains only the keys below, in this order; the required ones must have a value before the first start. Optional settings such as `LOG_LEVEL` or the [rate limits](/configuration/rate-limits) keep their defaults until you add them; all of them are on [Environment variables](/configuration/environment).
 
 ### Generate the secrets
 
@@ -52,14 +52,21 @@ for key in DB_PASSWORD BACKEND_JWT_SECRET BACKEND_ENCRYPTION_SECRET MAIL_PASSWOR
 done
 ```
 
-### Set the names and the version
+### Set the names, the addresses and the version
 
-Set your two host names and the image version. Replace the example values with yours; `IMAGE_TAG` is the release tag without the leading `v`:
+Set your two host names, the server's public IP address and the image version. Replace the example values with yours; `IMAGE_TAG` is the release tag without the leading `v`:
 
 ```bash
 sed -i 's|^SITE_ADDRESS=.*|SITE_ADDRESS=app.example.com|' .env
 sed -i 's|^MAIL_HOSTNAME=.*|MAIL_HOSTNAME=mx.example.com|' .env
+sed -i 's|^MAIL_SERVER_IPV4=.*|MAIL_SERVER_IPV4=203.0.113.10|' .env
 sed -i 's|^IMAGE_TAG=.*|IMAGE_TAG=1.0.0|' .env
+```
+
+If the server has a public IPv6 address and you created the AAAA record for `mx.example.com`, add it as well:
+
+```bash
+echo 'MAIL_SERVER_IPV6=2001:db8::10' >> .env
 ```
 
 You can also edit the file by hand with `nano .env`.
@@ -70,20 +77,14 @@ You can also edit the file by hand with `nano .env`.
 | --------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SITE_ADDRESS`              | Required         | The host name of the admin UI and API, for example `app.example.com`. Only the name: no `https://`, no path. Compose refuses to start while it is empty.                                                                                                                                      |
 | `IMAGE_TAG`                 | Optional, pin it | The version of the mailer image to run: the release tag without the `v`, for example `1.0.0` for `v1.0.0`. The template says `latest`; replace it, so the running image always matches the `compose.yml` you downloaded. A tag of the form `sha-<7 characters>` (the commit) also works.      |
-| `LOG_LEVEL`                 | Optional         | How much the backend logs. Keep `info`. See [LOG_LEVEL](/configuration/environment#log-level).                                                                                                                                                                                                |
 | `DB_DATABASE`               | Required         | The name of the database. Keep `mailer`.                                                                                                                                                                                                                                                      |
 | `DB_USERNAME`               | Required         | The database user. Keep `mailer`.                                                                                                                                                                                                                                                             |
 | `DB_PASSWORD`               | Required         | A generated secret. The bundled Postgres creates the database with it on the very first start only. Changing it later in `.env` alone locks the backend out of the database; the [Rotating secrets](/operations/rotating-secrets#db-password) page under Operations shows the full procedure. |
 | `BACKEND_JWT_SECRET`        | Required         | A generated secret of at least 32 characters. It signs the login sessions of the admin UI; changing it signs everybody out.                                                                                                                                                                   |
 | `BACKEND_ENCRYPTION_SECRET` | Required         | A generated secret of at least 32 characters, different from the JWT secret. It encrypts the DKIM private keys and reCAPTCHA secrets stored in the database. **Back it up now**, see below.                                                                                                   |
 | `MAIL_HOSTNAME`             | Required         | The name of the mail server and mailer's sending domain, for example `mx.example.com`. It must differ from `SITE_ADDRESS`. Compose refuses to start while it is empty.                                                                                                                        |
+| `MAIL_SERVER_IPV4`          | Required         | The public IPv4 address of the server, for example `203.0.113.10`: the address the A record of `mx.example.com` points to. mailer builds the A, SPF and PTR records of the sending domain from it. The backend refuses to start while it is empty.                                            |
 | `MAIL_PASSWORD`             | Required         | A generated secret: the password of the bounce mailbox `bounce@mx.example.com`. You create the mailbox with this password further down; compose passes it to the backend for sending and for reading bounces.                                                                                 |
-| `PUBLIC_API_RATE_LIMIT`     | Optional         | How many requests one API key may make to the send API per window. Keep `60`.                                                                                                                                                                                                                 |
-| `PUBLIC_API_RATE_TTL`       | Optional         | The length of that window in milliseconds. Keep `60000` (one minute).                                                                                                                                                                                                                         |
-| `FORM_SUBMIT_RATE_LIMIT`    | Optional         | How many submissions one visitor (IP address) may send to one form per window. Keep `5`.                                                                                                                                                                                                      |
-| `FORM_SUBMIT_RATE_TTL`      | Optional         | The length of that window in milliseconds. Keep `600000` (ten minutes).                                                                                                                                                                                                                       |
-| `FORM_TOKEN_RATE_LIMIT`     | Optional         | How many form tokens one visitor may request for one form per window. A form protected with a timed token requests one before it submits. Keep `5`.                                                                                                                                           |
-| `FORM_TOKEN_RATE_TTL`       | Optional         | The length of that window in milliseconds. Keep `600000` (ten minutes).                                                                                                                                                                                                                       |
 
 Everything else the backend needs (database host, Redis, the mail server connection) is set by `compose.yml` itself; a value for those keys in `.env` has no effect. [Environment variables](/configuration/environment) lists which.
 
@@ -96,7 +97,6 @@ cat .env
 ```text
 SITE_ADDRESS=app.example.com
 IMAGE_TAG=1.0.0
-LOG_LEVEL=info
 
 DB_DATABASE=mailer
 DB_USERNAME=mailer
@@ -106,14 +106,8 @@ BACKEND_JWT_SECRET=q9Lm…
 BACKEND_ENCRYPTION_SECRET=Hc4W…
 
 MAIL_HOSTNAME=mx.example.com
+MAIL_SERVER_IPV4=203.0.113.10
 MAIL_PASSWORD=Zr8k…
-
-PUBLIC_API_RATE_LIMIT=60
-PUBLIC_API_RATE_TTL=60000
-FORM_SUBMIT_RATE_LIMIT=5
-FORM_SUBMIT_RATE_TTL=600000
-FORM_TOKEN_RATE_LIMIT=5
-FORM_TOKEN_RATE_TTL=600000
 ```
 
 The four secrets show your own 64-character values. No line may end with a bare `=`.

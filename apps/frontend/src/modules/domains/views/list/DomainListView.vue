@@ -48,7 +48,7 @@
             :to="{ name: RouteNames.DOMAIN_DETAILS, params: { domainId: domain.domainId } }"
         >
             <template #subtitle>
-                <i18n-t v-if="domain.lastCheckedAt" keypath="dns.checkedAt" tag="span">
+                <i18n-t v-if="domain.lastCheckedAt" keypath="dns.checkedAt" tag="span" scope="global">
                     <template #time><RelativeTime :value="domain.lastCheckedAt" /></template>
                 </i18n-t>
                 <span v-else>{{ t('dns.neverChecked') }}</span>

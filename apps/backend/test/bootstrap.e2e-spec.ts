@@ -48,7 +48,7 @@ describe('application bootstrap (shared configureApp)', () => {
 
     it('answers a public form preflight from any origin and echoes the requested headers', async () => {
         const response = await request(app.getHttpServer())
-            .options('/api/public/form/contact')
+            .options('/api/v1/forms/contact-form-key-00001')
             .set('Origin', 'https://kunde.example')
             .set('Access-Control-Request-Method', 'POST')
             .set('Access-Control-Request-Headers', 'content-type,x-form-check')
@@ -59,7 +59,7 @@ describe('application bootstrap (shared configureApp)', () => {
 
     it('lets other sites load the form client script', async () => {
         await request(app.getHttpServer())
-            .get('/api/public/form/client.js')
+            .get('/api/v1/forms/client.js')
             .expect('Cross-Origin-Resource-Policy', 'cross-origin')
             .expect(200)
     })

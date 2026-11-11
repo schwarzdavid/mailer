@@ -18,9 +18,9 @@ describe('TRUST_PROXY (e2e)', () => {
         await app.close()
     })
 
-    function submitForm(forwardedFor: string, slug = 'trust-proxy-unknown-form') {
+    function submitForm(forwardedFor: string, formKey = 'trust-proxy-unknown-form') {
         return request(app.getHttpServer())
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .set('X-Forwarded-For', forwardedFor)
             .send({ data: {} })
     }

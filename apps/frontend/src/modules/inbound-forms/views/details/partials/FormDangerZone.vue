@@ -17,7 +17,7 @@
     import SectionCard from '@/components/SectionCard.vue'
     import { useConfirm } from '@/composables/useConfirm.ts'
     import { useNotify } from '@/composables/useNotify.ts'
-    import { SLUG_PREFIX } from '@/modules/inbound-forms/helpers/slug.ts'
+    import { formEndpointPath } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
     import { useInboundFormDeleteMutation } from '@/modules/inbound-forms/mutations/useInboundFormDeleteMutation.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 
@@ -33,7 +33,7 @@
         const confirmed = await confirm({
             title: t('module.inboundForms.details.delete.confirmTitle', { name: props.form.name }),
             body: t('module.inboundForms.details.delete.confirmBody', {
-                endpoint: `${SLUG_PREFIX}${props.form.slug}`,
+                endpoint: formEndpointPath(props.form.formKey),
                 fields: props.form.fields.length,
                 checks: props.form.security.length,
                 receivers: props.form.receivers.length,

@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Header, Param, Post, Req, UseGuards } from '@nestjs/common'
-import { ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
+import {
+    Body,
+    Controller,
+    Get,
+    Header,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Post,
+    Req,
+    SerializeOptions,
+    UseGuards,
+} from '@nestjs/common'
+import { ApiAcceptedResponse, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
 import { SkipThrottle } from '@nestjs/throttler'
 import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import type { Request } from 'express'
@@ -12,7 +24,7 @@ import { INBOUND_FORM_CLIENT_SCRIPT } from '../client/inbound-form-client.js'
 
 @ApiTags('public-form')
 @UseGuards(AppThrottlerGuard)
-@Controller('public/form')
+@Controller('v1/forms')
 export class PublicInboundFormController {
     constructor(private readonly submissionService: InboundFormSubmissionService) {}
 
@@ -28,24 +40,30 @@ export class PublicInboundFormController {
     }
 
     @ResponseDto(InboundFormTokenDto)
+    @HttpCode(HttpStatus.OK)
     @FormThrottle('token')
-    @Post(':slug/token')
-    async issueInboundFormToken(@Param('slug') slug: string, @Req() request: Request): Promise<InboundFormTokenDto> {
-        const issued = await this.submissionService.issueToken(slug, request.headers, request.ip ?? '')
+    @Post(':formKey/token')
+    async issueInboundFormToken(
+        @Param('formKey') formKey: string,
+        @Req() request: Request,
+    ): Promise<InboundFormTokenDto> {
+        const issued = await this.submissionService.issueToken(formKey, request.headers, request.ip ?? '')
 
         return InboundFormTokenDto.fromIssuedToken(issued)
     }
 
-    @ResponseDto(InboundFormSubmitResultDto)
+    @HttpCode(HttpStatus.ACCEPTED)
+    @SerializeOptions({ type: InboundFormSubmitResultDto })
+    @ApiAcceptedResponse({ type: InboundFormSubmitResultDto })
     @FormThrottle('submit')
-    @Post(':slug')
+    @Post(':formKey')
     async submitInboundForm(
-        @Param('slug') slug: string,
+        @Param('formKey') formKey: string,
         @Body() body: InboundFormSubmitDto,
         @Req() request: Request,
     ): Promise<InboundFormSubmitResultDto> {
         await this.submissionService.submitForm(
-            slug,
+            formKey,
             { security: body.security, data: body.data },
             request.headers,
             request.query,

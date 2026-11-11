@@ -52,7 +52,7 @@ describe('useRegisterMutation', () => {
         await result.mutateAsync(registration)
 
         expect(queryClient.getQueryData(['auth.user'])).toEqual(authentication.user)
-        expect(queryClient.getQueryData(['setup.status'])).toEqual({ needsSetup: true, step: 'sendingDomain' })
+        expect(queryClient.getQueryData(['setup.status'])).toEqual({ needsSetup: true, step: 'records' })
         expect(localStorage.getItem(JWT_KEY)).toContain('jwt-token')
         unmount()
     })

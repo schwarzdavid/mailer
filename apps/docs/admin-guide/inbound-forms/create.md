@@ -1,6 +1,6 @@
 # Create a form
 
-This page walks you through creating an inbound form: its name, its slug, the sender domain its mail comes from, whether it accepts submissions, and which websites may post to it. At the end the form has a public endpoint such as `https://app.example.com/api/public/form/contact` that your website's contact form can post to.
+This page walks you through creating an inbound form: its name, the sender domain its mail comes from, whether it accepts submissions, and which websites may post to it. At the end the form has a public endpoint such as `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that your website's contact form can post to.
 
 An **inbound form** is mailer's side of a contact form on a website. The website keeps its own HTML form; when a visitor submits it, the browser sends the values to the form's public endpoint, mailer checks them and e-mails them to the addresses you configure. The website needs no backend of its own.
 
@@ -24,21 +24,20 @@ Setting up a form takes five steps, each on its own page of this guide:
 2. In the card **Inbound forms**, click **New form**.
 3. In the dialog **New inbound form**, fill in:
 
-    | Field             | Required | What to enter                                                                                                                                                                              |
-    | ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-    | **Name**          | Required | A name for people, for example `Contact form`. At most 255 characters.                                                                                                                     |
-    | **Slug**          | Required | The last part of the endpoint URL, for example `contact`. mailer fills it in from the name until you edit it.                                                                              |
-    | **Sender domain** | Optional | The domain the form's mail comes from, for example `mail.example.net`. The list offers only the domains assigned to the project; when the project has exactly one, it is already selected. |
+    | Field             | Required | What to enter                                                                                                                                                                                                   |
+    | ----------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | **Name**          | Required | A name for people, for example `Contact form`. At most 255 characters.                                                                                                                                          |
+    | **Sender domain** | Optional | The domain the form's mail comes from, for example `mail.example.net`. The list offers only the domains assigned to the project. When the project has exactly one, the field is hidden and that domain is used. |
 
 4. Click **Create form**.
 
 mailer opens the form's page and shows **Form created**.
 
-The **slug** may contain lowercase letters, digits and single hyphens between them, like `contact` or `contact-request`; it cannot start or end with a hyphen and is at most 255 characters long. It must be unique across the whole installation, not only within the project: if another form anywhere already uses it, the dialog shows `Slug is already in use`.
+mailer gives every form a **form key**, a random 32-character value of lowercase letters and digits such as `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that forms the last part of the endpoint URL. Its casing does not matter: `/api/v1/forms/3F9A0C1E…` reaches the same form. Forms created before this format keep their shorter key, now in lowercase, and their old URLs keep working. You cannot choose or change it, so two forms never collide, even in different projects, and nobody can guess a form's URL from its name.
 
-![The page of the form Contact form: the Endpoint card with the URL https://app.example.com/api/public/form/contact and the Accept submissions switch, and below it the General card with name, slug and sender domain](/screenshots/admin-guide/form-detail.png)
+![The page of the form Contact form: the Endpoint card with the URL https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c and the Accept submissions switch, and below it the General card with the name](/screenshots/admin-guide/form-detail.png)
 
-_The form's page. The **Endpoint** card shows the public URL; **General** holds name, slug and sender domain._
+_The form's page. The **Endpoint** card shows the public URL; **General** holds the name and, when the project has more than one domain, the sender domain._
 
 ## The form's page
 
@@ -49,10 +48,10 @@ The page shows, from top to bottom, the cards **Endpoint**, **General**, **Field
 The **Endpoint** card shows the URL your website posts to, with a copy button:
 
 ```text
-https://app.example.com/api/public/form/<slug>
+https://app.example.com/api/v1/forms/<form-key>
 ```
 
-With the slug `contact` that is `https://app.example.com/api/public/form/contact`. The admin UI builds the URL from the address you opened it under, so it shows your own `SITE_ADDRESS`.
+With the form key `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` that is `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c`. The URL stays the same for the life of the form. The admin UI builds the URL from the address you opened it under, so it shows your own `SITE_ADDRESS`.
 
 **Example request** opens a ready-made JavaScript `fetch` call with sample values for the form's fields. [Embed the form](/admin-guide/inbound-forms/embed) has complete examples.
 
@@ -62,11 +61,12 @@ The switch **Accept submissions** turns the endpoint on and off. A new form is o
 
 While the switch is off, the endpoint answers `404` with the message `Unknown form`, exactly as if the form did not exist, and so does the token endpoint of the timed token. Submissions that were already accepted are still delivered. Switch it off while you build a form you do not want reachable yet, or to stop a flood of spam at once.
 
-### Name, slug and sender domain
+### Name and sender domain
 
 Change them in the card **General** and click **Save**.
 
-- Changing the **Slug** changes the endpoint URL at once. The website must post to the new URL; the old one answers `404`.
+- Renaming the form does not change its endpoint URL.
+- The **Sender domain** field only appears when the project has more than one domain. With exactly one, the form always uses that domain, and saving a form that has none yet assigns it.
 - The **Sender domain** decides which sender addresses the receivers may use. While the form has receivers, mailer refuses to clear it (`The domain cannot be removed while receivers exist`), and it refuses a different domain unless every receiver's sender address already ends in that domain, which in practice means it refuses it.
 
 ::: warning Changing the sender domain of a form with receivers

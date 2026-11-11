@@ -10,7 +10,7 @@ _The card **Receivers**: one receiver with a published template._
 
 ## Add a receiver
 
-You need **Manage forms** on the form's project, and the form needs a **Sender domain** (see [Create a form](/admin-guide/inbound-forms/create#name-slug-and-sender-domain)). Without one, the dialog says **Choose a sender domain on the form first.** and mailer refuses the receiver with `The form needs a domain before receivers can be configured`.
+You need **Manage forms** on the form's project, and the form needs a **Sender domain** (see [Create a form](/admin-guide/inbound-forms/create#name-and-sender-domain)). Without one, the dialog says **Choose a sender domain on the form first.** and mailer refuses the receiver with `The form needs a domain before receivers can be configured`.
 
 1. On the form's page, in the card **Receivers**, click **Add receiver**.
 2. Fill in the dialog:

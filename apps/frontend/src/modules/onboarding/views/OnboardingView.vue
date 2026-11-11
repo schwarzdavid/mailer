@@ -23,17 +23,10 @@
             </div>
             <ErrorState v-if="statusError" size="page" :thing="t('module.setup.thing')" @retry="refetchStatus()" />
             <OnboardingAccountStep v-else-if="current === 'account'" @completed="viewing = null" />
-            <SendingDomainCard
-                v-else-if="current === 'sendingDomain'"
-                mode="setup"
-                :sending-domain="settings?.sendingDomain ?? null"
-                @saved="onDomainSaved"
-            />
             <template v-else-if="current === 'records'">
                 <OnboardingRecordsStep
                     v-if="settings?.sendingDomain"
                     :sending-domain="settings.sendingDomain"
-                    @back="viewing = 'sendingDomain'"
                     @completed="finish"
                 />
                 <SectionCard v-else :title="t('dns.title')" flush>
@@ -50,9 +43,8 @@
     import { useI18n } from 'vue-i18n'
     import { useRouter } from 'vue-router'
     import { useTitle } from '@vueuse/core'
-    import { useQuery, useQueryClient } from '@tanstack/vue-query'
+    import { useQuery } from '@tanstack/vue-query'
     import { mdiLogout } from '@mdi/js'
-    import type { SetupStatusDto } from 'api'
     import AppLogo from '@/components/AppLogo.vue'
     import ErrorState from '@/components/ErrorState.vue'
     import IconButton from '@/components/IconButton.vue'
@@ -65,13 +57,11 @@
     import { useSetupStatusQuery } from '@/modules/onboarding/queries/useSetupStatusQuery.ts'
     import OnboardingAccountStep from '@/modules/onboarding/views/partials/OnboardingAccountStep.vue'
     import OnboardingRecordsStep from '@/modules/onboarding/views/partials/OnboardingRecordsStep.vue'
-    import SendingDomainCard from '@/modules/settings/components/SendingDomainCard.vue'
     import { useSettingsQuery } from '@/modules/settings/queries/useSettingsQuery.ts'
     import { RouteNames } from '@/router/RouteNames.ts'
 
     const { t } = useI18n()
     const router = useRouter()
-    const client = useQueryClient()
     const logout = useLogout()
     const year = new Date().getFullYear()
     const viewing = ref<SetupStepKey | null>(null)
@@ -79,10 +69,7 @@
     const { data: status, isError: statusError, refetch: refetchStatus } = useQuery(useSetupStatusQuery())
     const reached = computed<SetupStepKey>(() => {
         const step = status.value?.step
-        if (step === 'finished') {
-            return 'records'
-        }
-        return step === 'sendingDomain' || step === 'records' ? step : 'account'
+        return step === 'records' || step === 'finished' ? 'records' : 'account'
     })
     const current = computed<SetupStepKey>(() => viewing.value ?? reached.value)
     const signedIn = computed(() => reached.value !== 'account')
@@ -93,11 +80,6 @@
     const { data: settings } = useQuery({ queryKey: settingsKey, queryFn: settingsFn, enabled: signedIn })
 
     useTitle(() => t('app.documentTitle', { page: t('module.setup.title') }))
-
-    function onDomainSaved() {
-        viewing.value = null
-        client.setQueryData<SetupStatusDto>(['setup.status'], { needsSetup: true, step: 'records' })
-    }
 
     async function finish() {
         await router.push({ name: RouteNames.DASHBOARD })

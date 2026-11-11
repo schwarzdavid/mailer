@@ -1,10 +1,10 @@
 # Settings
 
-This page explains the **Settings** page, which holds the platform sending domain: the server's own mail identity. It walks you through changing the server's IP addresses and explains what happens when `MAIL_HOSTNAME` changes. At the end the sending domain's DNS records match your server again and the page shows them all as valid.
+This page explains the **Settings** page, which shows the platform sending domain: the server's own mail identity. It walks you through changing the server's IP addresses and explains what happens when `MAIL_HOSTNAME` changes; both are set in `.env`, not on this page. At the end the sending domain's DNS records match your server again and the page shows them all as valid.
 
 The **platform sending domain** is the host name your server sends mail as, the value of `MAIL_HOSTNAME` in `.env`, for example `mx.example.com`. There is exactly one. mailer uses it as the name of the mail server, as the address bounce reports go to (`bounce@mx.example.com`) and as the SPF include of every customer's sender domain. The customer domains themselves are on [Domains](/admin-guide/domains).
 
-You need **View settings** to open the page and **Update settings** to change anything on it.
+You need **View settings** to open the page and **Update settings** to run **Check again**.
 
 ## The Settings page
 
@@ -16,14 +16,14 @@ _**Settings** with the **Sending domain** card and the **DNS records** card belo
 
 ### The Sending domain card
 
-- **Domain name** shows `MAIL_HOSTNAME`. It cannot be edited here; the hint below says so: **Set by MAIL_HOSTNAME in the server configuration. Change it there and restart the server to switch.** See [When MAIL_HOSTNAME changes](#when-mail-hostname-changes).
-- **Server IPv4 address** (required) and **Server IPv6 address (optional)** are the public addresses your server sends from. You entered them in the [first-run setup](/installation/first-run-setup#step-2-sending-domain). mailer builds the A, AAAA, SPF and PTR records from them.
+The card is read-only for everyone. The hint below the values says where they come from: **Set by MAIL_HOSTNAME, MAIL_SERVER_IPV4 and MAIL_SERVER_IPV6 in the server configuration. Change them there and restart the server.**
 
-Users without **Update settings** see the same values read-only.
+- **Domain name** shows `MAIL_HOSTNAME`. See [When MAIL_HOSTNAME changes](#when-mail-hostname-changes).
+- **Server IPv4 address** and **Server IPv6 address** show `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6`, the public addresses your server sends from. The IPv6 address is empty when `MAIL_SERVER_IPV6` is not set. mailer builds the A, AAAA, SPF and PTR records from them; see [Change the server IP addresses](#change-the-server-ip-addresses).
 
 ### The DNS records card
 
-**DNS records** lists every record the sending domain needs, with **Host**, **Value**, copy buttons and a status, as in the first-run setup: **A**, **MX**, **SPF**, **PTR (IPv4)**, **DKIM** and **DMARC**, plus **AAAA** and **PTR (IPv6)** when an IPv6 address is set. That is 8 records, or 6 without IPv6. [First-run setup](/installation/first-run-setup#step-3-dns-records) lists every record with example values and explains each one. The PTR records are set at your hosting provider, all others in your DNS zone.
+**DNS records** lists every record the sending domain needs, with **Host**, **Value** (for **MX** also **Priority**), copy buttons and a status, as in the first-run setup: **A**, **MX**, **SPF**, **PTR (IPv4)**, **DKIM** and **DMARC**, plus **AAAA** and **PTR (IPv6)** when an IPv6 address is set. That is 8 records, or 6 without IPv6. [First-run setup](/installation/first-run-setup#step-2-dns-records) lists every record with example values and explains each one. The PTR records are set at your hosting provider, all others in your DNS zone.
 
 mailer checks the records every 15 minutes. **Check again** looks them up right away. When every record is valid, the card shows **All 8 records are valid** with **mx.example.com is fully set up for reliable delivery.** DKIM, A, AAAA, MX and PTR must match the value in the card exactly; SPF and DMARC are checked by content ([Publish the three records](/admin-guide/domains#publish-the-three-records)).
 
@@ -31,14 +31,23 @@ While a record is not valid, the navigation shows a dot next to **Settings** and
 
 ## Change the server IP addresses
 
-Do this when the server gets a new IP address, for example after moving to another machine with the same `MAIL_HOSTNAME`. The example changes the IPv4 address from `203.0.113.10` to `203.0.113.20`.
+Do this when the server gets a new IP address, for example after moving to another machine with the same `MAIL_HOSTNAME`, or when you add or drop its IPv6 address. You need shell access to the server. The example changes the IPv4 address from `203.0.113.10` to `203.0.113.20`.
 
 1. **Update the address records.** In your DNS zone, change the A record of `mx.example.com` to the new address (and the AAAA record if the IPv6 address changes). At your hosting provider, set the PTR record of the new address to `mx.example.com`, as on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
-2. **Save the new address in mailer.** On **Settings**, enter the new **Server IPv4 address** (and **Server IPv6 address (optional)**) and click **Save**. Confirm the dialog **Change the server addresses?** with **Change addresses**.
-3. **Update the SPF record.** The SPF value in **DNS records** now lists the new address, for example `v=spf1 ip4:203.0.113.20 ip6:2001:db8::10 -all`. Replace the SPF record of `mx.example.com` in your DNS zone with it, using the copy button.
+2. **Set the new address in `.env`** and restart the backend:
+
+    ```bash
+    cd /opt/mailer
+    sed -i 's/^MAIL_SERVER_IPV4=.*/MAIL_SERVER_IPV4=203.0.113.20/' .env
+    docker compose up -d
+    ```
+
+    For IPv6, set `MAIL_SERVER_IPV6` the same way; to drop IPv6, delete the `MAIL_SERVER_IPV6` line.
+
+3. **Update the SPF record.** The SPF value in **DNS records** on **Settings** now lists the new address, for example `v=spf1 ip4:203.0.113.20 ip6:2001:db8::10 -all`. Replace the SPF record of `mx.example.com` in your DNS zone with it, using the copy button.
 4. **Check.** Once DNS has caught up, click **Check again**.
 
-What mailer does when you save: it generates every record of the sending domain again from the new addresses and looks them up once right away. The DKIM key stays the same, so the DKIM record does not change. Your customers' sender domains are not affected: their SPF records include `mx.example.com` instead of naming addresses, so mailer leaves their records and statuses as they are and they keep sending.
+What mailer does on that start: the backend compares `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6` with the A and AAAA records of the sending domain, and when they differ it generates every record of the sending domain again from the new addresses and looks them up once right away. A start with unchanged addresses leaves the records and their statuses alone. The DKIM key stays the same, so the DKIM record does not change. Your customers' sender domains are not affected: their SPF records include `mx.example.com` instead of naming addresses, so mailer leaves their records and statuses as they are and they keep sending.
 
 ::: warning Mail may be rejected in between
 Until the A, SPF and PTR records point to the new address, receivers see mail from an address your DNS does not name, and may reject it or file it as spam. Change DNS first and keep the gap short.
@@ -148,7 +157,18 @@ Ask your customers to add the new include **alongside** the old one before the s
 
 On **Settings**, the **DNS records** card shows **All 8 records are valid** (6 without IPv6) after **Check again**, and the navigation shows no dot next to **Settings**.
 
-After changing the IP address, the records resolve with the new values:
+After changing the IP address, the backend log names the regeneration:
+
+```bash
+cd /opt/mailer
+docker compose logs backend | grep "Server addresses"
+```
+
+```text
+mailer-backend-1  | {"level":40,…,"context":"SettingsService","msg":"Server addresses of sending domain mx.example.com changed to 203.0.113.20 and 2001:db8::10, regenerating its DNS records"}
+```
+
+**Server IPv4 address** on **Settings** shows `203.0.113.20`, and once DNS has caught up the records resolve with the new values:
 
 ```bash
 dig +short A mx.example.com @1.1.1.1

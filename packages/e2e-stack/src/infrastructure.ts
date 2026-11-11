@@ -12,6 +12,8 @@ export interface BackendEnv {
     BACKEND_JWT_SECRET: string
     BACKEND_ENCRYPTION_SECRET: string
     MAIL_HOSTNAME: string
+    MAIL_SERVER_IPV4: string
+    MAIL_SERVER_IPV6: string
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
@@ -35,6 +37,8 @@ export interface Infrastructure {
 
 export interface InfrastructureOptions {
     mailHostname: string
+    serverIpv4: string
+    serverIpv6: string
     imapUser: string
     imapPassword: string
 }
@@ -82,6 +86,8 @@ export async function startInfrastructure(options: InfrastructureOptions): Promi
             BACKEND_JWT_SECRET: 'playwright-jwt-secret-0123456789ab',
             BACKEND_ENCRYPTION_SECRET: 'playwright-encryption-secret-012345',
             MAIL_HOSTNAME: options.mailHostname,
+            MAIL_SERVER_IPV4: options.serverIpv4,
+            MAIL_SERVER_IPV6: options.serverIpv6,
             SMTP_HOST: mailhog.getHost(),
             SMTP_PORT: String(mailhog.getMappedPort(1025)),
             SMTP_SECURE: 'false',

@@ -28,6 +28,7 @@ export function dnsRecord(overrides: Partial<DomainDnsRecordDto> = {}): DomainDn
         type: 'txt',
         use: 'spf',
         value: 'v=spf1 include:mail.acme-mailer.com ~all',
+        priority: null,
         ...overrides,
     }
 }
@@ -107,7 +108,7 @@ export function formListItem(overrides: Partial<InboundFormListDto> = {}): Inbou
         projectId: 1,
         domainId: null,
         name: 'Contact request',
-        slug: 'contact-request',
+        formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
         isActive: true,
         allowedHostnames: [],
         createdAt: created,
@@ -173,7 +174,7 @@ export function formDetail(overrides: Partial<InboundFormDetailDto> = {}): Inbou
         projectId: 1,
         domainId: 5,
         name: 'Contact request',
-        slug: 'contact-request',
+        formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
         isActive: true,
         allowedHostnames: [],
         createdAt: created,

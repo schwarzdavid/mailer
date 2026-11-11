@@ -4,7 +4,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { globalRoleId, login, projectRoleId, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 
 describe('Permissions (e2e)', () => {
     let app: INestApplication<App>
@@ -47,7 +47,7 @@ describe('Permissions (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, superCredentials)
         superToken = await login(app, superCredentials)
-        await configureSendingDomain(app, superToken)
+        await ensureSendingDomain(app)
 
         const me = await http().get('/api/auth/user').set('Authorization', asSuper()).expect(200)
         superUserId = (me.body as { userId: number }).userId
@@ -162,13 +162,13 @@ describe('Permissions (e2e)', () => {
         const visibleForm = await http()
             .post('/api/inbound-form')
             .set('Authorization', asSuper())
-            .send({ name: 'Perm Visible', slug: 'perm-visible-form', domainId: null, projectId })
+            .send({ name: 'Perm Visible', domainId: null, projectId })
             .expect(201)
         visibleFormId = (visibleForm.body as { inboundFormId: number }).inboundFormId
         const hiddenForm = await http()
             .post('/api/inbound-form')
             .set('Authorization', asSuper())
-            .send({ name: 'Perm Hidden', slug: 'perm-hidden-form', domainId: null, projectId: hiddenProjectId })
+            .send({ name: 'Perm Hidden', domainId: null, projectId: hiddenProjectId })
             .expect(201)
         hiddenFormId = (hiddenForm.body as { inboundFormId: number }).inboundFormId
 
@@ -249,8 +249,8 @@ describe('Permissions (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asMember())
             .send({ domainId })
-            .expect(201)
-        expect(allowed.status).toBe(201)
+            .expect(204)
+        expect(allowed.status).toBe(204)
     })
 
     it('only names the projects of a domain the caller can read', async () => {
@@ -258,7 +258,7 @@ describe('Permissions (e2e)', () => {
             .post(`/api/project/${hiddenProjectId}/domains`)
             .set('Authorization', asSuper())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const asMemberDetail = await http().get(`/api/domain/${domainId}`).set('Authorization', asMember()).expect(200)
         expect((asMemberDetail.body as { projects: unknown[] }).projects).toEqual([

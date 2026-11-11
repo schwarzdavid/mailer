@@ -13,7 +13,7 @@ export const HTTP_PORT = 18080
 export const HTTPS_PORT = 18443
 export const SMTP_PORT = 18025
 export const BASE_URL = `http://localhost:${HTTP_PORT}`
-export const IMAGE = 'ghcr.io/schwarzdavid/mailer-backend'
+export const IMAGE = 'ghcr.io/schwarzdavid/mailer'
 
 export interface SmokeStack {
     dir: string
@@ -60,6 +60,7 @@ DB_PASSWORD=${secret()}
 BACKEND_JWT_SECRET=${secret()}
 BACKEND_ENCRYPTION_SECRET=${secret()}
 MAIL_HOSTNAME=${MAIL_HOSTNAME}
+MAIL_SERVER_IPV4=203.0.113.10
 MAIL_PASSWORD=${mailPassword}
 SEND_REQUIRE_VALID_DNS=false
 `

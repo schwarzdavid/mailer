@@ -24,7 +24,11 @@
             `<input name="${props.scheme.key}" tabindex="-1" autocomplete="off" style="position: absolute; left: -9999px">`,
     )
     const send = computed(() =>
-        securityPlacement(formEndpointUrl(props.form.slug), props.scheme, `form.elements['${props.scheme.key}'].value`),
+        securityPlacement(
+            formEndpointUrl(props.form.formKey),
+            props.scheme,
+            `form.elements['${props.scheme.key}'].value`,
+        ),
     )
 </script>
 

@@ -8,12 +8,14 @@ schwarzdavid Mailer is a self-hosted mail service. It lets websites send email r
 
 What works so far:
 
-- **Inbound forms.** You define a form with its fields, security checks (reCAPTCHA, CSRF, honeypot) and receivers. A static website can then POST its contact form straight to a public endpoint. Each accepted submission goes out to the receivers as a DKIM-signed email, rendered from a versioned Handlebars template. The template editor has a live preview. The submission and one pending delivery per receiver are stored first, then each delivery is queued in Redis and sent in the background, so the form endpoint answers without waiting for the mail server. After a temporary error (a 4xx reply from the relay, a failed connection, or an internal error before the mail was handed over), a delivery gets up to 8 attempts in all, with exponentially growing pauses that add up to about two hours; a permanent rejection, a blocked recipient or a receiver or template deleted in the meantime fails it right away. A delivery that never reached the queue (Redis was down) or whose job was lost in a restart stays pending in the database and is queued again two minutes after the retry pause of its last attempt has passed, so Redis is required for deliveries but an outage only delays them. If the backend dies after the mail server accepted a mail but before the delivery was marked as sent, the delivery is sent a second time: a rare duplicate is accepted, because marking it sent before handing it over would lose mails instead.
-- **Domains & DNS.** You register sending domains, the service generates DKIM keys for them, and it lists the DNS records each domain needs (SPF, DKIM, DMARC, MX, A/AAAA, PTR). A scheduled job checks those records regularly and reports their health.
-- **Platform sending domain.** The service's own infrastructure domain is `MAIL_HOSTNAME` from the environment; there is exactly one. During first-start onboarding (or later in the settings) you only enter the server's IP addresses, pre-filled from the A/AAAA records of `MAIL_HOSTNAME` where those exist. It is used as the SPF include and as the bounce (return-path) domain. If `MAIL_HOSTNAME` changes, the backend switches the sending domain to the new name on its next start, keeping the stored IP addresses: it generates a new DKIM key and new records for it and rewrites the SPF include of every customer domain, whose owners then have to update their DNS. It refuses to start if the new name is already registered as a customer domain.
-- **Bounce handling.** A dedicated bounce mailbox is polled over IMAP, and recipients the SMTP server rejects with a 5xx at `RCPT TO` are recorded at send time. Recipients that bounce permanently, or bounce temporarily too often, are blocked automatically. Admins can review and lift blocks in the UI.
-- **Projects.** Projects group inbound forms and the domains assigned to them.
-- **Users, roles & permissions.** Global roles (Super Admin, Admin, User and custom ones) carry global permissions; project roles (Viewer, Editor, Maintainer, Owner and custom ones) carry project permissions (`read`, `update`, `delete`, `forms.manage`, `api_keys.manage`, `members.manage`). Users get a global role plus optional extra permissions, project members get a project role plus optional extras, and nobody can grant more than they hold. Roles are managed under Administration → Roles. Access checks use CASL on both the backend and the frontend.
+- **Inbound forms.** A static website POSTs its contact form straight to a public endpoint, protected by reCAPTCHA, a timed CSRF token and a honeypot. Each submission goes out to its receivers as a DKIM-signed email, rendered from a versioned Handlebars template, and is delivered in the background with automatic retries.
+- **Send API.** Server-side code sends a transactional mail with one HTTP request, authenticated with a project API key.
+- **Domains & DNS.** The service generates DKIM keys for your sending domains, lists the DNS records they need (SPF, DKIM, DMARC, MX, A/AAAA, PTR) and checks them regularly.
+- **Platform sending domain.** The service's own mail identity comes from `MAIL_HOSTNAME`, `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6` in the environment; the backend creates and updates it on start.
+- **Bounce handling.** Bounces are collected from a dedicated mailbox and from rejections at send time. Recipients that keep bouncing are blocked automatically, and admins can lift blocks in the UI.
+- **Projects, users & roles.** Projects group forms and domains. Global and project roles, including custom ones, control who can do what.
+
+[What is mailer](https://schwarzdavid.github.io/mailer/introduction/what-is-mailer) and [How it works](https://schwarzdavid.github.io/mailer/introduction/how-it-works) explain these in detail.
 
 ### Tech stack
 
@@ -23,116 +25,16 @@ A pnpm + Turborepo monorepo:
 | --------------- | ----------------------------------------------------------------------------------------------- |
 | `apps/backend`  | NestJS, Sequelize/PostgreSQL, Redis, Passport JWT, Nodemailer, ImapFlow                         |
 | `apps/frontend` | Vue 3, Vuetify, Vue Router, TanStack Query, vue-i18n, vee-validate + Zod                        |
+| `apps/docs`     | VitePress operator documentation                                                                |
 | `packages/api`  | Typed client and Zod schemas generated by `@hey-api/openapi-ts` from the backend's OpenAPI spec |
 
 ## Documentation
 
-Installation, configuration, the admin guide, operations and the API reference live on the documentation site at https://schwarzdavid.github.io/mailer/. This README covers development only.
+Installation, configuration, the admin guide, operations and the API reference live on the documentation site at https://schwarzdavid.github.io/mailer/.
 
-## Local setup
+## Contributing
 
-### Prerequisites
-
-- Node.js `^22.18.0` or `>=24.12.0`
-- pnpm (the exact version is pinned in `package.json` under `packageManager`; `corepack enable` picks it up)
-- Docker with Docker Compose
-
-### 1. Install dependencies
-
-```bash
-pnpm install
-```
-
-### 2. Configure the environment
-
-Copy the template to a root `.env`. The defaults already match the local Docker services.
-
-```bash
-cp .env.example .env
-```
-
-Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values of at least 32 characters. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
-
-`DB_USERNAME`, `DB_PASSWORD` and `DB_DATABASE` are required and have no defaults, and `DB_PORT` defaults to 5432. `DB_POOL_MAX` (default 10) caps the connections the backend keeps open to Postgres, so keep it below the server's `max_connections` divided by the number of backend instances. `DB_SSL` (default `false`) makes the backend connect to Postgres over TLS, which the local Docker database does not need. `DB_SSL_REJECT_UNAUTHORIZED` (default `true`) only has an effect when `DB_SSL` is set.
-
-`REDIS_HOST` (default `127.0.0.1`) and `REDIS_PORT` (default 6379) locate Redis. The local Docker Redis needs no login or TLS, so `REDIS_USERNAME`, `REDIS_PASSWORD` and `REDIS_TLS_SERVERNAME` stay empty and `REDIS_TLS` stays `false`.
-
-`LOG_LEVEL` (default `info`; `.env.example` sets `debug` for local work) sets the backend's log level, see [Logging](https://schwarzdavid.github.io/mailer/configuration/logging).
-
-`SMTP_REQUIRE_TLS` (default `true`) makes the backend refuse to hand mail to an SMTP server that does not offer STARTTLS, so credentials and mail never cross the network in clear text. It has no effect when `SMTP_SECURE=true`. The local MailHog has no STARTTLS, so `.env.example` sets it to `false`; the production compose file sets it to `true` for the bundled mail server.
-
-### 3. Start the infrastructure
-
-```bash
-docker compose -f dev/docker-compose.yml up -d
-```
-
-| Service    | Purpose                            | Ports                                           |
-| ---------- | ---------------------------------- | ----------------------------------------------- |
-| PostgreSQL | Main database                      | `5432`                                          |
-| Redis      | Cache, rate limits, delivery queue | `6379`                                          |
-| MailHog    | Catches all outgoing mail          | SMTP `1025`, web UI http://localhost:8025       |
-| GreenMail  | Bounce mailbox                     | SMTP `3025` (inject DSNs), IMAP `3143` (polled) |
-
-### 4. Database migrations
-
-The backend applies pending migrations itself every time it starts, under `pnpm dev` as well, and refuses to start if one of them fails. Each run is a single transaction, so a failed run leaves the database as it was.
-
-Migrations are recorded in the `SequelizeMeta` table without a file extension. If your dev database was already migrated by an earlier version, it still holds `.ts`-suffixed names. Convert them once **before** the backend starts, otherwise every migration would run again and fail (a fresh database needs no rename):
-
-```sql
-UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
-```
-
-To apply them without starting the backend, or to inspect and revert them, use the migration CLI (`up | down | pending | executed`):
-
-```bash
-pnpm --filter backend migrate up
-```
-
-### 5. The API client
-
-The OpenAPI spec (`apps/backend/openapi.json`) and the generated client (`packages/api/dist`) are not committed. Neither needs a database or Redis: the backend's `generate` task writes the spec from the compiled backend in Nest's preview mode, without booting the app, and `packages/api` builds the client from it. `pnpm dev` and `pnpm build` both run these steps first, so a fresh clone needs no extra step. Under `pnpm dev` the client is regenerated whenever the backend is rebuilt. Without `pnpm dev`, regenerate it with:
-
-```bash
-pnpm build --filter api
-```
-
-### 6. Start the apps
-
-```bash
-pnpm dev
-```
-
-- Frontend: http://localhost:5173 (proxies `/api` to the backend)
-- Backend API: http://localhost:8000/api
-- Swagger UI: http://localhost:8000/docs (mounted only when `NODE_ENV` is not `production`)
-
-On first start the frontend sends you to the onboarding wizard. There you create the first (Super Admin) user, which needs the setup token that the backend prints to its log on start while no user exists (`Setup token: …`), and enter the server addresses for the platform sending domain, which is `MAIL_HOSTNAME` from `.env` (`mail.example.com` in the template). Locally, the DNS records will stay "pending", which is expected.
-
-### Useful commands
-
-```bash
-pnpm lint                         # ESLint (+ oxlint in the frontend)
-pnpm typecheck                    # tsc / vue-tsc
-pnpm test                         # unit tests across all workspaces
-pnpm --filter backend test:e2e    # backend e2e tests (needs Docker, uses Testcontainers)
-pnpm --filter frontend test:e2e   # full-stack Playwright tests (needs Docker; once: pnpm --filter frontend exec playwright install chromium)
-pnpm check                        # lint + typecheck + test + format check
-```
-
-## CI and release pipeline
-
-`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs the smoke test (`pnpm --filter e2e test:smoke`) against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`.
-
-`.github/workflows/docs.yml` builds the documentation site (`apps/docs`) on every push and pull request to `main` and deploys it to GitHub Pages on pushes to `main`.
-
-**Local smoke test:** build the backend image and run the stack from it. It needs Docker, Compose 2.23.1 or newer and openssl (on Windows, run it from Git Bash so that `openssl` is on `PATH`). The suite lives in the `e2e` workspace (`e2e/smoke/`). The test starts a throwaway stack (compose project `mailer-smoke`, ports 18080, 18443 and 18025) with a throwaway CA for the mail certificate. It checks that the proxy is the stock Caddy image, routing (the SPA fallback, 404s for missing assets and unknown `/api` paths, `/docs` falling back to the SPA), caching and compression, security headers, JSON request logs whose `reqId` matches the `X-Request-Id` header, the login throttle, that `/api/health/ready` reports the missing mail server while `/api/health` stays up and turns `200` once `mail` is healthy, that the backend migrates the database when it starts, that a failing migration keeps it from serving until the migrations can run, and that `up -d` replaces it. On the mail side it checks authenticated submission with certificate verification against `MAIL_HOSTNAME` and spoof protection, that port 25 refuses to relay both from outside and from inside the Docker network, bounce ingestion end to end, that 587 and 143 are not published, recovery when the certificate appears after the first boot, and that a renewed certificate is served without a restart. It removes everything afterwards, whether the run completes or fails. An interrupted run (Ctrl-C) keeps the stack: the next run removes it first, or remove it by hand with `docker compose -p mailer-smoke down -v --remove-orphans`. The proxy's failing attempt to get a Let's Encrypt certificate for the fake `mail.smoke.test` only adds log noise.
-
-```bash
-docker build -t ghcr.io/schwarzdavid/mailer-backend:local .
-IMAGE_TAG=local pnpm --filter e2e test:smoke
-```
+The local development setup, the test commands and the CI and release pipeline are described in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

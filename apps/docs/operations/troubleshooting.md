@@ -71,7 +71,7 @@ docker compose exec mail postqueue -f
 
 **Symptom.** After `docker compose up -d`, `backend` shows `Restarting` or `unhealthy`, and the site answers `502`.
 
-**Cause.** Usually a database migration failed. The backend applies pending migrations when it starts and does not start if one fails. Less often, a value in `.env` is missing or invalid; the backend checks every setting at start and names the key it refuses.
+**Cause.** Usually a database migration failed. The backend applies pending migrations when it starts and does not start if one fails. Less often, a value in `.env` is missing or invalid; the backend checks every setting at start and names the key it refuses. A release that adds a required key does this until you add it: the release that moved the server addresses into `.env` needs `MAIL_SERVER_IPV4` (and `MAIL_SERVER_IPV6` if you used IPv6), the addresses you entered on **Settings** before.
 
 **Check.**
 
@@ -117,7 +117,7 @@ docker compose ps backend
 
 **Cause.** DNS has not caught up yet, the record was created with a different host or value, the name has several SPF records, or the SPF record lacks the include. mailer marks DKIM **Valid** only when DNS returns exactly the value it generated, SPF when it is the only SPF record and contains the generated mechanisms, and DMARC when it carries a `p=` tag. It checks every 15 minutes, or when you click **Check again**.
 
-**Check.** Ask a public resolver and compare with the value on the domain's page. DKIM, A, AAAA, MX and PTR must match character for character; SPF and DMARC are checked by content, as described above:
+**Check.** Ask a public resolver and compare with the value on the domain's page. DKIM, A, AAAA, MX and PTR must match character for character (for MX, `dig +short MX` prints the priority and the mail server together, for example `10 mx.example.com.`); SPF and DMARC are checked by content, as described above:
 
 ```bash
 dig +short TXT mail.example.net @1.1.1.1

@@ -159,9 +159,9 @@ const expectedRoutes: Record<string, RouteAccess> = {
         scopedByPrincipal: true,
     },
 
-    'GET /public/form/client.js': { guards: throttled, abilities: [], scopedByPrincipal: false },
-    'POST /public/form/:slug/token': { guards: throttled, abilities: [], scopedByPrincipal: false },
-    'POST /public/form/:slug': { guards: throttled, abilities: [], scopedByPrincipal: false },
+    'GET /v1/forms/client.js': { guards: throttled, abilities: [], scopedByPrincipal: false },
+    'POST /v1/forms/:formKey/token': { guards: throttled, abilities: [], scopedByPrincipal: false },
+    'POST /v1/forms/:formKey': { guards: throttled, abilities: [], scopedByPrincipal: false },
 
     'POST /v1/send': { guards: apiKeyAuth, abilities: [], scopedByPrincipal: true },
 
@@ -187,8 +187,6 @@ const expectedRoutes: Record<string, RouteAccess> = {
     'DELETE /project/:projectId/members/:userId': { guards: jwt, abilities: [], scopedByPrincipal: true },
 
     'GET /settings': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
-    'GET /settings/sending-domain/proposal': { guards: jwt, abilities: ['read:Settings'], scopedByPrincipal: false },
-    'PUT /settings/sending-domain': { guards: jwt, abilities: ['update:Settings'], scopedByPrincipal: false },
     'POST /settings/sending-domain/refresh': {
         guards: jwt,
         abilities: ['update:Settings'],

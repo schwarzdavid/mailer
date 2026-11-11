@@ -11,7 +11,6 @@ import {
     ProjectApi,
     PublicFormApi,
     RoleApi,
-    SettingsApi,
     UserApi,
 } from 'api'
 import { client } from 'api/client'
@@ -74,12 +73,12 @@ function dsnSource(): string {
     ].join('\r\n')
 }
 
-async function submitContactForm(slug: string): Promise<void> {
+async function submitContactForm(formKey: string): Promise<void> {
     const headers = { Origin: websiteOrigin }
-    const issued = await PublicFormApi.issueInboundFormToken({ path: { slug }, headers })
+    const issued = await PublicFormApi.issueInboundFormToken({ path: { formKey }, headers })
     await delay(issued.waitMs + 500)
     await PublicFormApi.submitInboundForm({
-        path: { slug },
+        path: { formKey },
         headers,
         body: {
             data: {
@@ -106,14 +105,12 @@ export async function seedAfterOnboarding(apiUrl: string, greenmailSmtpPort: num
     const { token } = await AuthApi.login({ body: { email: admin.email, password: admin.password } })
     client.setConfig({ baseUrl: apiUrl, auth: () => token })
 
-    await SettingsApi.configureSendingDomain({ body: { serverIpv4: '203.0.113.10', serverIpv6: '2001:db8::10' } })
-
     const { projectId } = await ProjectApi.createProject({ body: { name: 'Acme Website' } })
     const { domainId } = await DomainApi.createDomain({ body: { fqdn: customerDomain } })
     await ProjectApi.assignProjectDomain({ path: { projectId }, body: { domainId } })
 
-    const { inboundFormId, slug } = await InboundFormApi.createInboundForm({
-        body: { projectId, domainId, name: 'Contact form', slug: 'contact' },
+    const { inboundFormId, formKey } = await InboundFormApi.createInboundForm({
+        body: { projectId, domainId, name: 'Contact form' },
     })
     await InboundFormApi.updateInboundForm({
         path: { inboundFormId },
@@ -189,7 +186,7 @@ export async function seedAfterOnboarding(apiUrl: string, greenmailSmtpPort: num
         },
     })
 
-    await submitContactForm(slug)
+    await submitContactForm(formKey)
     await expect
         .poll(async () => (await MailMessageApi.getProjectMessages({ path: { projectId } })).items.length, {
             timeout: 60_000,

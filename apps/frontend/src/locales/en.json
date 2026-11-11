@@ -56,12 +56,11 @@
         "domain": "Domain name",
         "name": "Name",
         "project": "Project",
-        "slug": "Slug",
         "firstName": "First name",
         "lastName": "Last name",
         "role": "Role",
         "serverIpv4": "Server IPv4 address",
-        "serverIpv6": "Server IPv6 address (optional)",
+        "serverIpv6": "Server IPv6 address",
         "user": "User",
         "required": "{label} *",
         "showPassword": "Show password",
@@ -73,7 +72,6 @@
         "save": "Save",
         "login": "Login",
         "logout": "Logout",
-        "back": "Back",
         "copy": {
             "default": "Copy",
             "success": "Copied"
@@ -171,8 +169,10 @@
         "checkedAt": "Checked {time}",
         "neverChecked": "Not checked yet",
         "host": "Host",
+        "priority": "Priority",
         "value": "Value",
         "hostFor": "host for {name}",
+        "priorityFor": "priority for {name}",
         "valueFor": "value for {name}",
         "currentFor": "current value for {name}",
         "mergedFor": "merged value for {name}",
@@ -493,21 +493,13 @@
         },
         "settings": {
             "title": "Settings",
-            "description": "Server configuration from the first-run setup. Changes here affect every project.",
+            "description": "The server's mail identity and its DNS records, shared by every project.",
             "thing": "settings",
             "loading": "Loading settings",
             "sendingDomain": {
                 "title": "Sending domain",
-                "description": "The host name and IP addresses this server sends mail from. Saving updates the DNS records below.",
-                "domainHint": "Set by MAIL_HOSTNAME in the server configuration. Change it there and restart the server to switch.",
-                "addressHint": "Pre-filled from the A and AAAA records of {fqdn} where they exist. Correct them if those records are outdated.",
-                "saved": "Sending domain saved",
-                "error": "Couldn't save the sending domain",
-                "confirm": {
-                    "title": "Change the server addresses?",
-                    "body": "All DNS records are generated again for {fqdn}. Mail may be rejected until you publish them.",
-                    "action": "Change addresses"
-                }
+                "description": "The host name and IP addresses this server sends mail from.",
+                "configurationHint": "Set by MAIL_HOSTNAME, MAIL_SERVER_IPV4 and MAIL_SERVER_IPV6 in the server configuration. Change them there and restart the server."
             },
             "records": {
                 "instruction": "Add these records in your DNS zone; the PTR records are set at your hosting provider.",
@@ -529,17 +521,12 @@
             },
             "steps": {
                 "account": "Admin account",
-                "sendingDomain": "Sending domain",
                 "records": "DNS records"
             },
             "intro": {
                 "account": {
                     "title": "Welcome to Mail Admin",
-                    "lead": "Let's set up this server. It takes three steps and a few DNS records."
-                },
-                "sendingDomain": {
-                    "title": "Where does this server send from?",
-                    "lead": "Mail Admin generates the DNS records for this host name and these addresses in the next step."
+                    "lead": "Let's set up this server. It takes two steps and a few DNS records."
                 },
                 "records": {
                     "title": "Publish the DNS records",
@@ -553,9 +540,6 @@
                 "setupTokenLabel": "Setup token",
                 "setupTokenHint": "The backend writes it to its log on startup while no account exists. On the server: docker compose logs backend {'|'} grep \"Setup token\"",
                 "error": "Couldn't create the account"
-            },
-            "domain": {
-                "submit": "Save and continue"
             },
             "records": {
                 "summary": "{valid} of {total} records are valid.",
@@ -776,7 +760,6 @@
                 "senderDomain": "Sender domain"
             },
             "validation": {
-                "slug": "Use lowercase letters, numbers and single hyphens, like contact-request.",
                 "key": "Use letters, numbers, hyphens and underscores only.",
                 "keyTaken": "Another field already uses this key.",
                 "pattern": "This isn't a valid regular expression.",
@@ -797,7 +780,6 @@
                 "title": "New inbound form",
                 "intro": "Creates a public endpoint your website's form can post to. Fields and receivers come next.",
                 "namePlaceholder": "e.g. Contact request",
-                "slugHint": "Generated from the name until you edit it.",
                 "domainHint": "Only domains assigned to {project}.",
                 "submit": "Create form",
                 "success": "Form created",
@@ -822,7 +804,6 @@
                 },
                 "general": {
                     "title": "General",
-                    "slugHint": "Changing it changes the endpoint URL.",
                     "saved": "Form saved"
                 },
                 "fields": {

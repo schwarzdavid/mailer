@@ -36,8 +36,6 @@
             :to="{ name: RouteNames.INBOUND_FORM_DETAILS, params: { inboundFormId: form.inboundFormId } }"
         >
             <template #subtitle>
-                <span class="mono">{{ form.slug }}</span>
-                <span class="row-sep">·</span>
                 {{ t('module.inboundForms.receiverCount', { count: form.receivers.length }, form.receivers.length) }}
             </template>
             <template #meta>

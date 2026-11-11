@@ -27,9 +27,9 @@ vi.stubGlobal('visualViewport', null)
 
 const notifications = useNotificationHost()
 
-function mockApis(form = formDetail()) {
+function mockApis(form = formDetail(), domains = [domain()]) {
     vi.spyOn(InboundFormApi, 'getInboundForm').mockResolvedValue(form)
-    vi.spyOn(ProjectApi, 'getProject').mockResolvedValue(projectDetail({ domains: [domain()] }))
+    vi.spyOn(ProjectApi, 'getProject').mockResolvedValue(projectDetail({ domains }))
 }
 
 afterEach(() => {
@@ -48,7 +48,7 @@ describe('InboundFormDetailView', () => {
         await vi.waitFor(() => expect(wrapper.get('.page-header').text()).toContain('Acme Website'))
         expect(wrapper.get('.page-header').text()).toContain('forms.acme.com')
         expect(wrapper.get('.page-header').text()).toContain('1 receiver')
-        expect(wrapper.text()).toContain('/api/public/form/contact-request')
+        expect(wrapper.text()).toContain('/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
         const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
         expect(titles).toEqual(['Endpoint', 'General', 'Fields', 'Security', 'Receivers', 'Delete form'])
     })
@@ -101,6 +101,35 @@ describe('InboundFormDetailView', () => {
             expect(update).toHaveBeenCalledWith({ path: { inboundFormId: 9 }, body: { isActive: false } }),
         )
         await vi.waitFor(() => expect(notifications.current.value?.text).toBe('Form deactivated'))
+    })
+
+    it('hides the sender domain choice when the project has a single domain and saves with it', async () => {
+        mockApis(formDetail({ domainId: null, receivers: [] }))
+        const update = vi.spyOn(InboundFormApi, 'updateInboundForm').mockResolvedValue(formDetail({ name: 'Support' }))
+        const wrapper = mountInApp(InboundFormDetailView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="name"]').exists()).toBe(true))
+
+        expect(wrapper.text()).not.toContain('Sender domain')
+        await wrapper.get('input[name="name"]').setValue('Support')
+        await wrapper
+            .findAll('form')
+            .find((form) => form.find('input[name="name"]').exists())!
+            .trigger('submit')
+
+        await vi.waitFor(() =>
+            expect(update).toHaveBeenCalledWith({
+                path: { inboundFormId: 9 },
+                body: { name: 'Support', domainId: 5 },
+            }),
+        )
+    })
+
+    it('offers the sender domain choice when the project has several domains', async () => {
+        mockApis(formDetail(), [domain(), domain({ domainId: 6, fqdn: 'mail.acme.com' })])
+        const wrapper = mountInApp(InboundFormDetailView)
+        await vi.waitFor(() => expect(wrapper.find('input[name="name"]').exists()).toBe(true))
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain('Sender domain'))
     })
 
     it('removes a field only after the undo window, sending the remaining fields', async () => {
@@ -199,7 +228,7 @@ describe('InboundFormDetailView', () => {
         expect(findButton(wrapper, 'Add field')).toBeUndefined()
         expect(findButton(wrapper, 'View template')).toBeDefined()
         expect(wrapper.text()).not.toContain('Delete form')
-        expect(wrapper.text()).toContain('/api/public/form/contact-request')
+        expect(wrapper.text()).toContain('/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
     })
 
     it('warns when no domains are allowed', async () => {

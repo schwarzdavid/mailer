@@ -108,18 +108,8 @@ test('installation/onboarding-account', async ({ page }) => {
     await capture(page, 'installation/onboarding-account', 'Welcome to Mail Admin')
 
     await page.getByRole('button', { name: 'Create account' }).click()
-    await expect(page.getByRole('heading', { name: 'Where does this server send from?' })).toBeVisible()
-    await rememberSession(page)
-})
-
-test('installation/onboarding-domain', async ({ page }) => {
-    await openAuthenticated(page, '/setup')
-    await input(page, 'serverIpv4').fill('203.0.113.10')
-    await input(page, 'serverIpv4').blur()
-    await capture(page, 'installation/onboarding-domain', 'Where does this server send from?')
-
-    await page.getByRole('button', { name: 'Save and continue' }).click()
     await expect(page.getByRole('heading', { name: 'Publish the DNS records' })).toBeVisible()
+    await rememberSession(page)
 })
 
 test('installation/onboarding-records', async ({ page }) => {

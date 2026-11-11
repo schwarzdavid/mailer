@@ -7,7 +7,9 @@ This page lists every setting mailer reads from its environment: what it does, w
 All settings are plain `KEY=value` lines in one file named `.env`.
 
 - **Production (Docker Compose):** `.env` sits next to `compose.yml`, for example in `/opt/mailer/.env`. You create it by copying `deploy/.env.example`. Compose reads it for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on.
-- **Local development:** `.env` sits in the repository root. You create it by copying `.env.example`, whose values already match the Docker services that `dev/docker-compose.yml` starts.
+- **Local development:** `.env` sits in the repository root. You create it by copying `.env.example`, whose values already match the Docker services that the root `compose.yml` starts.
+
+Both templates hold only the required variables and the values that differ from the backend's defaults. Every other variable on this page can be added to `.env` when you need it.
 
 Every table has the same columns.
 
@@ -30,14 +32,14 @@ These variables are read by `compose.yml` itself, not by the backend. They exist
 | `SITE_ADDRESS`     | yes      | –        | –              | The domain the admin UI and the API are served on, for example `app.example.com`. The proxy (Caddy) obtains a Let's Encrypt certificate for it. Compose refuses to start while it is empty. It must differ from `MAIL_HOSTNAME`.            |
 | `MAIL_HOSTNAME`    | yes      | –        | –              | The name of the bundled mail server, for example `mx.example.com`. Also the platform's sending domain and the name on the mail server's TLS certificate. See [Mail server](#mail-server). Compose refuses to start while it is empty.       |
 | `MAIL_PASSWORD`    | yes      | –        | –              | The password of the mailbox `bounce@MAIL_HOSTNAME`. Compose passes it to the backend as `SMTP_PASSWORD` and `IMAP_PASSWORD`. You create the mailbox with this same password during the first deploy, and change both together to rotate it. |
-| `IMAGE_TAG`        | no       | `latest` | –              | The tag of the backend image `ghcr.io/schwarzdavid/mailer-backend` to run. For production, pin a release version or `sha-<7 characters>` so the image always matches the `compose.yml` next to it. It does not affect the other images.     |
+| `IMAGE_TAG`        | no       | `latest` | –              | The tag of the backend image `ghcr.io/schwarzdavid/mailer` to run. For production, pin a release version or `sha-<7 characters>` so the image always matches the `compose.yml` next to it. It does not affect the other images.             |
 | `HTTP_PORT`        | no       | `80`     | –              | The host port that forwards to the proxy's port 80. Change it only when port 80 is taken on the host.                                                                                                                                       |
 | `HTTPS_PORT`       | no       | `443`    | –              | The host port that forwards to the proxy's port 443, used for both TCP and UDP (HTTP/3).                                                                                                                                                    |
 | `SMTP_PUBLIC_PORT` | no       | `25`     | –              | The host port that forwards to the mail server's port 25, where other mail servers deliver bounces to you. Other mail servers always connect to port 25, so change it only for testing.                                                     |
 
 ## Backend variables
 
-The tables below follow the groups of `.env.example`. Every one of these variables is read by the backend.
+The tables below group the variables by topic. Every one of these variables is read by the backend.
 
 ### General
 
@@ -87,11 +89,15 @@ Both secrets must be at least 32 characters. Generate each with `openssl rand -b
 
 ### Mail server
 
-| Variable        | Required | Default | Set by compose | Description                                                                                                                                                                                                                                                 |
-| --------------- | -------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAIL_HOSTNAME` | yes      | –       | –              | The single sending domain of the platform, for example `mx.example.com`. It must be a fully qualified domain name (it contains a dot) and is lower-cased. The backend uses it as the sending domain, and the app asks you only for the server IP addresses. |
+| Variable           | Required | Default | Set by compose | Description                                                                                                                                                                                                                                                           |
+| ------------------ | -------- | ------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MAIL_HOSTNAME`    | yes      | –       | –              | The single sending domain of the platform, for example `mx.example.com`. It must be a fully qualified domain name (it contains a dot) and is lower-cased. The backend uses it as the sending domain.                                                                  |
+| `MAIL_SERVER_IPV4` | yes      | –       | –              | The public IPv4 address the server sends mail from, for example `203.0.113.10`. mailer puts it into the A, SPF and PTR records of the sending domain. The backend refuses to start when it is missing or not an IPv4 address.                                         |
+| `MAIL_SERVER_IPV6` | no       | unset   | –              | The public IPv6 address the server sends mail from, for example `2001:db8::10`. When set, mailer adds an AAAA record, an `ip6:` entry in the SPF record and a second PTR record. Leave it out if the server has no IPv6 address or you do not publish an AAAA record. |
 
-With Docker Compose this is the same variable as in the [compose variables](#compose-variables); you set it once, in `.env`. The compose file also derives the mail server's host name and the bounce mailbox from it.
+With Docker Compose `MAIL_HOSTNAME` is the same variable as in the [compose variables](#compose-variables); you set it once, in `.env`. The compose file also derives the mail server's host name and the bounce mailbox from it. `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6` go into the same `.env`; compose hands them to the backend unchanged.
+
+When the backend starts, it creates the sending domain from these three variables, or brings it in line with them: a changed `MAIL_HOSTNAME` replaces the sending domain (see [Change MAIL_HOSTNAME](/admin-guide/settings#change-mail-hostname)), changed addresses regenerate its DNS records and keep its DKIM key (see [Change the server IP addresses](/admin-guide/settings#change-the-server-ip-addresses)).
 
 ### SMTP
 
@@ -221,7 +227,7 @@ When a domain is not ready:
 
 No mail is recorded on **Sent mail** while the gate refuses it. [Domains](/admin-guide/domains#sending-needs-valid-records) describes how to get a domain ready.
 
-Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why `.env.example` and the test stacks set it to `false`, while `deploy/.env.example` lists it as `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
+Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why `.env.example` and the test stacks set it to `false`, while `deploy/.env.example` leaves it out and so keeps the default `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
 
 ## LOG_LEVEL
 

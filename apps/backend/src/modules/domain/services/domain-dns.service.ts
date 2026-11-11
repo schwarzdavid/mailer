@@ -16,6 +16,7 @@ import { resolve, resolve4, resolve6, resolveMx, reverse } from 'node:dns/promis
 import { DomainModel } from '../models/domain.model.js'
 import { SettingsModel } from '../../settings/models/settings.model.js'
 import { evaluateRecord } from '../helpers/txt-record-check.js'
+import { formatMxRecordValue } from '../helpers/mx-record-value.js'
 import ErrnoException = NodeJS.ErrnoException
 
 type DomainName = Pick<Domain, 'domainId' | 'fqdn'>
@@ -25,6 +26,7 @@ export class DomainDnsService {
     private static readonly DKIM_PUBLIC_KEY_PREFIX = '-----BEGIN PUBLIC KEY-----'
     private static readonly DKIM_PUBLIC_KEY_SUFFIX = '-----END PUBLIC KEY-----'
     private static readonly MISSING_RECORD_CODES = ['ENOTFOUND', 'ENODATA']
+    private static readonly MX_PRIORITY = 10
 
     private readonly logger = new Logger(DomainDnsService.name)
 
@@ -94,7 +96,7 @@ export class DomainDnsService {
             {
                 domainId: domain.domainId,
                 host: domain.fqdn,
-                value: `10 ${domain.fqdn}`,
+                value: formatMxRecordValue({ priority: DomainDnsService.MX_PRIORITY, exchange: domain.fqdn }),
                 use: DomainDnsRecordUse.MX,
                 current: null,
                 status: DomainDnsRecordStatus.INVALID,
@@ -224,7 +226,7 @@ export class DomainDnsService {
                 case DomainDnsRecordType.AAAA:
                     return await resolve6(record.host)
                 case DomainDnsRecordType.MX:
-                    return (await resolveMx(record.host)).map((entry) => `${entry.priority} ${entry.exchange}`)
+                    return (await resolveMx(record.host)).map(formatMxRecordValue)
                 case DomainDnsRecordType.PTR:
                     return await reverse(record.host)
             }

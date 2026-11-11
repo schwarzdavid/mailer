@@ -89,14 +89,11 @@ describe('router', () => {
             expect(fresh.currentRoute.value.path).toBe('/setup')
         })
 
-        it.each(['sendingDomain', 'records'] as const)(
-            'resumes a signed-in admin at setup while on the %s step',
-            async (step) => {
-                const { landed } = await navigate({ step }, '/projects')
+        it('resumes a signed-in admin at setup while on the records step', async () => {
+            const { landed } = await navigate({ step: 'records' }, '/projects')
 
-                expect(landed).toBe(RouteNames.ONBOARDING)
-            },
-        )
+            expect(landed).toBe(RouteNames.ONBOARDING)
+        })
 
         it('asks a signed-out admin to log in before resuming setup', async () => {
             const { landed } = await navigate({ step: 'records', user: new Error('Unauthorized') }, '/setup')
@@ -105,7 +102,7 @@ describe('router', () => {
         })
 
         it('keeps the login reachable during setup', async () => {
-            const { landed, currentUser } = await navigate({ step: 'sendingDomain' }, '/login')
+            const { landed, currentUser } = await navigate({ step: 'records' }, '/login')
 
             expect(landed).toBe(RouteNames.LOGIN)
             expect(currentUser).not.toHaveBeenCalled()

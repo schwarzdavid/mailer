@@ -26,11 +26,8 @@ export class SetupService {
         }
 
         const settings = await this.settingsService.getSettings()
-        if (!settings?.sendingDomainId) {
-            return 'sendingDomain'
-        }
 
-        return settings.setupFinishedAt === null ? 'records' : 'finished'
+        return settings?.setupFinishedAt ? 'finished' : 'records'
     }
 
     async finishSetup(): Promise<SetupStep> {

@@ -4,7 +4,7 @@ import request from 'supertest'
 import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain } from './support/sending-domain.js'
+import { ensureSendingDomain } from './support/sending-domain.js'
 import { resetThrottleCounters } from './support/throttle-counters.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
 import { DomainDnsRecordStatus } from '../src/modules/domain/interfaces/domain-dns.interface.js'
@@ -31,7 +31,6 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
         password: 'correct-horse-battery-staple',
     }
     const sendFrom = 'news@send.gate-example.com'
-    const formSlug = 'send-gate-contact'
 
     const http = () => request(app.getHttpServer())
     const asOwner = () => `Bearer ${token}`
@@ -52,15 +51,15 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', asOwner())
             .send({ domainId })
-            .expect(201)
+            .expect(204)
         return domainId
     }
 
-    async function createPublishedForm(domainId: number): Promise<number> {
+    async function createPublishedForm(domainId: number): Promise<string> {
         const form = await http()
             .post('/api/inbound-form')
             .set('Authorization', asOwner())
-            .send({ name: 'Send Gate Contact', slug: formSlug, domainId, projectId })
+            .send({ name: 'Send Gate Contact', domainId, projectId })
             .expect(201)
         const inboundFormId = (form.body as { inboundFormId: number }).inboundFormId
         const receiver = await http()
@@ -74,8 +73,8 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
             .set('Authorization', asOwner())
             .send({ subject: 'Gate submission', template: '<p>Someone wrote in.</p>' })
             .expect(200)
-        await http().post(`${templatePath}/publish`).set('Authorization', asOwner()).expect(201)
-        return inboundFormId
+        await http().post(`${templatePath}/publish`).set('Authorization', asOwner()).expect(200)
+        return (form.body as { formKey: string }).formKey
     }
 
     beforeAll(async () => {
@@ -93,7 +92,7 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
 
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
 
         const project = await http()
             .post('/api/project')
@@ -148,14 +147,14 @@ describe('Send gate SEND_REQUIRE_VALID_DNS (e2e)', () => {
     })
 
     it('keeps a form delivery pending until the domain records are valid, then sends it', async () => {
-        await createPublishedForm(formDomainId)
-        await http().post(`/api/public/form/${formSlug}`).send({ data: {} }).expect(201)
+        const formKey = await createPublishedForm(formDomainId)
+        await http().post(`/api/v1/forms/${formKey}`).send({ data: {} }).expect(202)
 
         const submissionModel = app.get<typeof InboundFormSubmissionModel>(getModelToken(InboundFormSubmissionModel))
         const deliveryModel = app.get<typeof InboundFormDeliveryModel>(getModelToken(InboundFormDeliveryModel))
         const submission = await submissionModel.findOne({
             where: { status: 'accepted' },
-            include: [{ association: 'inboundForm', where: { slug: formSlug } }],
+            include: [{ association: 'inboundForm', where: { formKey } }],
             rejectOnEmpty: true,
         })
         const delivery = await deliveryModel.findOne({

@@ -13,9 +13,9 @@ export function installInboundFormClient(target: InboundFormClientTarget, script
     const base = (scriptSrc || '').replace(/\/client\.js(?:[?#].*)?$/, '')
     const pending = new Map<string, Promise<string>>()
 
-    function requestToken(slug: string): Promise<string> {
+    function requestToken(formKey: string): Promise<string> {
         return target
-            .fetch(base + '/' + encodeURIComponent(slug) + '/token', { method: 'POST', credentials: 'omit' })
+            .fetch(base + '/' + encodeURIComponent(formKey) + '/token', { method: 'POST', credentials: 'omit' })
             .then(function (response) {
                 if (!response.ok) {
                     throw Object.assign(new Error('Form token request failed with status ' + response.status), {
@@ -36,22 +36,22 @@ export function installInboundFormClient(target: InboundFormClientTarget, script
             })
     }
 
-    function getToken(slug: string): Promise<string> {
-        const existing = pending.get(slug)
+    function getToken(formKey: string): Promise<string> {
+        const existing = pending.get(formKey)
         if (existing) {
             return existing
         }
-        const request = requestToken(slug).then(
+        const request = requestToken(formKey).then(
             function (token) {
-                pending.delete(slug)
+                pending.delete(formKey)
                 return token
             },
             function (error: unknown) {
-                pending.delete(slug)
+                pending.delete(formKey)
                 throw error
             },
         )
-        pending.set(slug, request)
+        pending.set(formKey, request)
         return request
     }
 

@@ -16,7 +16,7 @@ const form: InboundForm = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: 'contact-form-key-00001',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date(),
@@ -151,18 +151,14 @@ describe('InboundFormController', () => {
         const result = await controller.createInboundForm(
             {
                 name: 'Contact',
-                slug: 'contact',
                 domainId: 3,
                 projectId: 5,
             },
             manageAll,
         )
 
-        expect(createForm).toHaveBeenCalledWith(
-            { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 },
-            manageAll,
-        )
-        expect(result.slug).toBe('contact')
+        expect(createForm).toHaveBeenCalledWith({ name: 'Contact', domainId: 3, projectId: 5 }, manageAll)
+        expect(result.formKey).toBe('contact-form-key-00001')
     })
 
     it('lists forms with their receivers and template summaries', async () => {
@@ -176,7 +172,7 @@ describe('InboundFormController', () => {
                 projectId: 5,
                 domainId: 3,
                 name: 'Contact',
-                slug: 'contact',
+                formKey: 'contact-form-key-00001',
                 isActive: true,
                 allowedHostnames: [],
                 createdAt: form.createdAt,
@@ -198,11 +194,11 @@ describe('InboundFormController', () => {
     it('collects the receiver ids of every listed form for one summary lookup', async () => {
         getForms.mockResolvedValue([
             formWithReceivers,
-            { ...form, inboundFormId: 2, slug: 'other', inboundFormReceivers: [] },
+            { ...form, inboundFormId: 2, inboundFormReceivers: [] },
             {
                 ...form,
                 inboundFormId: 3,
-                slug: 'third',
+                formKey: 'third-form-key-00000003',
                 inboundFormReceivers: [{ ...receiver, inboundFormReceiverId: 32, inboundFormId: 3 }],
             },
         ])

@@ -22,6 +22,6 @@ docs
 deploy
 e2e
 apps/docs
-dev
+compose.yml
 .github
 **/*.md

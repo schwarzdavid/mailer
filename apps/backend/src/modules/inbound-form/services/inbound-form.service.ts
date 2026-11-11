@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/sequelize'
 import { Sequelize } from 'sequelize-typescript'
-import { Op, UniqueConstraintError, type OrderItem, type WhereOptions } from 'sequelize'
+import { Op, type OrderItem, type WhereOptions } from 'sequelize'
 import { InboundFormModel } from '../models/inbound-form.model.js'
 import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
 import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
@@ -30,6 +30,7 @@ import { parsePlaceholder } from '../helpers/placeholder.js'
 import { pickDefined } from '../../../helpers/pick-defined.js'
 import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
 import { normalizeHostname } from '../helpers/hostname.js'
+import { generateFormKey } from '../helpers/form-key.js'
 import { isRecaptchaConfig } from '../helpers/security-config.js'
 import { findPatternProblem } from '../helpers/pattern-safety.js'
 import { AbilityFactory } from '../../permission/services/ability-factory.service.js'
@@ -48,18 +49,16 @@ export const FORM_LIST_ORDER: OrderItem[] = [
 
 export interface InboundFormCreateRequest {
     name: string
-    slug: string
     domainId: number | null
     projectId: number
 }
 
 export type InboundFormUpdateRequest = Partial<
-    Pick<InboundFormCreateRequest, 'name' | 'slug' | 'domainId'> & { isActive: boolean; allowedHostnames: string[] }
+    Pick<InboundFormCreateRequest, 'name' | 'domainId'> & { isActive: boolean; allowedHostnames: string[] }
 >
 
 const FORM_UPDATABLE_KEYS = [
     'name',
-    'slug',
     'domainId',
     'isActive',
     'allowedHostnames',
@@ -95,15 +94,11 @@ export class InboundFormService {
             await this.projectService.assertDomainInProject(create.projectId, create.domainId)
         }
 
-        try {
-            const created = await this.formModel.create({ ...create, isActive: true }, { returning: true })
-            return created.get({ plain: true })
-        } catch (error) {
-            if (error instanceof UniqueConstraintError) {
-                throw new BadRequestException('Slug is already in use')
-            }
-            throw error
-        }
+        const created = await this.formModel.create(
+            { ...create, formKey: generateFormKey(), isActive: true },
+            { returning: true },
+        )
+        return created.get({ plain: true })
     }
 
     async getForms(principal: User, ability: AppAbility, projectId?: number): Promise<InboundFormWithReceivers[]> {
@@ -175,14 +170,7 @@ export class InboundFormService {
             }
         }
 
-        try {
-            await form.update(update)
-        } catch (error) {
-            if (error instanceof UniqueConstraintError) {
-                throw new BadRequestException('Slug is already in use')
-            }
-            throw error
-        }
+        await form.update(update)
 
         return this.getFormById(inboundFormId, ability)
     }

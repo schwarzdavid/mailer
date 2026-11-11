@@ -34,7 +34,7 @@ describe('ProjectDetailView', () => {
         await vi.waitFor(() => expect(wrapper.get('h1').text()).toBe('Acme Website'))
         await vi.waitFor(() => expect(wrapper.text()).toContain('Contact request'))
         const titles = wrapper.findAll('h2').map((heading) => heading.text().replace(/\s*\d+$/, ''))
-        expect(titles).toEqual(['Inbound forms', 'Sender domains', 'Members', 'API keys', 'General', 'Delete project'])
+        expect(titles).toEqual(['General', 'Inbound forms', 'Sender domains', 'API keys', 'Members', 'Delete project'])
         expect(wrapper.get('.page-header__meta').text()).toContain('1 form')
         expect(wrapper.get('.page-header__meta').text()).toContain('No sender domain')
         expect(wrapper.text()).toContain('Projects')

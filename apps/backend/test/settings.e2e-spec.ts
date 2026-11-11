@@ -5,13 +5,20 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { E2E_MAIL_HOSTNAME, E2E_SERVER_IPV4, ensureSendingDomain } from './support/sending-domain.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
 import { SettingsModel } from '../src/modules/settings/models/settings.model.js'
 import { SettingsService } from '../src/modules/settings/services/settings.service.js'
 import { DomainDnsRecordDto } from '../src/modules/domain/dtos/domain-dns-record.dto.js'
 import { DomainDnsRecordStatus, DomainDnsRecordUse } from '../src/modules/domain/interfaces/domain-dns.interface.js'
+
+interface SendingDomainBody {
+    fqdn: string
+    serverIpv4: string
+    serverIpv6: string | null
+    records: DomainDnsRecordDto[]
+}
 
 describe('SettingsController (e2e)', () => {
     let app: INestApplication<App>
@@ -63,15 +70,6 @@ describe('SettingsController (e2e)', () => {
         expect(response.body).toEqual({ sendingDomain: null })
     })
 
-    it('proposes MAIL_HOSTNAME and tolerates missing address records', async () => {
-        const response = await http()
-            .get('/api/settings/sending-domain/proposal')
-            .set('Authorization', `Bearer ${token}`)
-            .expect(200)
-
-        expect(response.body).toEqual({ fqdn: E2E_MAIL_HOSTNAME, serverIpv4: null, serverIpv6: null })
-    })
-
     it('rejects customer domain creation while no sending domain is configured', async () => {
         const response = await http()
             .post('/api/domain')
@@ -82,31 +80,32 @@ describe('SettingsController (e2e)', () => {
         await expect(domainModel().findOne({ where: { fqdn: 'customer-early.org' } })).resolves.toBeNull()
     })
 
-    it('no longer accepts a domain name in the configuration', async () => {
-        const response = await http()
-            .put('/api/settings/sending-domain')
-            .set('Authorization', `Bearer ${token}`)
-            .send({ fqdn: 'mail.other-sending.org', serverIpv4: '203.0.113.10' })
-
-        expect(response.status).toBe(400)
-        await expect(domainModel().findOne({ where: { fqdn: 'mail.other-sending.org' } })).resolves.toBeNull()
-    })
-
-    it('configures MAIL_HOSTNAME as the sending domain and returns the full record set', async () => {
-        const response = await http()
+    it('no longer offers the configuration endpoints', async () => {
+        await http()
             .put('/api/settings/sending-domain')
             .set('Authorization', `Bearer ${token}`)
             .send({ serverIpv4: '203.0.113.10' })
-            .expect(200)
-        const body = response.body as { fqdn: string; records: DomainDnsRecordDto[] }
+            .expect(404)
+        await http().get('/api/settings/sending-domain/proposal').set('Authorization', `Bearer ${token}`).expect(404)
+        await expect(settingsModel().count()).resolves.toBe(0)
+    })
 
-        expect(body.fqdn).toBe(E2E_MAIL_HOSTNAME)
+    it('creates MAIL_HOSTNAME as the sending domain from MAIL_SERVER_IPV4', async () => {
+        await ensureSendingDomain(app)
+
+        const response = await http().get('/api/settings').set('Authorization', `Bearer ${token}`).expect(200)
+        const body = (response.body as { sendingDomain: SendingDomainBody }).sendingDomain
+
+        expect(body).toMatchObject({ fqdn: E2E_MAIL_HOSTNAME, serverIpv4: E2E_SERVER_IPV4, serverIpv6: null })
         const uses = body.records.map((record) => record.use).sort()
         expect(uses).toEqual(['a', 'dkim', 'dmarc', 'mx', 'ptr', 'spf'])
         const spf = body.records.find((record) => record.use === DomainDnsRecordUse.SPF)
-        expect(spf?.value).toBe('v=spf1 ip4:203.0.113.10 -all')
+        expect(spf?.value).toBe(`v=spf1 ip4:${E2E_SERVER_IPV4} -all`)
+        expect(spf?.priority).toBeNull()
+        const mx = body.records.find((record) => record.use === DomainDnsRecordUse.MX)
+        expect(mx).toMatchObject({ value: E2E_MAIL_HOSTNAME, priority: 10 })
         const ptr = body.records.find((record) => record.use === DomainDnsRecordUse.PTR)
-        expect(ptr?.host).toBe('203.0.113.10')
+        expect(ptr?.host).toBe(E2E_SERVER_IPV4)
     })
 
     it('generates customer SPF records against the sending domain and hides it from the list', async () => {
@@ -126,7 +125,7 @@ describe('SettingsController (e2e)', () => {
         expect(fqdns).not.toContain(E2E_MAIL_HOSTNAME)
     })
 
-    it('changes the server addresses while keeping the domain and the customer SPF status', async () => {
+    it('regenerates the records when the stored addresses differ from the configuration', async () => {
         const before = await domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME }, rejectOnEmpty: true })
         const customer = await domainModel().findOne({ where: { fqdn: 'customer-e2e.org' }, rejectOnEmpty: true })
         const publishedSpf = `v=spf1 include:${E2E_MAIL_HOSTNAME} ~all`
@@ -134,20 +133,24 @@ describe('SettingsController (e2e)', () => {
             { status: DomainDnsRecordStatus.VALID, current: publishedSpf, issue: null },
             { where: { domainId: customer.domainId, use: DomainDnsRecordUse.SPF } },
         )
+        await dnsModel().update(
+            { value: '203.0.113.99' },
+            { where: { domainId: before.domainId, use: DomainDnsRecordUse.A } },
+        )
+        await dnsModel().update(
+            { value: 'v=spf1 ip4:203.0.113.99 -all' },
+            { where: { domainId: before.domainId, use: DomainDnsRecordUse.SPF } },
+        )
 
-        const response = await http()
-            .put('/api/settings/sending-domain')
-            .set('Authorization', `Bearer ${token}`)
-            .send({ serverIpv4: '203.0.113.11', serverIpv6: '2001:db8::11' })
-            .expect(200)
-        const body = response.body as { fqdn: string; serverIpv6: string | null; records: DomainDnsRecordDto[] }
+        await ensureSendingDomain(app)
 
-        expect(body.fqdn).toBe(E2E_MAIL_HOSTNAME)
-        expect(body.serverIpv6).toBe('2001:db8::11')
-        const spf = body.records.find((record) => record.use === DomainDnsRecordUse.SPF)
-        expect(spf?.value).toBe('v=spf1 ip4:203.0.113.11 ip6:2001:db8::11 -all')
+        const sendingRecords = await dnsModel().findAll({ where: { domainId: before.domainId } })
+        const valueOf = (use: DomainDnsRecordUse) => sendingRecords.find((record) => record.use === use)?.value
+        expect(valueOf(DomainDnsRecordUse.A)).toBe(E2E_SERVER_IPV4)
+        expect(valueOf(DomainDnsRecordUse.SPF)).toBe(`v=spf1 ip4:${E2E_SERVER_IPV4} -all`)
         const after = await domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME }, rejectOnEmpty: true })
         expect(after.domainId).toBe(before.domainId)
+        expect(after.activeDkimId).toBe(before.activeDkimId)
         const customerSpf = await dnsModel().findOne({
             where: { domainId: customer.domainId, use: DomainDnsRecordUse.SPF },
             rejectOnEmpty: true,
@@ -155,11 +158,35 @@ describe('SettingsController (e2e)', () => {
         expect(customerSpf).toMatchObject({ status: DomainDnsRecordStatus.VALID, current: publishedSpf, issue: null })
     })
 
+    it('keeps the records on a restart with unchanged configuration', async () => {
+        const sendingDomain = await domainModel().findOne({ where: { fqdn: E2E_MAIL_HOSTNAME }, rejectOnEmpty: true })
+        await dnsModel().update(
+            { status: DomainDnsRecordStatus.VALID, issue: null },
+            { where: { domainId: sendingDomain.domainId } },
+        )
+        const before = await dnsModel().findAll({
+            where: { domainId: sendingDomain.domainId },
+            order: [['dnsId', 'ASC']],
+        })
+
+        const restarted = await createTestApp()
+        await app.close()
+        app = restarted
+
+        const after = await dnsModel().findAll({
+            where: { domainId: sendingDomain.domainId },
+            order: [['dnsId', 'ASC']],
+        })
+        expect(after.map((record) => [record.dnsId, record.status])).toEqual(
+            before.map((record) => [record.dnsId, DomainDnsRecordStatus.VALID]),
+        )
+    })
+
     it('refreshes the sending domain records on demand', async () => {
         const response = await http()
             .post('/api/settings/sending-domain/refresh')
             .set('Authorization', `Bearer ${token}`)
-            .expect(201)
+            .expect(200)
         const body = response.body as { lastCheckedAt: string | null }
 
         expect(body.lastCheckedAt).not.toBeNull()
@@ -174,7 +201,7 @@ describe('SettingsController (e2e)', () => {
 
         const settingsResponse = await http().get('/api/settings').set('Authorization', `Bearer ${token}`).expect(200)
         const settings = settingsResponse.body as { sendingDomain: { fqdn: string; serverIpv4: string } }
-        expect(settings.sendingDomain).toMatchObject({ fqdn: E2E_MAIL_HOSTNAME, serverIpv4: '203.0.113.11' })
+        expect(settings.sendingDomain).toMatchObject({ fqdn: E2E_MAIL_HOSTNAME, serverIpv4: E2E_SERVER_IPV4 })
         await expect(domainModel().findOne({ where: { fqdn: 'mail.stale-sending.org' } })).resolves.toBeNull()
 
         const listResponse = await http().get('/api/domain').set('Authorization', `Bearer ${token}`).expect(200)

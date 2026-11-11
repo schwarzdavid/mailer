@@ -78,6 +78,7 @@ BACKEND_JWT_SECRET=output-of-openssl-rand-base64-48
 BACKEND_ENCRYPTION_SECRET=a-second-output-of-openssl-rand-base64-48
 
 MAIL_HOSTNAME=mx.example.com
+MAIL_SERVER_IPV4=203.0.113.10
 
 SMTP_HOST=mx.example.com
 SMTP_PORT=587
@@ -93,13 +94,14 @@ IMAP_USER=bounce@mx.example.com
 IMAP_PASSWORD=the-mailbox-password
 ```
 
-Generate each of the two secrets with `openssl rand -base64 48`, and use two different values. Remove the line `SMTP_REQUIRE_TLS=false` that the template contains for local development, or set it to `true` as above.
+Generate each of the two secrets with `openssl rand -base64 48`, and use two different values. Remove the lines `SMTP_REQUIRE_TLS=false` and `SEND_REQUIRE_VALID_DNS=false` that the template contains for local development, or set both to `true`.
 
 The lines in detail:
 
 - **`NODE_ENV=production`** is required here. It makes the backend serve the admin UI, write its log as JSON lines and turn off the developer API browser at `/docs`.
 - **`TRUST_PROXY=loopback`** trusts the client address that a reverse proxy on the same server reports, and only that one. If your proxy runs on another machine, use the number of proxies or their subnet instead; see [Reverse proxy](/configuration/reverse-proxy#trust-proxy).
 - **`DB_*` and `REDIS_*`** point at your database and Redis. For TLS and private certificate authorities see [External Postgres and Redis](/configuration/external-postgres-redis#credentials-and-tls-in-env). Without Docker, `NODE_EXTRA_CA_CERTS` does **not** work in `.env`: Node.js reads it from the process environment when it starts, before the backend loads `.env`. Set it in the service unit instead, as shown in [Run the backend as a service](#run-the-backend-as-a-service).
+- **`MAIL_HOSTNAME`, `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6`** are the sending domain and the public addresses it sends from; add `MAIL_SERVER_IPV6=` with the IPv6 address if the mail server has one. See [Mail server](/configuration/environment#mail-server).
 - **`SMTP_*` and `IMAP_*`** are explained in the next section.
 
 ## Bring your own mail server
@@ -108,7 +110,7 @@ The backend does not deliver mail to recipients itself. It hands each mail to an
 
 Your mail server must:
 
-- **Run under the name `MAIL_HOSTNAME`** (here `mx.example.com`) and on the IP addresses you enter in the setup wizard. The DNS records the admin UI asks for make `MAIL_HOSTNAME` its own mail exchanger (`MX`) and allow only those addresses to send for it (`SPF`).
+- **Run under the name `MAIL_HOSTNAME`** (here `mx.example.com`) and send from the addresses in `MAIL_SERVER_IPV4` and `MAIL_SERVER_IPV6`. The DNS records the admin UI asks for make `MAIL_HOSTNAME` its own mail exchanger (`MX`) and allow only those addresses to send for it (`SPF`).
 - **Accept submitted mail** from the backend on `SMTP_HOST`/`SMTP_PORT`, logging in as `SMTP_USER` with `SMTP_PASSWORD`. The backend sends every mail with the return address (envelope sender) `bounce@mx.example.com` and a visible `From` address in your customers' domains, so the server must allow that login to use both. The backend signs every mail with DKIM itself; the server must not change the mail's content.
 - **Offer STARTTLS** on the submission port, the command that encrypts a plain connection. With `SMTP_REQUIRE_TLS=true`, the default, the backend refuses to send through a server without it. Use `SMTP_PORT=465` with `SMTP_SECURE=true` instead for a server that speaks TLS from the first byte. Set `SMTP_REQUIRE_TLS=false` only for a test server on the same machine.
 - **Hold the mailbox `bounce@mx.example.com`** and accept mail for it from the internet on port 25, because bounces come back to the return address. The backend reads that mailbox over IMAP with `IMAP_USER` and `IMAP_PASSWORD`: `IMAP_PORT=993` with `IMAP_SECURE=true` for TLS from the start, or `IMAP_PORT=143` with `IMAP_SECURE=false` for STARTTLS. Without `IMAP_HOST`, the backend reads no bounces at all and logs that polling is disabled.
@@ -247,7 +249,7 @@ cp -r apps/frontend/dist apps/backend/public
 systemctl start mailer
 ```
 
-Compare `.env.example` of the new release with your `.env` for new or renamed variables before you start.
+Compare `.env.example` of the new release with your `.env` for new required or renamed variables before you start. The template lists only required variables and development values; new optional settings are on [Environment variables](/configuration/environment).
 
 ## How you know it worked
 

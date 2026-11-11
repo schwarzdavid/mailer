@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { DomainModel } from '../src/modules/domain/models/domain.model.js'
 import { DomainDkimModel } from '../src/modules/domain/models/domain-dkim.model.js'
 import { DomainDnsModel } from '../src/modules/domain/models/domain-dns.model.js'
@@ -25,7 +25,7 @@ describe('DomainController (e2e)', () => {
         app = await createTestApp()
         await seedUser(app, credentials)
         token = await login(app, credentials)
-        await configureSendingDomain(app, token)
+        await ensureSendingDomain(app)
     })
 
     afterAll(async () => {
@@ -96,7 +96,7 @@ describe('DomainController (e2e)', () => {
         const refreshed = await http()
             .post(`/api/domain/${domainId}/refresh`)
             .set('Authorization', `Bearer ${token}`)
-            .expect(201)
+            .expect(200)
         expect(refreshed.body).toMatchObject({ domainId, fqdn: 'example.com' })
         const checked = await domainModel.findByPk(domainId, { rejectOnEmpty: true })
         expect(checked.lastCheckedAt).toBeInstanceOf(Date)
@@ -195,14 +195,14 @@ describe('DomainController (e2e)', () => {
                 .post(`/api/project/${projectId}/domains`)
                 .set('Authorization', `Bearer ${token}`)
                 .send({ domainId })
-                .expect(201)
+                .expect(204)
 
             const assigned = await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`)
             expect(assigned.status).toBe(409)
 
             await http().delete(`/api/project/${projectId}`).set('Authorization', `Bearer ${token}`).expect(200)
             await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`).expect(200)
-            await http().post(`/api/project/${projectId}/restore`).set('Authorization', `Bearer ${token}`).expect(201)
+            await http().post(`/api/project/${projectId}/restore`).set('Authorization', `Bearer ${token}`).expect(200)
 
             await http().get(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`).expect(404)
             const dnsModel = app.get<typeof DomainDnsModel>(getModelToken(DomainDnsModel))
@@ -250,11 +250,11 @@ describe('DomainController (e2e)', () => {
                 .post(`/api/project/${projectId}/domains`)
                 .set('Authorization', `Bearer ${token}`)
                 .send({ domainId })
-                .expect(201)
+                .expect(204)
             await http()
                 .post('/api/inbound-form')
                 .set('Authorization', `Bearer ${token}`)
-                .send({ name: 'Uses domain', slug: 'e2e-domain-delete-in-use', domainId, projectId })
+                .send({ name: 'Uses domain', domainId, projectId })
                 .expect(201)
 
             const response = await http().delete(`/api/domain/${domainId}`).set('Authorization', `Bearer ${token}`)

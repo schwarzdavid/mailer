@@ -1,4 +1,5 @@
 import { SetMetadata, type ExecutionContext } from '@nestjs/common'
+import { normalizeFormKey } from './form-key.js'
 
 export const FORM_SUBMIT_THROTTLER = 'formSubmit'
 
@@ -21,5 +22,6 @@ export function formThrottleKind(context: ExecutionContext): FormThrottleKind | 
 }
 
 export function formThrottleTracker(request: FormThrottleRequest): string {
-    return `form:${request.params?.slug ?? 'unknown'}:${request.ip ?? 'unknown'}`
+    const formKey = request.params?.formKey
+    return `form:${formKey === undefined ? 'unknown' : normalizeFormKey(formKey)}:${request.ip ?? 'unknown'}`
 }

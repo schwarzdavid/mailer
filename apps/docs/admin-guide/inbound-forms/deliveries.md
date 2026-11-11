@@ -8,7 +8,7 @@ A **delivery** is one e-mail for one receiver of one submission. A form with two
 
 1. **The submission is checked.** mailer runs the [security checks](/admin-guide/inbound-forms/security) and the [field rules](/admin-guide/inbound-forms/fields). A submission caught by the honeypot is stored marked as spam and gets no deliveries.
 2. **Submission and deliveries are stored together.** In one database transaction, mailer stores the submission and one delivery with the status `pending` for every receiver that is **Active** and has a published template. Receivers without a published template are skipped. Each delivery remembers the template version that was live at this moment.
-3. **The form answers.** The website gets `200` `{ "status": "accepted" }`. mailer does not wait for the mail server.
+3. **The form answers.** The website gets `202` `{ "status": "accepted" }`. mailer does not wait for the mail server.
 4. **Each delivery is queued.** mailer puts a job for each delivery into a queue in Redis. If Redis does not answer within 2 seconds, mailer logs it and leaves the delivery to the recovery sweep (see [The recovery sweep](#the-recovery-sweep)); the website still gets `accepted`.
 5. **The backend sends it.** A worker inside the backend takes the job, up to five at a time, renders the template with the submitted values, resolves placeholder recipients such as <code v-pre>{{email}}</code>, signs the e-mail with the sender domain's DKIM key and hands it to mailer's mail server, which delivers it to the recipient's server.
 6. **The delivery is marked `sent`**, or retried, or marked `failed`, as described below.

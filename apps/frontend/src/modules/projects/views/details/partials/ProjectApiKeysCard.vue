@@ -33,7 +33,7 @@
                 :lead-tone="key.revokedAt ? 'none' : 'neutral'"
             >
                 <template #subtitle>
-                    <i18n-t keypath="module.projects.apiKeys.prefix" tag="span">
+                    <i18n-t keypath="module.projects.apiKeys.prefix" tag="span" scope="global">
                         <template #prefix>
                             <span class="mono">{{ key.prefix }}</span>
                         </template>

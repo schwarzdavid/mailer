@@ -35,6 +35,16 @@ const optionalString = z
     .optional()
     .transform((value) => value || undefined)
 
+const serverIpv4 = z.string().trim().pipe(z.ipv4())
+
+const serverIpv6 = z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || undefined)
+    .pipe(z.ipv6().optional())
+    .transform((value) => value && new URL(`http://[${value}]`).hostname.slice(1, -1))
+
 export const envShape = {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: port.default(8000),
@@ -61,6 +71,8 @@ export const envShape = {
     BACKEND_ENCRYPTION_SECRET: secret,
 
     MAIL_HOSTNAME: mailHostname,
+    MAIL_SERVER_IPV4: serverIpv4,
+    MAIL_SERVER_IPV6: serverIpv6,
 
     SMTP_HOST: z.string().min(1),
     SMTP_PORT: port,

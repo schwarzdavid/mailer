@@ -117,7 +117,7 @@ If you have to start with a new value, every stored secret must be replaced, bec
 
 3. **Give every sender domain a new DKIM key** by deleting it and adding it again under **Domains**. The backend refuses to delete a domain while it is in use, so for each domain, for example `mail.example.net`:
     - unassign it from every project that uses it (the domain's page names them);
-    - it must not be the sender domain of any inbound form. A form's sender domain cannot be cleared while the form has receivers, so remove the form's receivers first, or delete the form. Removing a receiver deletes its template and all its versions: copy the template text out of the editor before you remove it ([Name, slug and sender domain](/admin-guide/inbound-forms/create#name-slug-and-sender-domain));
+    - it must not be the sender domain of any inbound form. A form's sender domain cannot be cleared while the form has receivers, so remove the form's receivers first, or delete the form. Removing a receiver deletes its template and all its versions: copy the template text out of the editor before you remove it ([Name and sender domain](/admin-guide/inbound-forms/create#name-and-sender-domain));
     - delete the domain ([Delete a domain](/admin-guide/domains#delete-a-domain)) and add it again ([Add the domain](/admin-guide/domains#add-the-domain));
     - replace the DKIM record `s1._domainkey.mail.example.net` in DNS with the new value from the domain's page; the SPF and DMARC records stay the same;
     - assign the domain to its projects again, set it on the forms again and add the receivers and templates back.

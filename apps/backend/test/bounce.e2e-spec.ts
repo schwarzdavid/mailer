@@ -7,7 +7,7 @@ import type { App } from 'supertest/types.js'
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
-import { configureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
+import { ensureSendingDomain, E2E_MAIL_HOSTNAME } from './support/sending-domain.js'
 import { fetchMessagesTo, header, waitForMessagesTo } from './support/mailhog.js'
 import { BounceMailboxService } from '../src/modules/bounce/services/bounce-mailbox.service.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -82,7 +82,7 @@ describe('Bounce (e2e)', () => {
     let inboundFormId: number
 
     const env = inject('e2eEnv')
-    const slug = 'e2e-bounce-contact'
+    let formKey = ''
     const permanentAddress = 'gone@bounce-e2e.test'
     const transientAddress = 'busy@bounce-e2e.test'
     const password = 'correct-horse-battery-staple'
@@ -138,9 +138,9 @@ describe('Bounce (e2e)', () => {
 
     async function submitForm(): Promise<void> {
         await http()
-            .post(`/api/public/form/${slug}`)
+            .post(`/api/v1/forms/${formKey}`)
             .send({ data: { message: 'Hello there' } })
-            .expect(201)
+            .expect(202)
     }
 
     async function latestDeliveryTo(address: string): Promise<InboundFormDeliveryModel> {
@@ -173,7 +173,7 @@ describe('Bounce (e2e)', () => {
         superToken = await login(app, superCredentials)
         readerToken = await login(app, readerCredentials)
         memberToken = await login(app, memberCredentials)
-        await configureSendingDomain(app, superToken)
+        await ensureSendingDomain(app)
 
         const users = await http().get('/api/user').set('Authorization', bearer(superToken)).expect(200)
         const reader = (users.body as { userId: number; email: string }[]).find(
@@ -203,14 +203,15 @@ describe('Bounce (e2e)', () => {
             .post(`/api/project/${projectId}/domains`)
             .set('Authorization', bearer(superToken))
             .send({ domainId })
-            .expect(201)
+            .expect(204)
 
         const form = await http()
             .post('/api/inbound-form')
             .set('Authorization', bearer(superToken))
-            .send({ name: 'E2E Bounce Contact', slug, domainId, projectId })
+            .send({ name: 'E2E Bounce Contact', domainId, projectId })
             .expect(201)
         inboundFormId = (form.body as { inboundFormId: number }).inboundFormId
+        formKey = (form.body as { formKey: string }).formKey
 
         await http()
             .put(`/api/inbound-form/${inboundFormId}/fields`)
@@ -233,7 +234,7 @@ describe('Bounce (e2e)', () => {
         await http()
             .post(`/api/inbound-form/${inboundFormId}/receiver/${receiverId}/template/publish`)
             .set('Authorization', bearer(superToken))
-            .expect(201)
+            .expect(200)
     })
 
     afterAll(async () => {

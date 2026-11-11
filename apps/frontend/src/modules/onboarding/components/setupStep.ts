@@ -1,1 +1,1 @@
-export type SetupStepKey = 'account' | 'sendingDomain' | 'records'
+export type SetupStepKey = 'account' | 'records'

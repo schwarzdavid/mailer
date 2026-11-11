@@ -18,6 +18,10 @@
                 <dt>{{ t('dns.host') }}</dt>
                 <dd><CopyField :value="record.host" :label="t('dns.hostFor', { name })" /></dd>
             </div>
+            <div v-if="record.priority !== null" class="dns-record__pair">
+                <dt>{{ t('dns.priority') }}</dt>
+                <dd><CopyField :value="String(record.priority)" :label="t('dns.priorityFor', { name })" /></dd>
+            </div>
             <div class="dns-record__pair">
                 <dt>{{ t('dns.value') }}</dt>
                 <dd>

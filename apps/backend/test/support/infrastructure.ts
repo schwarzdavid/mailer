@@ -1,6 +1,6 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
 import { GenericContainer, Wait } from 'testcontainers'
-import { E2E_MAIL_HOSTNAME } from './sending-domain.js'
+import { E2E_MAIL_HOSTNAME, E2E_SERVER_IPV4 } from './sending-domain.js'
 
 export interface E2eEnv {
     DB_HOST: string
@@ -13,6 +13,7 @@ export interface E2eEnv {
     BACKEND_JWT_SECRET: string
     BACKEND_ENCRYPTION_SECRET: string
     MAIL_HOSTNAME: string
+    MAIL_SERVER_IPV4: string
     SMTP_HOST: string
     SMTP_PORT: string
     SMTP_SECURE: string
@@ -86,6 +87,7 @@ export async function startInfrastructure(): Promise<Infrastructure> {
         BACKEND_JWT_SECRET: 'e2e-jwt-secret-0123456789abcdef0',
         BACKEND_ENCRYPTION_SECRET: 'e2e-encryption-secret-0123456789ab',
         MAIL_HOSTNAME: E2E_MAIL_HOSTNAME,
+        MAIL_SERVER_IPV4: E2E_SERVER_IPV4,
         SMTP_HOST: mailhog.getHost(),
         SMTP_PORT: String(mailhog.getMappedPort(1025)),
         SMTP_SECURE: 'false',

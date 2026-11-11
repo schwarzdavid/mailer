@@ -1,8 +1,8 @@
 # Embed the form
 
-This page shows three ways to connect a website's contact form to mailer, each as a complete example you can paste: a plain HTML form, a form sent with JavaScript `fetch` and the timed token, and a complete static page. At the end your website submits to `https://app.example.com/api/public/form/contact` and you have seen an e-mail arrive.
+This page shows three ways to connect a website's contact form to mailer, each as a complete example you can paste: a plain HTML form, a form sent with JavaScript `fetch` and the timed token, and a complete static page. At the end your website submits to `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` and you have seen an e-mail arrive.
 
-The examples use the form from the other pages of this guide: slug `contact`, the fields `name`, `email` and `message`, a honeypot with the key `website` and a timed token with the key `formToken`, both with the location **Body**, and the allowed domain `www.example.org`. Replace these with your form's values; the info button of each check on the form's page (**How to integrate _type_**) shows the exact keys.
+The examples use the form from the other pages of this guide: form key `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` (yours is on the form's **Endpoint** card), the fields `name`, `email` and `message`, a honeypot with the key `website` and a timed token with the key `formToken`, both with the location **Body**, and the allowed domain `www.example.org`. Replace these with your form's values; the info button of each check on the form's page (**How to integrate _type_**) shows the exact keys.
 
 ## Before you start
 
@@ -13,7 +13,7 @@ The examples use the form from the other pages of this guide: slug `contact`, th
 
 ## What the endpoint accepts
 
-The website sends a `POST` to `https://app.example.com/api/public/form/<slug>` with a body that has up to two parts:
+The website sends a `POST` to `https://app.example.com/api/v1/forms/<form-key>` with a body that has up to two parts:
 
 ```json
 {
@@ -32,7 +32,7 @@ No other top-level keys are allowed. The body can be JSON (`Content-Type: applic
 A plain HTML form needs no JavaScript at all. It works only for forms whose fields are all **Text** or **Email** and whose only security check is the honeypot: the timed token and reCAPTCHA need JavaScript, and a browser sends every value as a string, which **Number** and **Boolean** fields reject.
 
 ```html
-<form method="post" action="https://app.example.com/api/public/form/contact">
+<form method="post" action="https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c">
     <label>
         Name
         <input name="data[name]" required minlength="1" />
@@ -61,7 +61,7 @@ After sending, the browser shows mailer's raw answer, `{"status":"accepted"}` or
 
 ## Example 2: fetch with client.js and the timed token
 
-This is a form block for an existing page. It loads mailer's `client.js`, which provides `InboundForm.getToken('<slug>')`: the function requests a timed token and resolves only once the token's minimum delay has passed. The script asks for the token as soon as the visitor starts filling in the form, so the delay has passed by the time they click send, and sends it in the `security` object together with the empty honeypot.
+This is a form block for an existing page. It loads mailer's `client.js`, which provides `InboundForm.getToken('<form-key>')`: the function requests a timed token and resolves only once the token's minimum delay has passed. The script asks for the token as soon as the visitor starts filling in the form, so the delay has passed by the time they click send, and sends it in the `security` object together with the empty honeypot.
 
 ```html
 <form id="contact-form">
@@ -82,16 +82,16 @@ This is a form block for an existing page. It loads mailer's `client.js`, which 
     <p id="contact-status" role="status"></p>
 </form>
 
-<script src="https://app.example.com/api/public/form/client.js"></script>
+<script src="https://app.example.com/api/v1/forms/client.js"></script>
 <script>
-    const endpoint = 'https://app.example.com/api/public/form/contact'
+    const endpoint = 'https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c'
     const form = document.getElementById('contact-form')
     const status = document.getElementById('contact-status')
     let tokenRequest = null
 
     function requestToken() {
         if (!tokenRequest) {
-            tokenRequest = InboundForm.getToken('contact')
+            tokenRequest = InboundForm.getToken('3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
             tokenRequest.catch(() => {
                 tokenRequest = null
             })
@@ -205,10 +205,10 @@ A whole page, for example `contact.html` on a static site. It adds to example 2 
             <p id="contact-status" role="status"></p>
         </form>
 
-        <script src="https://app.example.com/api/public/form/client.js"></script>
+        <script src="https://app.example.com/api/v1/forms/client.js"></script>
         <script>
-            const endpoint = 'https://app.example.com/api/public/form/contact'
-            const slug = 'contact'
+            const formKey = '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c'
+            const endpoint = `https://app.example.com/api/v1/forms/${formKey}`
             const form = document.getElementById('contact-form')
             const button = form.querySelector('button')
             const status = document.getElementById('contact-status')
@@ -216,7 +216,7 @@ A whole page, for example `contact.html` on a static site. It adds to example 2 
 
             function requestToken() {
                 if (!tokenRequest) {
-                    tokenRequest = InboundForm.getToken(slug)
+                    tokenRequest = InboundForm.getToken(formKey)
                     tokenRequest.catch(() => {
                         tokenRequest = null
                     })
@@ -294,7 +294,7 @@ If the form has no timed token, remove the `client.js` tag, `requestToken`, the 
 
 ## Responses
 
-A successful submission answers `200` with exactly this body:
+A successful submission answers `202 Accepted` with exactly this body:
 
 ```json
 { "status": "accepted" }
@@ -304,17 +304,17 @@ A successful submission answers `200` with exactly this body:
 
 Errors other than `413` are JSON with `statusCode` and `message`; all of them except `429` also carry `error`. The exact schemas are on [Public form endpoints](/api/reference/public-form).
 
-| Status | When                                                                                 | Example body                                                                                 | What the website should do                                       |
-| ------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `400`  | A field breaks its rules, `data` is missing, or the body has unknown top-level keys  | `{ "message": ["email: Invalid email address"], "error": "Bad Request", "statusCode": 400 }` | Show the visitor which fields to correct. `message` is a list.   |
-| `403`  | A security check failed or the website is not in the allowed domains                 | `{ "message": "Form token expired", "error": "Forbidden", "statusCode": 403 }`               | Fetch a new token and let the visitor send again.                |
-| `404`  | The slug is unknown, the form does not accept submissions, or its project is deleted | `{ "message": "Unknown form", "error": "Not Found", "statusCode": 404 }`                     | Check the URL and **Accept submissions**.                        |
-| `413`  | The body is larger than 100 kB                                                       | no fixed body; check the status only                                                         | Shorten the input; set `maxlength` on text areas.                |
-| `429`  | A rate limit was hit                                                                 | `{ "statusCode": 429, "message": "ThrottlerException: Too Many Requests" }`                  | Ask the visitor to try again later; by default after 10 minutes. |
+| Status | When                                                                                     | Example body                                                                                 | What the website should do                                       |
+| ------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `400`  | A field breaks its rules, `data` is missing, or the body has unknown top-level keys      | `{ "message": ["email: Invalid email address"], "error": "Bad Request", "statusCode": 400 }` | Show the visitor which fields to correct. `message` is a list.   |
+| `403`  | A security check failed or the website is not in the allowed domains                     | `{ "message": "Form token expired", "error": "Forbidden", "statusCode": 403 }`               | Fetch a new token and let the visitor send again.                |
+| `404`  | The form key is unknown, the form does not accept submissions, or its project is deleted | `{ "message": "Unknown form", "error": "Not Found", "statusCode": 404 }`                     | Check the URL and **Accept submissions**.                        |
+| `413`  | The body is larger than 100 kB                                                           | no fixed body; check the status only                                                         | Shorten the input; set `maxlength` on text areas.                |
+| `429`  | A rate limit was hit                                                                     | `{ "statusCode": 429, "message": "ThrottlerException: Too Many Requests" }`                  | Ask the visitor to try again later; by default after 10 minutes. |
 
 Every `403` message is listed on [Security checks](/admin-guide/inbound-forms/security): `Origin not allowed`, the `Form token …` messages and the `Captcha …` messages. Write the website's code against the status, not against the message text.
 
-The token endpoint `https://app.example.com/api/public/form/<slug>/token` answers `403` `Origin not allowed`, `404` `Unknown form` or `429` in the same shapes. `InboundForm.getToken` then rejects with an error whose `status` property holds the status code, which example 3 uses.
+The token endpoint `https://app.example.com/api/v1/forms/<form-key>/token` answers `403` `Origin not allowed`, `404` `Unknown form` or `429` in the same shapes. `InboundForm.getToken` then rejects with an error whose `status` property holds the status code, which example 3 uses.
 
 ## CORS and browser security
 
@@ -328,10 +328,10 @@ The token endpoint `https://app.example.com/api/public/form/<slug>/token` answer
 1. From any computer, request a token and submit a test message as the website would. The `Origin` header stands in for the browser, the `sleep` for the minimum delay of 3 seconds plus a margin. Run the commands one after another; the token is bound to your IP address:
 
     ```bash
-    TOKEN=$(curl -s -X POST https://app.example.com/api/public/form/contact/token \
+    TOKEN=$(curl -s -X POST https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c/token \
       -H "Origin: https://www.example.org" | sed -E 's/.*"token":"([^"]+)".*/\1/')
     sleep 5
-    curl -s -X POST https://app.example.com/api/public/form/contact \
+    curl -s -X POST https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c \
       -H "Origin: https://www.example.org" \
       -H "Content-Type: application/json" \
       -d "{\"data\":{\"name\":\"Ada\",\"email\":\"reader@example.org\",\"message\":\"Test from curl\"},\"security\":{\"website\":\"\",\"formToken\":\"$TOKEN\"}}"
@@ -347,6 +347,6 @@ The token endpoint `https://app.example.com/api/public/form/<slug>/token` answer
 
 2. Within a few seconds the receiver's e-mail arrives, in the example at `inbox@example.org`, with the subject of its template.
 3. In the admin UI, open the project's **Sent mail** page (see [Projects](/admin-guide/projects#sent-mail)). The newest row has the **Source** **Form** and the **Status** **Sent**.
-4. Open the page on the website, fill in the form and send it. In the browser's developer tools, the **Network** tab shows the `POST` to `/api/public/form/contact` with status `200` and the answer `{"status":"accepted"}`, and a second row appears on **Sent mail**.
+4. Open the page on the website, fill in the form and send it. In the browser's developer tools, the **Network** tab shows the `POST` to `/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` with status `202` and the answer `{"status":"accepted"}`, and a second row appears on **Sent mail**.
 
 If step 1 prints an error instead, the table under [Responses](#responses) names the cause. If it prints `accepted` but no e-mail arrives, see [Deliveries](/admin-guide/inbound-forms/deliveries#when-no-e-mail-arrives).

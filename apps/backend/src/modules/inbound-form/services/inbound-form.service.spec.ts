@@ -2,11 +2,12 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { getModelToken } from '@nestjs/sequelize'
 import { Test, TestingModule } from '@nestjs/testing'
 import { Sequelize } from 'sequelize-typescript'
-import { Op, UniqueConstraintError } from 'sequelize'
+import { Op } from 'sequelize'
 import { createMongoAbility } from '@casl/ability'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { FORM_LIST_ORDER, InboundFormService } from './inbound-form.service.js'
 import { FIELD_ORDER, INCLUDED_FIELD_ORDER } from '../helpers/field-order.js'
+import { generateFormKey } from '../helpers/form-key.js'
 import { InboundFormModel } from '../models/inbound-form.model.js'
 import { InboundFormFieldModel } from '../models/inbound-form-field.model.js'
 import { InboundFormSecurityModel } from '../models/inbound-form-security.model.js'
@@ -80,7 +81,7 @@ const form: InboundForm = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: 'contact-form-key-00001',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date(),
@@ -134,6 +135,11 @@ function formRow(partial: Partial<InboundFormFull> = {}): FormRow {
     row.update.mockResolvedValue(row)
     return row
 }
+
+vi.mock('../helpers/form-key.js', () => ({
+    FORM_KEY_LENGTH: 22,
+    generateFormKey: vi.fn<() => string>(() => 'generated-form-key-001'),
+}))
 
 describe('InboundFormService', () => {
     let service: InboundFormService
@@ -216,29 +222,39 @@ describe('InboundFormService', () => {
             const row = formRow()
             formCreate.mockResolvedValue(row)
 
-            const result = await service.createForm(
-                { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 },
-                manageAll,
-            )
+            vi.mocked(generateFormKey).mockReturnValueOnce('contact-form-key-00001')
+
+            const result = await service.createForm({ name: 'Contact', domainId: 3, projectId: 5 }, manageAll)
 
             expect(getDomainById).toHaveBeenCalledWith(3)
             expect(formCreate).toHaveBeenCalledWith(
-                { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5, isActive: true },
+                { name: 'Contact', domainId: 3, projectId: 5, formKey: 'contact-form-key-00001', isActive: true },
                 { returning: true },
             )
-            expect(result.slug).toBe('contact')
+            expect(result.formKey).toBe('contact-form-key-00001')
+        })
+
+        it('generates a new form key for every form', async () => {
+            vi.mocked(generateFormKey).mockClear()
+            formCreate.mockResolvedValue(formRow())
+            const request = { name: 'Contact', domainId: null, projectId: 5 }
+
+            await service.createForm(request, manageAll)
+            await service.createForm(request, manageAll)
+
+            expect(generateFormKey).toHaveBeenCalledTimes(2)
         })
 
         it('creates a form without a domain', async () => {
             formCreate.mockResolvedValue(formRow({ domainId: null }))
 
-            await service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll)
+            await service.createForm({ name: 'Contact', domainId: null, projectId: 5 }, manageAll)
 
             expect(getDomainById).not.toHaveBeenCalled()
         })
 
         it('lets form editors create forms and keeps project updaters out', async () => {
-            const request = { name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }
+            const request = { name: 'Contact', domainId: null, projectId: 5 }
             formCreate.mockResolvedValue(formRow({ domainId: null }))
 
             await expect(service.createForm(request, formEditorAbility)).resolves.toBeDefined()
@@ -248,9 +264,9 @@ describe('InboundFormService', () => {
         it('rejects an unknown domain with a BadRequestException', async () => {
             getDomainById.mockRejectedValue(new Error('empty result'))
 
-            await expect(
-                service.createForm({ name: 'X', slug: 'x', domainId: 99, projectId: 5 }, manageAll),
-            ).rejects.toThrow(BadRequestException)
+            await expect(service.createForm({ name: 'X', domainId: 99, projectId: 5 }, manageAll)).rejects.toThrow(
+                BadRequestException,
+            )
         })
     })
 
@@ -259,7 +275,7 @@ describe('InboundFormService', () => {
             assertProjectExists.mockRejectedValue(new NotFoundException('Unknown project'))
 
             await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
+                service.createForm({ name: 'Contact', domainId: null, projectId: 5 }, manageAll),
             ).rejects.toThrow(new BadRequestException('Unknown project'))
             expect(formCreate).not.toHaveBeenCalled()
         })
@@ -267,9 +283,9 @@ describe('InboundFormService', () => {
         it('rejects domains that are not assigned to the project', async () => {
             assertDomainInProject.mockRejectedValue(new BadRequestException('Domain does not belong to the project'))
 
-            await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 }, manageAll),
-            ).rejects.toThrow(new BadRequestException('Domain does not belong to the project'))
+            await expect(service.createForm({ name: 'Contact', domainId: 3, projectId: 5 }, manageAll)).rejects.toThrow(
+                new BadRequestException('Domain does not belong to the project'),
+            )
             expect(assertDomainInProject).toHaveBeenCalledWith(5, 3)
             expect(formCreate).not.toHaveBeenCalled()
         })
@@ -447,11 +463,7 @@ describe('InboundFormService', () => {
             const row = formRow()
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
 
-            await service.updateForm(
-                1,
-                { name: 'New name', slug: undefined, domainId: undefined, isActive: undefined },
-                manageAll,
-            )
+            await service.updateForm(1, { name: 'New name', domainId: undefined, isActive: undefined }, manageAll)
 
             expect(row.update).toHaveBeenCalledWith({ name: 'New name' })
         })
@@ -1023,14 +1035,14 @@ describe('InboundFormService', () => {
 
         it('rejects creating a form in a project the caller can only read', async () => {
             await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, readOnlyAbility),
+                service.createForm({ name: 'Contact', domainId: null, projectId: 5 }, readOnlyAbility),
             ).rejects.toThrow(ForbiddenException)
             expect(formCreate).not.toHaveBeenCalled()
         })
 
         it('hides a project the caller cannot read when creating a form in it', async () => {
             await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 6 }, readOnlyAbility),
+                service.createForm({ name: 'Contact', domainId: null, projectId: 6 }, readOnlyAbility),
             ).rejects.toThrow(new NotFoundException('Unknown project'))
             expect(formCreate).not.toHaveBeenCalled()
         })
@@ -1086,34 +1098,6 @@ describe('InboundFormService', () => {
             await expect(service.getReceiver(1, 31, readOnlyAbility, 'forms.manage')).rejects.toThrow(
                 ForbiddenException,
             )
-        })
-    })
-
-    describe('slug conflicts', () => {
-        it('maps a duplicate slug on create to a bad request', async () => {
-            formCreate.mockRejectedValue(new UniqueConstraintError({}))
-
-            await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
-            ).rejects.toThrow(new BadRequestException('Slug is already in use'))
-        })
-
-        it('maps a duplicate slug on update to a bad request', async () => {
-            const row = formRow()
-            row.update.mockRejectedValue(new UniqueConstraintError({}))
-            formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
-
-            await expect(service.updateForm(1, { slug: 'taken' }, manageAll)).rejects.toThrow(
-                new BadRequestException('Slug is already in use'),
-            )
-        })
-
-        it('rethrows unexpected persistence errors on create', async () => {
-            formCreate.mockRejectedValue(new Error('connection lost'))
-
-            await expect(
-                service.createForm({ name: 'Contact', slug: 'contact', domainId: null, projectId: 5 }, manageAll),
-            ).rejects.toThrow('connection lost')
         })
     })
 

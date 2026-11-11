@@ -8,7 +8,7 @@ const form: InboundFormDto = {
     projectId: 5,
     domainId: 3,
     name: 'Contact',
-    slug: 'contact',
+    formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
     isActive: true,
     allowedHostnames: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -24,10 +24,10 @@ describe('useInboundFormCreateMutation', () => {
         const { result, queryClient, unmount } = withVueQuery(() => useInboundFormCreateMutation())
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-        const created = await result.mutateAsync({ name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 })
+        const created = await result.mutateAsync({ name: 'Contact', domainId: 3, projectId: 5 })
 
         expect(createSpy).toHaveBeenCalledWith({
-            body: { name: 'Contact', slug: 'contact', domainId: 3, projectId: 5 },
+            body: { name: 'Contact', domainId: 3, projectId: 5 },
         })
         expect(created).toEqual(form)
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] })

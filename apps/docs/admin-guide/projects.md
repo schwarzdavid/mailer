@@ -36,14 +36,14 @@ _The page of the project Acme Website. The button **Sent mail** in the top right
 
 The page shows, from top to bottom:
 
-| Card               | What it holds                                                                                                                                                                         | Needed to change it                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| **Inbound forms**  | The project's forms, with their slug, receiver count and status. **New form** creates one; the [Inbound forms](/admin-guide/inbound-forms/create) pages of this guide describe forms. | **Manage forms**                        |
-| **Sender domains** | The domains the project's forms and API keys may send from. Hidden from users without **View domains**.                                                                               | **Update project** and **View domains** |
-| **Members**        | Who works on the project and with which project role.                                                                                                                                 | **Manage members** or **Update users**  |
-| **API keys**       | Keys that let your own applications send mail through the project.                                                                                                                    | **Manage API keys**                     |
-| **General**        | The **Project name**. Change it and click **Save**.                                                                                                                                   | **Update project**                      |
-| **Delete project** | Moves the project to **Recently deleted**.                                                                                                                                            | **Delete project**                      |
+| Card               | What it holds                                                                                                                                                                   | Needed to change it                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **Inbound forms**  | The project's forms, with their receiver count and status. **New form** creates one; the [Inbound forms](/admin-guide/inbound-forms/create) pages of this guide describe forms. | **Manage forms**                        |
+| **Sender domains** | The domains the project's forms and API keys may send from. Hidden from users without **View domains**.                                                                         | **Update project** and **View domains** |
+| **Members**        | Who works on the project and with which project role.                                                                                                                           | **Manage members** or **Update users**  |
+| **API keys**       | Keys that let your own applications send mail through the project.                                                                                                              | **Manage API keys**                     |
+| **General**        | The **Project name**. Change it and click **Save**.                                                                                                                             | **Update project**                      |
+| **Delete project** | Moves the project to **Recently deleted**.                                                                                                                                      | **Delete project**                      |
 
 The **Members** card is hidden entirely unless you hold **Manage members** on the project or the global **Update users**; **Sender domains** is hidden without **View domains**, and **Delete project** without **Delete project**. The other cards are shown without their buttons, and **General** read-only, when you may not change them. If you may only view the project, its name carries the tag **Read only** and the page explains **You can view this project**.
 

@@ -1,6 +1,6 @@
 # First-run setup
 
-This page walks you through the setup wizard that opens on the first visit: you create the first administrator, confirm the server's IP addresses and publish the mail DNS records mailer generates for `MAIL_HOSTNAME`. At the end you are signed in to the admin UI and your server has a complete mail identity.
+This page walks you through the setup wizard that opens on the first visit: you create the first administrator and publish the mail DNS records mailer generated for `MAIL_HOSTNAME` and the server addresses from `.env`. At the end you are signed in to the admin UI and your server has a complete mail identity.
 
 ## Read the setup token
 
@@ -25,7 +25,7 @@ How the token behaves:
 
 ## Open the wizard
 
-Open `https://app.example.com` in your browser. While setup is not finished, every page leads to the wizard. The bar at the top shows its three steps: **Admin account**, **Sending domain** and **DNS records**.
+Open `https://app.example.com` in your browser. While setup is not finished, every page leads to the wizard. The bar at the top shows its two steps: **Admin account** and **DNS records**.
 
 ### Step 1: Admin account
 
@@ -47,28 +47,19 @@ Click **Create account**. The account becomes the first **Super admin**, the rol
 
 If the wizard shows **Couldn't create the account** with `Invalid setup token`, the token is wrong or from an earlier start: read the log again and use the last token. The form allows 10 attempts per minute from one IP address; if Redis is down it answers with an error instead of trying, so check `docker compose ps` first.
 
-### Step 2: Sending domain
-
-![The Sending domain step showing the domain name mx.example.com and the pre-filled server IPv4 address 203.0.113.10](/screenshots/installation/onboarding-domain.png)
-
-_The second step, **Where does this server send from?**, takes the server's IP addresses._
-
-The card **Sending domain** shows the **Domain name**, which is your `MAIL_HOSTNAME`, for example `mx.example.com`. You cannot change it here: it comes from `.env`. The hint below it says the same: **Set by MAIL_HOSTNAME in the server configuration. Change it there and restart the server to switch.** If the name is wrong, fix it now, before you publish any records: create the A record for the new name as on [DNS records](/installation/dns), change `MAIL_HOSTNAME` in `.env`, run `docker compose up -d`, create the bounce mailbox for the new name as on [Docker Compose](/installation/docker-compose#create-the-bounce-mailbox), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
-
-The two address fields are pre-filled from the A and AAAA records of `mx.example.com` you created on [DNS records](/installation/dns):
-
-- **Server IPv4 address** (required): the public IPv4 address of the server, for example `203.0.113.10`.
-- **Server IPv6 address (optional)**: the public IPv6 address, for example `2001:db8::10`. Leave it empty if you did not create AAAA records.
-
-Correct the values if the pre-filled ones are outdated or empty, then click **Save and continue**. mailer now generates a DKIM key for `mx.example.com`, builds the list of DNS records from the name and the addresses, and checks them once right away.
-
-### Step 3: DNS records
+### Step 2: DNS records
 
 ![The DNS records step listing the A and MX records for mx.example.com with their host and value and the status Invalid](/screenshots/installation/onboarding-records.png)
 
-_The third step, **Publish the DNS records**, lists every record with a copy button for its host and value._
+_The second step, **Publish the DNS records**, lists every record with a copy button for its host and value._
 
-Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each, and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
+The backend created these records when it started: a DKIM key for `MAIL_HOSTNAME` and one record set built from `MAIL_HOSTNAME`, `MAIL_SERVER_IPV4` and, if set, `MAIL_SERVER_IPV6`. The card is titled with the name, for example `mx.example.com`, and the **A** record shows the IPv4 address.
+
+Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each (the **MX** record also has a **Priority** with its own copy button, because DNS providers ask for it in a separate field), and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
+
+::: tip Wrong name or address?
+Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `docker compose up -d` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name as on [DNS records](/installation/dns), change `MAIL_HOSTNAME` in `.env`, run `docker compose up -d`, create the bounce mailbox for the new name as on [Docker Compose](/installation/docker-compose#create-the-bounce-mailbox), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
+:::
 
 Create the records in your DNS zone. With the example values, the full set looks like this:
 
@@ -76,14 +67,14 @@ Create the records in your DNS zone. With the example values, the full set looks
 | -------------------- | ------------------------------ | ------ | ----------------------------------------------- | ----------------------- |
 | **A**                | `mx.example.com`               | `A`    | `203.0.113.10`                                  | DNS zone (done already) |
 | **AAAA**             | `mx.example.com`               | `AAAA` | `2001:db8::10`                                  | DNS zone (done already) |
-| **MX**               | `mx.example.com`               | `MX`   | `10 mx.example.com`                             | DNS zone                |
+| **MX**               | `mx.example.com`               | `MX`   | `mx.example.com`, priority `10`                 | DNS zone                |
 | **SPF**              | `mx.example.com`               | `TXT`  | `v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 -all` | DNS zone                |
 | **DKIM**             | `s1._domainkey.mx.example.com` | `TXT`  | `v=DKIM1; k=rsa; p=<public key>`                | DNS zone                |
 | **DMARC**            | `_dmarc.mx.example.com`        | `TXT`  | `v=DMARC1; p=none;`                             | DNS zone                |
 | **PTR (IPv4)**       | `203.0.113.10`                 | `PTR`  | `mx.example.com`                                | Hosting provider        |
 | **PTR (IPv6)**       | `2001:db8::10`                 | `PTR`  | `mx.example.com`                                | Hosting provider        |
 
-With only an IPv4 address the wizard lists six records: the **AAAA** and **PTR (IPv6)** rows are left out, and the SPF value is `v=spf1 ip4:203.0.113.10 -all`.
+Without `MAIL_SERVER_IPV6` the wizard lists six records: the **AAAA** and **PTR (IPv6)** rows are left out, and the SPF value is `v=spf1 ip4:203.0.113.10 -all`.
 
 In zone-file notation (the DKIM key shortened):
 
@@ -96,7 +87,7 @@ _dmarc.mx.example.com.         300  IN  TXT  "v=DMARC1; p=none;"
 
 What each record does:
 
-- **MX** sends mail addressed to `mx.example.com`, such as bounce reports to `bounce@mx.example.com`, to your server. In a DNS provider's form, the priority is `10` and the mail server is `mx.example.com`.
+- **MX** sends mail addressed to `mx.example.com`, such as bounce reports to `bounce@mx.example.com`, to your server. The wizard shows the priority `10` and the mail server `mx.example.com` as separate fields, as DNS provider forms ask for them; in a zone file they form one value, `10 mx.example.com.`.
 - **SPF** says that only your server's addresses may send mail with an envelope sender at `mx.example.com`, and that receivers should reject anything else (`-all`).
 - **DKIM** publishes the public half of the key the backend signs mail with. `s1` is the selector, the name of the key. The value is generated for your installation: copy it from the wizard with the copy button, never from this page. It is about 400 characters long; most DNS providers accept it in one piece, while zone files split it into several quoted strings of at most 255 characters, which is fine, because mailer joins them when it checks.
 - **DMARC** with `p=none` only observes: receivers take no action on mail that fails SPF and DKIM, and because the record names no report address, they send no reports either. [Going live](/installation/going-live) explains when to tighten it.
@@ -108,7 +99,7 @@ Use the copy buttons. DKIM is **Valid** only when DNS returns exactly the genera
 
 After creating the records, click **Check again** to look them up immediately. DNS changes can take a while to show up, from minutes to, rarely, a day.
 
-You do not have to wait for every record. Click **Finish setup** at any time: mailer keeps checking every 15 minutes and lists records that still need attention on the dashboard and in **Settings**. **Back** returns to the **Sending domain** step if you need to correct an address; saving there generates the records again.
+You do not have to wait for every record. Click **Finish setup** at any time: mailer keeps checking every 15 minutes and lists records that still need attention on the dashboard and in **Settings**.
 
 ## If you leave in the middle
 

@@ -6,21 +6,21 @@ A rate limit counts requests from one caller within a time window. When the call
 
 ## Every limit
 
-| Route                                | Limit                                                                 | Window                                                    | Counted per                                      | Set by                                | When Redis is down |
-| ------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ | ------------------------------------- | ------------------ |
-| `POST /api/auth/login`               | 10 attempts, then a block of 5 minutes                                | 1 minute                                                  | client IP and the e-mail address entered         | fixed in the code, not configurable   | `503`, fail closed |
-| `POST /api/setup/user`               | 10 requests                                                           | 1 minute                                                  | client IP                                        | fixed in the code (the general limit) | `503`, fail closed |
-| `POST /api/setup/finish`             | 10 requests                                                           | 1 minute                                                  | client IP                                        | fixed in the code (the general limit) | let through        |
-| `POST /api/v1/send`, per key         | `PUBLIC_API_RATE_LIMIT` (default `60`)                                | `PUBLIC_API_RATE_TTL` ms (default `60000`, one minute)    | API key                                          | `.env`                                | let through        |
-| `POST /api/v1/send`, per IP          | 10 × `PUBLIC_API_RATE_LIMIT` (default `600`)                          | `PUBLIC_API_RATE_TTL` ms                                  | client IP, across all keys                       | `.env` (the factor 10 is fixed)       | let through        |
-| `POST /api/public/form/<slug>/token` | `FORM_TOKEN_RATE_LIMIT` (default `5`), and the general 10 per minute  | `FORM_TOKEN_RATE_TTL` ms (default `600000`, ten minutes)  | form and client IP; the general limit: client IP | `.env` (the general limit is fixed)   | let through        |
-| `POST /api/public/form/<slug>`       | `FORM_SUBMIT_RATE_LIMIT` (default `5`), and the general 10 per minute | `FORM_SUBMIT_RATE_TTL` ms (default `600000`, ten minutes) | form and client IP; the general limit: client IP | `.env` (the general limit is fixed)   | let through        |
+| Route                                 | Limit                                                                 | Window                                                    | Counted per                                      | Set by                                | When Redis is down |
+| ------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ | ------------------------------------- | ------------------ |
+| `POST /api/auth/login`                | 10 attempts, then a block of 5 minutes                                | 1 minute                                                  | client IP and the e-mail address entered         | fixed in the code, not configurable   | `503`, fail closed |
+| `POST /api/setup/user`                | 10 requests                                                           | 1 minute                                                  | client IP                                        | fixed in the code (the general limit) | `503`, fail closed |
+| `POST /api/setup/finish`              | 10 requests                                                           | 1 minute                                                  | client IP                                        | fixed in the code (the general limit) | let through        |
+| `POST /api/v1/send`, per key          | `PUBLIC_API_RATE_LIMIT` (default `60`)                                | `PUBLIC_API_RATE_TTL` ms (default `60000`, one minute)    | API key                                          | `.env`                                | let through        |
+| `POST /api/v1/send`, per IP           | 10 × `PUBLIC_API_RATE_LIMIT` (default `600`)                          | `PUBLIC_API_RATE_TTL` ms                                  | client IP, across all keys                       | `.env` (the factor 10 is fixed)       | let through        |
+| `POST /api/v1/forms/<form-key>/token` | `FORM_TOKEN_RATE_LIMIT` (default `5`), and the general 10 per minute  | `FORM_TOKEN_RATE_TTL` ms (default `600000`, ten minutes)  | form and client IP; the general limit: client IP | `.env` (the general limit is fixed)   | let through        |
+| `POST /api/v1/forms/<form-key>`       | `FORM_SUBMIT_RATE_LIMIT` (default `5`), and the general 10 per minute | `FORM_SUBMIT_RATE_TTL` ms (default `600000`, ten minutes) | form and client IP; the general limit: client IP | `.env` (the general limit is fixed)   | let through        |
 
 Everything else has no rate limit:
 
 - the admin API used by the admin UI, which requires a login token (JWT), apart from `POST /api/setup/finish` above;
 - `GET /api/setup/status`;
-- `GET /api/public/form/client.js`, the script your websites embed;
+- `GET /api/v1/forms/client.js`, the script your websites embed;
 - the health endpoints `/api/health` and `/api/health/ready`;
 - the admin UI's own files.
 
@@ -28,18 +28,18 @@ A few details the table leaves out:
 
 - **Login** counts every attempt, successful or not, because the limit is checked before the password. The counter is kept per pair of client IP and e-mail address (trimmed and lower-cased), so one visitor guessing passwords for one account is blocked without locking that account out for everyone else. The 11th attempt within a minute starts a block of 5 minutes for that pair.
 - **The send API** counts per key only when the request carries something shaped like an API key (`sdm_…`), in the `Authorization: Bearer` header or the `key` query parameter. A request without one is counted per client IP in its place. The limit is checked before the key itself, so requests with wrong keys count too.
-- **Forms** are counted per form, identified by its slug in the URL, and per client IP. The token request and the submission each have their own counter. The general limit of 10 per minute per client IP counts each of the two routes separately, across all forms.
+- **Forms** are counted per form, identified by its form key in the URL in any casing, and per client IP. The token request and the submission each have their own counter. The general limit of 10 per minute per client IP counts each of the two routes separately, across all forms.
 - **Client IP** means the address the backend sees after applying `TRUST_PROXY`. Behind a proxy that is not counted correctly, every visitor shares the proxy's address and therefore one counter; see [Reverse proxy](/configuration/reverse-proxy#trust-proxy). For IPv6 visitors, the per-IP counters of the send API, of first-user registration and the general limit count the whole `/64` network, which is what one household or one server usually gets.
 
 ## Change a limit
 
 Only the send API and form limits are configurable. Each is a pair of a count (`…_LIMIT`) and a window in milliseconds (`…_TTL`); both must be positive whole numbers. The full descriptions are on [Environment variables](/configuration/environment#rate-limits).
 
-1. Edit the pair in `/opt/mailer/.env`; the template from the installation already contains all six keys. For example, to allow 300 sends per key and minute:
+1. Set the key in `/opt/mailer/.env`. The template from the installation leaves the six keys out, so the defaults apply until you add them. For example, to allow 300 sends per key and minute, replace the line or add it when it is not there yet:
 
     ```bash
     cd /opt/mailer
-    sed -i 's|^PUBLIC_API_RATE_LIMIT=.*|PUBLIC_API_RATE_LIMIT=300|' .env
+    grep -q '^PUBLIC_API_RATE_LIMIT=' .env && sed -i 's|^PUBLIC_API_RATE_LIMIT=.*|PUBLIC_API_RATE_LIMIT=300|' .env || echo 'PUBLIC_API_RATE_LIMIT=300' >> .env
     ```
 
 2. Recreate the backend so it reads the new value:

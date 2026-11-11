@@ -30,14 +30,6 @@ export class SettingsModel extends Model<Settings, SettingsCreate> implements Se
     @Column(DataType.INTEGER)
     declare sendingDomainId: number | null
 
-    @AllowNull(false)
-    @Column(DataType.STRING(45))
-    declare serverIpv4: string
-
-    @AllowNull
-    @Column(DataType.STRING(45))
-    declare serverIpv6: string | null
-
     @AllowNull
     @Column(DataType.DATE)
     declare setupFinishedAt: Date | null

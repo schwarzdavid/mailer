@@ -5,6 +5,7 @@ const requiredEnv: Record<string, string> = {
     BACKEND_JWT_SECRET: 'jwt-secret-for-unit-tests-0123456789',
     BACKEND_ENCRYPTION_SECRET: 'encryption-secret-for-unit-tests-0123',
     MAIL_HOSTNAME: 'mail.example.com',
+    MAIL_SERVER_IPV4: '203.0.113.10',
     SMTP_HOST: 'smtp.example.com',
     SMTP_PORT: '1025',
     DB_USERNAME: 'mailer',
@@ -97,6 +98,43 @@ describe('envSchema', () => {
 
     it.each(['localhost', 'https://mx.example.com', 'mx example.com', ''])('rejects "%s" as MAIL_HOSTNAME', (value) => {
         expect(envSchema.safeParse({ ...requiredEnv, MAIL_HOSTNAME: value }).success).toBe(false)
+    })
+
+    it.each([undefined, '', '999.1.1.1', '2001:db8::10', '203.0.113'])('rejects %j as MAIL_SERVER_IPV4', (value) => {
+        const result = envSchema.safeParse({ ...requiredEnv, MAIL_SERVER_IPV4: value })
+
+        expect(result.success).toBe(false)
+        expect(result.error?.issues.map((issue) => issue.path)).toContainEqual(['MAIL_SERVER_IPV4'])
+    })
+
+    it('trims MAIL_SERVER_IPV4', () => {
+        expect(envSchema.parse({ ...requiredEnv, MAIL_SERVER_IPV4: ' 203.0.113.10 ' }).MAIL_SERVER_IPV4).toBe(
+            '203.0.113.10',
+        )
+    })
+
+    it.each([undefined, ''])('treats a MAIL_SERVER_IPV6 of %j as unset', (value) => {
+        expect(envSchema.parse({ ...requiredEnv, MAIL_SERVER_IPV6: value }).MAIL_SERVER_IPV6).toBeUndefined()
+    })
+
+    it('passes a trimmed MAIL_SERVER_IPV6 address through', () => {
+        expect(envSchema.parse({ ...requiredEnv, MAIL_SERVER_IPV6: ' 2001:db8::10 ' }).MAIL_SERVER_IPV6).toBe(
+            '2001:db8::10',
+        )
+    })
+
+    it.each(['2001:DB8::10', '2001:0db8:0000:0000:0000:0000:0000:0010', '2001:db8:0:0::10'])(
+        'writes MAIL_SERVER_IPV6 %s in the compressed lower-case form DNS answers with',
+        (value) => {
+            expect(envSchema.parse({ ...requiredEnv, MAIL_SERVER_IPV6: value }).MAIL_SERVER_IPV6).toBe('2001:db8::10')
+        },
+    )
+
+    it('rejects an IPv4 address as MAIL_SERVER_IPV6', () => {
+        const result = envSchema.safeParse({ ...requiredEnv, MAIL_SERVER_IPV6: '203.0.113.10' })
+
+        expect(result.success).toBe(false)
+        expect(result.error?.issues.map((issue) => issue.path)).toContainEqual(['MAIL_SERVER_IPV6'])
     })
 
     it.each(['BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'MAIL_HOSTNAME', 'SMTP_HOST', 'SMTP_PORT'])(
