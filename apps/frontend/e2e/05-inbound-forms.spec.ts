@@ -67,7 +67,7 @@ test('an administrator creates an inbound form with fields and a receiver', asyn
     await expect(page).toHaveURL(/\/forms\/\d+$/)
     await expect(page.getByRole('heading', { name: formName, level: 1 })).toBeVisible()
     await expect(card(page, 'Endpoint').locator('.copy-field__value').first()).toHaveText(
-        /\/api\/v1\/forms\/[A-Za-z0-9_-]{22}$/,
+        /\/api\/v1\/forms\/[0-9a-f]{32}$/,
     )
     await expect(page.getByRole('navigation', { name: 'Breadcrumbs' })).toContainText(projectName)
     await expect(page.locator('.page-header')).toContainText(senderDomain)
