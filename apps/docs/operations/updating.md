@@ -62,13 +62,14 @@ cp compose.yml compose.yml.before-update
 
 ## Take the new release's files
 
-Every release ships its own `compose.yml` and `.env.example`. Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together.
+Every release ships its own `compose.yml`, `setup.sh` and `.env.example`. Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together.
 
-Download the new `compose.yml` over the old one, and the new template next to your `.env`:
+Download the new `compose.yml` and `setup.sh` over the old ones, and the new template next to your `.env`:
 
 ```bash
 TAG=v1.1.0
 curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/compose.yml"
+curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/setup.sh"
 curl -fsSL -o .env.example "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/.env.example"
 ```
 

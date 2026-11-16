@@ -34,7 +34,7 @@ The file is the one you downloaded on [Docker Compose](/installation/docker-comp
 - **Certificate:** `SSL_TYPE: manual` with `SSL_CERT_PATH` and `SSL_KEY_PATH` pointing at the files Caddy keeps for `MAIL_HOSTNAME` in the `caddy-data` volume, which is mounted read-only at `/caddy`. Until Caddy has that certificate, `mail` restarts ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)).
 - **Postfix setting:** the block `x-mail-postfix-main`, mounted as `/tmp/docker-mailserver/postfix-main.cf` through the config `mail-postfix-main`, sets `mydestination = localhost.$mydomain, localhost`. Postfix's default list of local destinations would also contain the server's own name, `MAIL_HOSTNAME`; leaving it out lets mail to `bounce@` plus `MAIL_HOSTNAME` reach the mailbox created with `setup email add`.
 - **Shutdown:** `stop_grace_period: 1m` gives the mail server up to a minute to finish open deliveries when it stops.
-- **Accounts:** the bounce mailbox and the `postmaster` alias are created by hand after the first start ([CLI](/reference/cli#mail-server-accounts)).
+- **Accounts:** `deploy/setup.sh` creates the bounce mailbox and the `postmaster` alias after it started the stack, and sets the password from `MAIL_PASSWORD` again on every run ([CLI](/reference/cli#mail-server-accounts)).
 
 ## Volumes
 

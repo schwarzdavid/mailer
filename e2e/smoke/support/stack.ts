@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { Compose } from './compose.js'
@@ -20,7 +20,7 @@ export interface SmokeStack {
     composeFile: string
     overrideFile: string
     envFile: string
-    mailPassword: string
+    setupFile: string
     pkiDir: string
     caDir: string
     tlsDir: string
@@ -29,6 +29,7 @@ export interface SmokeStack {
 }
 
 const sourceComposeFile = fileURLToPath(new URL('../../../deploy/compose.yml', import.meta.url))
+const sourceSetupFile = fileURLToPath(new URL('../../../deploy/setup.sh', import.meta.url))
 
 const smokeOverride = `services:
     mail:
@@ -48,7 +49,7 @@ function secret(): string {
     return randomBytes(32).toString('base64')
 }
 
-function envFileContent(imageTag: string, mailPassword: string): string {
+function envFileContent(imageTag: string): string {
     return `SITE_ADDRESS=:80
 HTTP_PORT=${HTTP_PORT}
 HTTPS_PORT=${HTTPS_PORT}
@@ -61,7 +62,7 @@ BACKEND_JWT_SECRET=${secret()}
 BACKEND_ENCRYPTION_SECRET=${secret()}
 MAIL_HOSTNAME=${MAIL_HOSTNAME}
 MAIL_SERVER_IPV4=203.0.113.10
-MAIL_PASSWORD=${mailPassword}
+MAIL_PASSWORD=${secret()}
 SEND_REQUIRE_VALID_DNS=false
 `
 }
@@ -75,13 +76,12 @@ async function assertImageExists(imageTag: string): Promise<void> {
 }
 
 async function prepareStack(dir: string, imageTag: string): Promise<SmokeStack> {
-    const mailPassword = secret()
     const stack: SmokeStack = {
         dir,
         composeFile: join(dir, 'compose.yml'),
         overrideFile: join(dir, 'compose.smoke.yml'),
         envFile: join(dir, '.env'),
-        mailPassword,
+        setupFile: join(dir, 'setup.sh'),
         pkiDir: join(dir, 'pki'),
         caDir: join(dir, 'ca'),
         tlsDir: join(dir, 'tls'),
@@ -89,8 +89,9 @@ async function prepareStack(dir: string, imageTag: string): Promise<SmokeStack> 
         tlsAwayDir: join(dir, 'tls-away'),
     }
     await copyFile(sourceComposeFile, stack.composeFile)
+    await copyFile(sourceSetupFile, stack.setupFile)
     await writeFile(stack.overrideFile, smokeOverride)
-    await writeFile(stack.envFile, envFileContent(imageTag, mailPassword))
+    await writeFile(stack.envFile, envFileContent(imageTag))
     for (const subDir of [stack.pkiDir, stack.caDir, stack.tlsDir, stack.renewDir, stack.tlsAwayDir]) {
         await mkdir(subDir)
     }
@@ -109,6 +110,19 @@ export async function createStack(imageTag: string): Promise<SmokeStack> {
         await rm(dir, { recursive: true, force: true })
         throw error
     }
+}
+
+export async function runSetup(stack: SmokeStack): Promise<string> {
+    const { stdout } = await execa('sh', [stack.setupFile], {
+        cwd: stack.dir,
+        env: {
+            COMPOSE_PROJECT_NAME: PROJECT_NAME,
+            COMPOSE_FILE: [stack.composeFile, stack.overrideFile].map((file) => basename(file)).join(':'),
+            COMPOSE_PATH_SEPARATOR: ':',
+            MSYS_NO_PATHCONV: '1',
+        },
+    })
+    return stdout.replaceAll('\r', '')
 }
 
 export async function destroyStack(stack: SmokeStack): Promise<void> {

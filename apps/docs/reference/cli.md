@@ -47,24 +47,23 @@ The tool needs only the `DB_*` variables and `BACKEND_ENCRYPTION_SECRET`; it doe
 
 The `mail` service is docker-mailserver, whose `setup` command manages the mailboxes and aliases. mailer needs exactly one mailbox, `bounce@` plus `MAIL_HOSTNAME`, and one alias, `postmaster@` plus `MAIL_HOSTNAME`. Both are stored in the `mail-config` volume.
 
-Create the bounce mailbox with the password from `MAIL_PASSWORD`. On the first start of the stack, wait until `docker compose ps` shows `mail` as `Up` (it restarts until Caddy has its certificate), then run it and the alias command below within two minutes, as on [Docker Compose](/installation/docker-compose#create-the-bounce-mailbox); if you miss the window, run them again once the container is back up:
+`setup.sh`, next to `compose.yml`, brings both in line with `.env`. It starts the stack with `docker compose up -d`, waits up to ten minutes until the mail server answers (it restarts until Caddy has its certificate), then creates the mailbox with the password from `MAIL_PASSWORD`, or sets that password again if the mailbox exists, and creates the alias if it is missing ([Docker Compose](/installation/docker-compose#start-the-stack-and-create-the-bounce-mailbox)):
+
+```bash
+sh setup.sh
+```
+
+Run it after the first start, after a restore, after changing `MAIL_HOSTNAME` and after changing `MAIL_PASSWORD` ([Rotating secrets](/operations/rotating-secrets#mail-password)): `up -d` recreates the backend with the new values, and the script puts the same values on the mail account.
+
+The script uses these docker-mailserver commands, which you can also run by hand:
 
 ```bash
 (set -a; . ./.env; docker compose exec mail setup email add "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
-```
-
-Point `postmaster@` at the bounce mailbox:
-
-```bash
+(set -a; . ./.env; docker compose exec mail setup email update "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
 (set -a; . ./.env; docker compose exec mail setup alias add "postmaster@$MAIL_HOSTNAME" "bounce@$MAIL_HOSTNAME")
 ```
 
-Set a new password on the bounce mailbox after you changed `MAIL_PASSWORD` in `.env`, then recreate the backend so it uses the new value too ([Rotating secrets](/operations/rotating-secrets#mail-password)):
-
-```bash
-(set -a; . ./.env; docker compose exec mail setup email update "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
-docker compose up -d backend
-```
+They read `.env` in a subshell: values exported into your own shell would override later edits to `.env` in every following `docker compose` call.
 
 List the mailboxes; the list must contain `bounce@mx.example.com`:
 

@@ -14,7 +14,7 @@ Three things cannot be recreated if the server is lost:
 
 - **The database** in the volume `postgres-data`: users, roles, projects, domains with their DKIM keys, forms, templates, API keys, sent mail, bounces and blocked addresses.
 - **The file `.env`**, above all `BACKEND_ENCRYPTION_SECRET`. mailer encrypts every DKIM private key and every reCAPTCHA secret in the database with it. A database backup restored with a different secret has no usable DKIM keys and no usable reCAPTCHA secrets.
-- **The mail server's accounts** in the volume `mail-config`: the bounce mailbox `bounce@mx.example.com` and the alias `postmaster@mx.example.com`. They are small and quick to recreate with two commands, so backing them up is optional unless you added accounts or aliases of your own.
+- **The mail server's accounts** in the volume `mail-config`: the bounce mailbox `bounce@mx.example.com` and the alias `postmaster@mx.example.com`. They are small and `setup.sh` recreates them, so backing them up is optional unless you added accounts or aliases of your own.
 
 Keep `compose.yml` as well, or note the release tag it came from, so you can download the same file again.
 
@@ -23,7 +23,7 @@ Keep `compose.yml` as well, or note the release tag it came from, so you can dow
 | Volume          | Holds                                                                                            | Back up  | Why                                                                                                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `postgres-data` | The PostgreSQL database                                                                          | Yes      | All of mailer's data. Back it up with `pg_dump` (below), not by copying the volume while Postgres runs.                                                                            |
-| `mail-config`   | docker-mailserver's accounts and aliases                                                         | Optional | The bounce mailbox and the `postmaster` alias; recreating them takes two commands.                                                                                                 |
+| `mail-config`   | docker-mailserver's accounts and aliases                                                         | Optional | The bounce mailbox and the `postmaster` alias; `setup.sh` recreates them.                                                                                                          |
 | `redis-data`    | Redis: the queue of form deliveries waiting to be sent, rate-limit counters, a short-lived cache | No       | The database is the record of every delivery: on a new server, the recovery sweep queues deliveries that are still `pending` again. Counters and cache start empty.                |
 | `caddy-data`    | Caddy's TLS certificates and keys for `SITE_ADDRESS` and `MAIL_HOSTNAME`                         | No       | Caddy obtains new certificates from Let's Encrypt on the first start of a new server, once DNS points to it.                                                                       |
 | `caddy-config`  | Caddy's own saved configuration                                                                  | No       | The Caddyfile lives in `compose.yml`; Caddy rebuilds this on every start.                                                                                                          |
@@ -94,13 +94,14 @@ The backend creates every table itself the first time it starts. If it starts be
 
 1. **Prepare the server and DNS** as on [Prepare the server](/installation/prepare-server): Docker, the firewall, outbound port 25 and the PTR record for the new IP address. Point the A and AAAA records of `app.example.com` and `mx.example.com` to the new server ([DNS records](/installation/dns)).
 
-2. **Download the same release** that wrote the dump, with the tag from your notes. Take only `compose.yml` this time, because you bring your own `.env`:
+2. **Download the same release** that wrote the dump, with the tag from your notes. Take only `compose.yml` and `setup.sh` this time, because you bring your own `.env`:
 
     ```bash
     mkdir -p /opt/mailer
     cd /opt/mailer
     TAG=v1.0.0
     curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/compose.yml"
+    curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/setup.sh"
     ```
 
 3. **Put the saved `.env` back** as `/opt/mailer/.env` and make it readable only by `root`:
@@ -134,31 +135,22 @@ The backend creates every table itself the first time it starts. If it starts be
 
     If the new installation uses an external Postgres instead of the bundled one, restore into that database with the `docker run --rm -it -v "$PWD":/backup postgres:17-alpine pg_restore …` command on [External Postgres and Redis](/configuration/external-postgres-redis#if-mailer-already-runs), before you start the backend.
 
-7. **Restore the mail accounts, if you backed them up.** Skip this step if you did not; step 9 recreates them instead. The archive must go into the volume before `mail` starts for the first time. `docker compose create mail` creates the `mail` container and its volumes without starting it; copy `mail-config.tar.gz` to `/opt/mailer` and unpack it into the volume:
+7. **Restore the mail accounts, if you backed them up.** Skip this step if you did not; step 8 recreates them instead. The archive must go into the volume before `mail` starts for the first time. `docker compose create mail` creates the `mail` container and its volumes without starting it; copy `mail-config.tar.gz` to `/opt/mailer` and unpack it into the volume:
 
     ```bash
     docker compose create mail
     docker run --rm -v mailer_mail-config:/data -v "$PWD":/backup alpine tar xzf /backup/mail-config.tar.gz -C /data
     ```
 
-8. **Start the rest of the stack:**
+8. **Start the rest of the stack** with the setup script, as on the first installation:
 
     ```bash
-    docker compose up -d
+    sh setup.sh
     ```
 
-    The backend applies no migrations, because the restored database already has them, and logs no setup token, because users exist.
+    The backend applies no migrations, because the restored database already has them, and logs no setup token, because users exist. `mail` restarts until Caddy has obtained the certificate for `mx.example.com` ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)); the script waits for it. It then creates the bounce mailbox and the `postmaster` alias, or, if you restored the mail accounts in step 7, sets the password from `.env` on the restored mailbox.
 
-9. **Recreate the bounce mailbox** within two minutes of the start, exactly as on the first installation. Skip this step if you restored the mail accounts in step 7:
-
-    ```bash
-    (set -a; . ./.env; docker compose exec mail setup email add "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
-    (set -a; . ./.env; docker compose exec mail setup alias add "postmaster@$MAIL_HOSTNAME" "bounce@$MAIL_HOSTNAME")
-    ```
-
-    `mail` restarts until Caddy has obtained the certificate for `mx.example.com`, as on the first installation ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)).
-
-10. **Update the server addresses** if the new server has a different IP address: in the admin UI, follow [Change the server IP addresses](/admin-guide/settings#change-the-server-ip-addresses). The SPF record of `mx.example.com` lists the addresses, so it must be updated too.
+9. **Update the server addresses** if the new server has a different IP address: in the admin UI, follow [Change the server IP addresses](/admin-guide/settings#change-the-server-ip-addresses). The SPF record of `mx.example.com` lists the addresses, so it must be updated too.
 
 ## Move to a new server
 

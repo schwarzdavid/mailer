@@ -91,7 +91,7 @@ The example renames the sending domain from `mx.example.com` to `mx2.example.com
 cd /opt/mailer
 ```
 
-The platform stops sending at step 4 and sends again after step 5; until the records of step 7 are published, receivers may reject mail or file it as spam. With `SEND_REQUIRE_VALID_DNS=true` (the default), each customer domain sends again only once its SPF record carries the new include and a check has run, as the warning below explains. Plan a quiet moment.
+The platform stops sending at step 4 and sends again once `setup.sh` has finished; until the records of step 6 are published, receivers may reject mail or file it as spam. With `SEND_REQUIRE_VALID_DNS=true` (the default), each customer domain sends again only once its SPF record carries the new include and a check has run, as the warning below explains. Plan a quiet moment.
 
 ::: warning Every customer domain stops sending after the switch
 The switch marks the SPF record of every customer domain **Invalid**, and mailer sends only from domains whose records are all valid. From step 4 on, with `SEND_REQUIRE_VALID_DNS=true` (the default), every customer domain stops sending (the send API answers `422 FROM_DOMAIN_NOT_READY`, form deliveries wait and fail after about two hours) until its owner has published the new SPF include and a check has run. Announce the switch to your customers before you start, with the new value `v=spf1 include:mx2.example.com ~all` and the time of the switch, so they can update their zone right after it.
@@ -132,26 +132,17 @@ Ask your customers to add the new include **alongside** the old one before the s
     MAIL_HOSTNAME=mx2.example.com
     ```
 
-4. **Restart the stack** with the new name:
+4. **Restart the stack and create the bounce mailbox for the new name** with the setup script:
 
     ```bash
-    docker compose up -d
+    sh setup.sh
     ```
 
-    The backend switches the sending domain while it starts. Caddy obtains the certificate for `mx2.example.com`; until it has it, `mail` restarts, which takes a few seconds to a few minutes. Wait until `docker compose ps mail` shows it as `Up`.
+    The backend switches the sending domain while it starts. Caddy obtains the certificate for `mx2.example.com`; until it has it, `mail` restarts, which takes a few seconds to a few minutes, and the script waits for it. It then creates the mailbox `bounce@mx2.example.com` and its `postmaster` alias. The backend logs in to the mail server with that mailbox to send and to read bounces, so every send fails until the script has finished. The mailbox of the old name stays in place but is no longer read.
 
-5. **Create the bounce mailbox for the new name** and its `postmaster` alias. The backend logs in to the mail server as `bounce@` plus `MAIL_HOSTNAME` to send and to read bounces, so every send fails until this mailbox exists:
-
-    ```bash
-    (set -a; . ./.env; docker compose exec mail setup email add "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
-    (set -a; . ./.env; docker compose exec mail setup alias add "postmaster@$MAIL_HOSTNAME" "bounce@$MAIL_HOSTNAME")
-    ```
-
-    The commands read `.env` in a subshell, so nothing stays exported in your shell. If `docker compose exec` answers that the container is restarting or not running, wait until `docker compose ps mail` shows `Up` and run both again. The mailbox of the old name stays in place but is no longer read.
-
-6. **Set the PTR records.** At your hosting provider, set the reverse DNS of `203.0.113.10` (and `2001:db8::10`) to `mx2.example.com`, as on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
-7. **Publish the new records.** Open **Settings**: **Domain name** shows `mx2.example.com` and **DNS records** lists its records. Create the MX, SPF, DKIM and DMARC records in the DNS zone of the new name with the copy buttons; the DKIM value is new. Once DNS has caught up, click **Check again**. The records of `mx.example.com` are no longer used; delete them once the new ones are valid.
-8. **Notify your customers.** Every sender domain's SPF record must now read `v=spf1 include:mx2.example.com ~all`. Each domain's page under **Domains** shows the new value; send it to the owner of each zone, and click **Check again** on the domain once they have changed it.
+5. **Set the PTR records.** At your hosting provider, set the reverse DNS of `203.0.113.10` (and `2001:db8::10`) to `mx2.example.com`, as on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
+6. **Publish the new records.** Open **Settings**: **Domain name** shows `mx2.example.com` and **DNS records** lists its records. Create the MX, SPF, DKIM and DMARC records in the DNS zone of the new name with the copy buttons; the DKIM value is new. Once DNS has caught up, click **Check again**. The records of `mx.example.com` are no longer used; delete them once the new ones are valid.
+7. **Notify your customers.** Every sender domain's SPF record must now read `v=spf1 include:mx2.example.com ~all`. Each domain's page under **Domains** shows the new value; send it to the owner of each zone, and click **Check again** on the domain once they have changed it.
 
 ## How you know it worked
 
