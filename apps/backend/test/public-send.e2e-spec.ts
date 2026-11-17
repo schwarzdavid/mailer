@@ -225,20 +225,19 @@ describe('Public send API (e2e)', () => {
             ).toBe(202)
         })
 
-        it('accepts multibyte html and text bodies at the payload maximum', async () => {
+        it('parses and validates multibyte html and text bodies at the payload maximum', async () => {
             const maximalMultibyteBody = '😀'.repeat(1_000_000)
+            // The blocked recipient stops the send before SMTP: MailHog needs close to a minute to take an 11 MB message.
+            await app.get(EmailBlockService).applyBlock('reader5@psa-e2e.test')
 
-            expect(
-                (
-                    await send({
-                        from,
-                        to: 'reader5@psa-e2e.test',
-                        subject: 'Huge',
-                        html: maximalMultibyteBody,
-                        text: maximalMultibyteBody,
-                    })
-                ).status,
-            ).toBe(202)
+            const response = await send({
+                from,
+                to: 'reader5@psa-e2e.test',
+                subject: 'Huge',
+                html: maximalMultibyteBody,
+                text: maximalMultibyteBody,
+            }).expect(422)
+            expect((response.body as { code: string }).code).toBe('RECIPIENT_BLOCKED')
         })
 
         it('keeps the default json limit on every other route', async () => {
