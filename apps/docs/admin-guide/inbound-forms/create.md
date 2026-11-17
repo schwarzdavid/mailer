@@ -67,7 +67,7 @@ Change them in the card **General** and click **Save**.
 
 - Renaming the form does not change its endpoint URL.
 - The **Sender domain** field only appears when the project has more than one domain. With exactly one, the form always uses that domain, and saving a form that has none yet assigns it.
-- The **Sender domain** decides which sender addresses the receivers may use. While the form has receivers, mailer refuses to clear it (`The domain cannot be removed while receivers exist`), and it refuses a different domain unless every receiver's sender address already ends in that domain, which in practice means it refuses it.
+- The **Sender domain** decides which sender addresses the receivers may use. While the form has receivers, mailer refuses to clear it (`The domain cannot be removed while receivers exist`), and it refuses a different domain unless every receiver's sender address already belongs to that domain's registrable domain, which in practice means it refuses it.
 
 ::: warning Changing the sender domain of a form with receivers
 There is no way to move receivers to another domain. To switch domains, remove the receivers, change the domain, and add them again. Removing a receiver deletes its template and all its versions, so copy the template text out of the editor first.

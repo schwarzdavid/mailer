@@ -18,8 +18,11 @@
             class="mono-field"
             :label="requiredLabel(t('module.inboundForms.details.receivers.from'))"
             :hint="
-                domainFqdn
-                    ? t('module.inboundForms.details.receivers.dialog.senderHint', { domain: domainFqdn })
+                senderDomain
+                    ? t('module.inboundForms.details.receivers.dialog.senderHint', {
+                          domain: senderDomain.rootDomain,
+                          fqdn: senderDomain.fqdn,
+                      })
                     : t('module.inboundForms.details.receivers.dialog.noDomain')
             "
             persistent-hint
@@ -77,7 +80,8 @@
     import { toTypedSchema } from '@vee-validate/zod'
     import { z } from 'zod'
     import { useI18n } from 'vue-i18n'
-    import type { InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
+    import { parse } from 'tldts'
+    import type { DomainDto, InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
     import FormDialog from '@/components/FormDialog.vue'
     import { useFormChanged } from '@/composables/useDirtyGuard.ts'
     import { useRequiredLabel } from '@/composables/useRequiredLabel.ts'
@@ -86,7 +90,7 @@
         defineProps<{
             receiver: InboundFormReceiverDto | null
             emailFields: { key: string; label: string }[]
-            domainFqdn: string | null
+            senderDomain: Pick<DomainDto, 'fqdn' | 'rootDomain'> | null
             saving: boolean
             error?: string | null
         }>(),
@@ -107,9 +111,11 @@
     const { defineField, handleSubmit, errors, resetForm, resetField, meta, values } = useForm({
         validationSchema: toTypedSchema(
             z.object({
-                emailFrom: z.email().refine((value) => !props.domainFqdn || value.endsWith(`@${props.domainFqdn}`), {
+                emailFrom: z.email().refine((value) => !props.senderDomain || usesSenderDomain(value), {
                     error: () =>
-                        t('module.inboundForms.details.receivers.dialog.senderDomain', { domain: props.domainFqdn }),
+                        t('module.inboundForms.details.receivers.dialog.senderDomain', {
+                            domain: props.senderDomain?.rootDomain,
+                        }),
                 }),
                 emailReceiver: z.string().trim().min(1),
                 emailReplyTo: z.string().nullable().optional(),
@@ -125,12 +131,17 @@
 
     const changed = useFormChanged(values, () => meta.value.initialValues)
 
-    function defaultSender(fqdn: string | null): string {
+    function usesSenderDomain(address: string): boolean {
+        const host = address.slice(address.lastIndexOf('@') + 1).toLowerCase()
+        return parse(host).domain === props.senderDomain?.rootDomain
+    }
+
+    function defaultSender(fqdn: string | undefined): string {
         return fqdn ? `noreply@${fqdn}` : ''
     }
 
     watch(
-        () => props.domainFqdn,
+        () => props.senderDomain?.fqdn,
         (fqdn) => {
             if (model.value && !props.receiver && fqdn && !emailFrom.value) {
                 resetField('emailFrom', { value: defaultSender(fqdn) })
@@ -146,7 +157,7 @@
             }
             resetForm({
                 values: {
-                    emailFrom: props.receiver?.emailFrom ?? defaultSender(props.domainFqdn),
+                    emailFrom: props.receiver?.emailFrom ?? defaultSender(props.senderDomain?.fqdn),
                     emailReceiver: props.receiver?.emailReceiver ?? '',
                     emailReplyTo: props.receiver?.emailReplyTo ?? null,
                     isActive: props.receiver?.isActive ?? true,

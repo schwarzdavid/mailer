@@ -18,7 +18,7 @@ Take a database backup before you start ([Backup and restore](/operations/backup
 
 | Secret                      | What it protects                                                                    | Rotate                                                                      |
 | --------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `MAIL_PASSWORD`             | The bounce mailbox, which the backend uses to send and to read bounce reports       | Any time; two commands                                                      |
+| `MAIL_PASSWORD`             | The bounce mailbox, which the backend uses to send and to read bounce reports       | Any time; `setup.sh`                                                        |
 | `DB_PASSWORD`               | The database user                                                                   | Any time; change it in the database too                                     |
 | `BACKEND_JWT_SECRET`        | The login sessions of the admin UI                                                  | Any time; signs every user out                                              |
 | `BACKEND_ENCRYPTION_SECRET` | The DKIM private keys and reCAPTCHA secrets stored in the database, and form tokens | **Cannot be rotated** without losing the stored keys and secrets; see below |
@@ -27,20 +27,21 @@ Take a database backup before you start ([Backup and restore](/operations/backup
 
 The mail server keeps its own copy of the password in its account list, and compose hands `MAIL_PASSWORD` to the backend as the SMTP and IMAP password. Both must change together.
 
-1. Write a new value into `.env`:
+1. Empty the value in `.env`:
 
     ```bash
-    sed -i "s|^MAIL_PASSWORD=.*|MAIL_PASSWORD=$(openssl rand -base64 48)|" .env
+    sed -i "s|^MAIL_PASSWORD=.*|MAIL_PASSWORD=|" .env
     ```
 
-2. Set it on the mail account, then recreate the backend so it uses the new value:
+2. Run the setup script. It writes a new random value into `.env`, recreates the backend with it, then sets the same value on the mail account:
 
     ```bash
-    (set -a; . ./.env; docker compose exec mail setup email update "bounce@$MAIL_HOSTNAME" "$MAIL_PASSWORD")
-    docker compose up -d backend
+    sh setup.sh
     ```
 
-Between the two commands the backend still logs in with the old password and fails: sends through the API answer `502` with `DELIVERY_FAILED` and form deliveries wait for their next retry. Run both commands right after each other.
+    It prints `Generated MAIL_PASSWORD in .env.` and `Updated the password of bounce@mx.example.com.` To choose the password yourself, write it into `.env` in step 1 instead of emptying the line.
+
+For the few seconds between the backend's restart and the password change on the account, the backend logs in with the new password and fails: sends through the API answer `502` with `DELIVERY_FAILED` and form deliveries wait for their next retry.
 
 ## DB_PASSWORD
 

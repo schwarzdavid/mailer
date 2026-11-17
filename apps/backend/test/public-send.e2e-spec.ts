@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import { ensureSendingDomain } from './support/sending-domain.js'
-import { waitForMessagesTo } from './support/mailhog.js'
+import { header, waitForMessagesTo } from './support/mailhog.js'
 import { EmailBlockService } from '../src/modules/bounce/services/email-block.service.js'
 import { MailMessageService } from '../src/modules/mail/services/mail-message.service.js'
 import { MailMessageSource } from '../src/modules/mail/interfaces/mail-message.interface.js'
@@ -199,6 +199,19 @@ describe('Public send API (e2e)', () => {
             ).toBe(202)
         })
 
+        it('sends from the root domain of the project domain, signed for the registered subdomain', async () => {
+            await send({
+                from: 'info@psa-example.com',
+                to: 'reader-root@psa-e2e.test',
+                subject: 'Root',
+                html: '<p>x</p>',
+            }).expect(202)
+
+            const [delivered] = await waitForMessagesTo(mailhogUrl, 'reader-root@psa-e2e.test')
+            expect(header(delivered!, 'From')[0]).toContain('info@psa-example.com')
+            expect(header(delivered!, 'DKIM-Signature')[0]).toContain('d=send.psa-example.com')
+        })
+
         it('accepts an html body larger than the default json limit', async () => {
             expect(
                 (
@@ -212,20 +225,19 @@ describe('Public send API (e2e)', () => {
             ).toBe(202)
         })
 
-        it('accepts multibyte html and text bodies at the payload maximum', async () => {
+        it('parses and validates multibyte html and text bodies at the payload maximum', async () => {
             const maximalMultibyteBody = '😀'.repeat(1_000_000)
+            // The blocked recipient stops the send before SMTP: MailHog needs close to a minute to take an 11 MB message.
+            await app.get(EmailBlockService).applyBlock('reader5@psa-e2e.test')
 
-            expect(
-                (
-                    await send({
-                        from,
-                        to: 'reader5@psa-e2e.test',
-                        subject: 'Huge',
-                        html: maximalMultibyteBody,
-                        text: maximalMultibyteBody,
-                    })
-                ).status,
-            ).toBe(202)
+            const response = await send({
+                from,
+                to: 'reader5@psa-e2e.test',
+                subject: 'Huge',
+                html: maximalMultibyteBody,
+                text: maximalMultibyteBody,
+            }).expect(422)
+            expect((response.body as { code: string }).code).toBe('RECIPIENT_BLOCKED')
         })
 
         it('keeps the default json limit on every other route', async () => {

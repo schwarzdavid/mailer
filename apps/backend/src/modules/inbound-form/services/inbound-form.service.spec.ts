@@ -374,7 +374,7 @@ describe('InboundFormService', () => {
     describe('updateForm', () => {
         it('re-validates receiver senders when the domain changes', async () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
-            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
+            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'mail.other.com', rootDomain: 'other.com' })
 
             await expect(service.updateForm(1, { domainId: 4 }, manageAll)).rejects.toThrow(BadRequestException)
         })
@@ -946,7 +946,7 @@ describe('InboundFormService', () => {
             formFindByPk.mockResolvedValue(formRow() as unknown as InboundFormModel)
 
             await expect(
-                service.createReceiver(1, upsert({ emailFrom: 'noreply@evil.example.com' }), manageAll),
+                service.createReceiver(1, upsert({ emailFrom: 'noreply@evil.com' }), manageAll),
             ).rejects.toThrow(BadRequestException)
         })
 
@@ -1122,9 +1122,9 @@ describe('InboundFormService', () => {
         })
 
         it('switches to a domain every existing sender already uses', async () => {
-            const row = formRow({ inboundFormReceivers: [{ ...receiver, emailFrom: 'noreply@other.example.com' }] })
+            const row = formRow({ inboundFormReceivers: [{ ...receiver, emailFrom: 'noreply@other.com' }] })
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
-            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
+            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'mail.other.com', rootDomain: 'other.com' })
 
             await service.updateForm(1, { domainId: 4 }, manageAll)
 
@@ -1134,10 +1134,10 @@ describe('InboundFormService', () => {
         it('leaves the form untouched when a sender no longer matches the new domain', async () => {
             const row = formRow()
             formFindByPk.mockResolvedValue(row as unknown as InboundFormModel)
-            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'other.example.com' })
+            getDomainById.mockResolvedValue({ ...domain, domainId: 4, fqdn: 'mail.other.com', rootDomain: 'other.com' })
 
             await expect(service.updateForm(1, { domainId: 4 }, manageAll)).rejects.toThrow(
-                new BadRequestException('Sender address must use the form domain other.example.com'),
+                new BadRequestException('Sender address must use other.com or one of its subdomains'),
             )
             expect(row.update).not.toHaveBeenCalled()
         })
@@ -1174,11 +1174,20 @@ describe('InboundFormService', () => {
             expect(receiverCreate).toHaveBeenCalled()
         })
 
-        it.each(['noreply@evilmail.example.com', 'noreply@mail.example.com.evil.io', 'noreply@example.com'])(
+        it.each(['noreply@example.com', 'noreply@News.Example.com', 'noreply@a.b.example.com'])(
+            'accepts the sender %s under the registrable domain of the form domain',
+            async (emailFrom) => {
+                await service.createReceiver(1, upsert({ emailFrom }), manageAll)
+
+                expect(receiverCreate).toHaveBeenCalled()
+            },
+        )
+
+        it.each(['noreply@mail.example.com.evil.io', 'noreply@example.co', 'noreply@notexample.com'])(
             'rejects the lookalike sender %s',
             async (emailFrom) => {
                 await expect(service.createReceiver(1, upsert({ emailFrom }), manageAll)).rejects.toThrow(
-                    new BadRequestException('Sender address must use the form domain mail.example.com'),
+                    new BadRequestException('Sender address must use example.com or one of its subdomains'),
                 )
                 expect(receiverCreate).not.toHaveBeenCalled()
             },

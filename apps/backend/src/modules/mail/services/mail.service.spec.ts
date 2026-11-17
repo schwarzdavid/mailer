@@ -30,9 +30,9 @@ function smtpError(
 describe('MailService', () => {
     let service: MailService
     let sendMail: Mock<Transporter<SMTPTransport.SentMessageInfo>['sendMail']>
-    let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
+    let getSendingDomainForSender: Mock<DomainService['getSendingDomainForSender']>
     let getConfiguredSendingDomain: Mock<DomainService['getConfiguredSendingDomain']>
-    let getDomainByFqdn: Mock<DomainService['getDomainByFqdn']>
+    let getDomainForSender: Mock<DomainService['getDomainForSender']>
     let assertReadyToSend: Mock<DomainService['assertReadyToSend']>
     let sendRequireValidDns: boolean
     let decrypt: Mock<SecretEncryptionService['decrypt']>
@@ -100,9 +100,9 @@ describe('MailService', () => {
         errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
 
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue(sentInfo)
-        getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
+        getSendingDomainForSender = vi.fn<typeof getSendingDomainForSender>().mockResolvedValue(sendingDomain)
         getConfiguredSendingDomain = vi.fn<typeof getConfiguredSendingDomain>().mockResolvedValue(null)
-        getDomainByFqdn = vi.fn<typeof getDomainByFqdn>().mockResolvedValue(sendingDomain)
+        getDomainForSender = vi.fn<typeof getDomainForSender>().mockResolvedValue(sendingDomain)
         assertReadyToSend = vi.fn<typeof assertReadyToSend>().mockResolvedValue(undefined)
         sendRequireValidDns = false
         const configGet = vi
@@ -122,9 +122,9 @@ describe('MailService', () => {
                 {
                     provide: DomainService,
                     useValue: {
-                        getSendingDomainByFqdn,
+                        getSendingDomainForSender,
                         getConfiguredSendingDomain,
-                        getDomainByFqdn,
+                        getDomainForSender,
                         assertReadyToSend,
                     },
                 },
@@ -146,7 +146,7 @@ describe('MailService', () => {
     it('signs with the sending domain dkim key and hands the mail to the transporter', async () => {
         await service.sendMail(mail, context)
 
-        expect(getSendingDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+        expect(getSendingDomainForSender).toHaveBeenCalledWith('mail.example.com')
         expect(decrypt).toHaveBeenCalledWith('v1.encrypted-key')
         expect(sendMail).toHaveBeenCalledWith({
             from: 'noreply@mail.example.com',
@@ -162,6 +162,22 @@ describe('MailService', () => {
                 privateKey: '-----BEGIN PRIVATE KEY-----',
             },
         })
+    })
+
+    it('signs a sender on the root domain with the dkim key of the registered subdomain', async () => {
+        await service.sendMail({ ...mail, from: 'info@example.com' }, context)
+
+        expect(getSendingDomainForSender).toHaveBeenCalledWith('example.com')
+        expect(sendMail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                from: 'info@example.com',
+                dkim: {
+                    domainName: 'mail.example.com',
+                    keySelector: 's1',
+                    privateKey: '-----BEGIN PRIVATE KEY-----',
+                },
+            }),
+        )
     })
 
     it('passes replyTo through when set', async () => {
@@ -181,7 +197,7 @@ describe('MailService', () => {
 
             await expect(service.sendMail(mail, context)).rejects.toBe(notReady)
 
-            expect(getDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+            expect(getDomainForSender).toHaveBeenCalledWith('mail.example.com')
             expect(assertReadyToSend).toHaveBeenCalledWith(sendingDomain)
             expect(recordPending).not.toHaveBeenCalled()
             expect(sendMail).not.toHaveBeenCalled()
@@ -198,8 +214,8 @@ describe('MailService', () => {
         })
 
         it('leaves an unknown from domain to the delivery, which fails as before', async () => {
-            getDomainByFqdn.mockResolvedValue(null)
-            getSendingDomainByFqdn.mockResolvedValue(null)
+            getDomainForSender.mockResolvedValue(null)
+            getSendingDomainForSender.mockResolvedValue(null)
 
             await expect(service.sendMail(mail, context)).rejects.toThrow(
                 'No sending domain configured for mail.example.com',
@@ -215,13 +231,13 @@ describe('MailService', () => {
 
         await service.sendMail(mail, context)
 
-        expect(getDomainByFqdn).not.toHaveBeenCalled()
+        expect(getDomainForSender).not.toHaveBeenCalled()
         expect(assertReadyToSend).not.toHaveBeenCalled()
         expect(sendMail).toHaveBeenCalledTimes(1)
     })
 
     it('rejects when no sending domain is configured for the from address', async () => {
-        getSendingDomainByFqdn.mockResolvedValue(null)
+        getSendingDomainForSender.mockResolvedValue(null)
 
         await expect(service.sendMail(mail, context)).rejects.toThrow(
             'No sending domain configured for mail.example.com',
@@ -433,7 +449,7 @@ describe('MailService', () => {
     it('resolves the sending domain from the part after the @ of the from address', async () => {
         await service.sendMail({ ...mail, from: 'Support.Team@mail.example.com' }, context)
 
-        expect(getSendingDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+        expect(getSendingDomainForSender).toHaveBeenCalledWith('mail.example.com')
     })
 
     it('logs a pending message before sending and marks it sent with the smtp message id', async () => {
@@ -504,7 +520,7 @@ describe('MailService', () => {
     })
 
     it('marks a missing sending domain as failed', async () => {
-        getSendingDomainByFqdn.mockResolvedValue(null)
+        getSendingDomainForSender.mockResolvedValue(null)
 
         await expect(service.sendMail(mail, context)).rejects.toThrow('No sending domain configured')
         expect(markUnsent).toHaveBeenCalledWith(

@@ -528,6 +528,23 @@ describe('DomainService', () => {
         })
     })
 
+    describe('getDomainForSender', () => {
+        it.each(['example.com', 'mail.example.com', 'News.Example.com'])(
+            'finds the domain of the registrable domain for the sender host %s',
+            async (senderHost) => {
+                findOne.mockResolvedValue(domainRow(persistedDomain) as unknown as DomainModel)
+
+                await expect(service.getDomainForSender(senderHost)).resolves.toEqual(persistedDomain)
+                expect(findOne).toHaveBeenCalledWith({ where: { rootDomain: 'example.com' } })
+            },
+        )
+
+        it('returns null without a lookup for a host without a registrable domain', async () => {
+            await expect(service.getDomainForSender('com')).resolves.toBeNull()
+            expect(findOne).not.toHaveBeenCalled()
+        })
+    })
+
     describe('assertReadyToSend', () => {
         it('resolves when every dns record of the domain is valid', async () => {
             allRecordsValid.mockResolvedValue(true)
@@ -596,6 +613,30 @@ describe('DomainService', () => {
             findOne.mockResolvedValue({ activeDkim: null, get: () => ({}) } as unknown as DomainModel)
 
             await expect(service.getSendingDomainByFqdn('mail.example.com')).resolves.toBeNull()
+        })
+    })
+
+    describe('getSendingDomainForSender', () => {
+        it('looks the domain with its active dkim up by the registrable domain of the sender host', async () => {
+            const activeDkim: DomainDkim = { ...dkim, domainId: 1 }
+            const sendingDomain: DomainWithActiveDkim = {
+                ...persistedDomain,
+                domainId: 1,
+                fqdn: 'mail.example.com',
+                activeDkim,
+            }
+            findOne.mockResolvedValue({ activeDkim, get: () => sendingDomain } as unknown as DomainModel)
+
+            await expect(service.getSendingDomainForSender('example.com')).resolves.toEqual(sendingDomain)
+            expect(findOne).toHaveBeenCalledWith({
+                where: { rootDomain: 'example.com' },
+                include: [{ model: DomainDkimModel, as: 'activeDkim' }],
+            })
+        })
+
+        it('returns null without a lookup for a host without a registrable domain', async () => {
+            await expect(service.getSendingDomainForSender('co.uk')).resolves.toBeNull()
+            expect(findOne).not.toHaveBeenCalled()
         })
     })
 })

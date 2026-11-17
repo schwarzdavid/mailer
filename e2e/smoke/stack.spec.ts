@@ -6,8 +6,8 @@ import { Compose } from './support/compose.js'
 import { issueLeaf, serialOf, servedImapSerial, servedSmtpSerial } from './support/pki.js'
 import { request, statusOf } from './support/http.js'
 import { requestLogEntry, setupTokenFrom } from './support/logs.js'
-import { deliverDsn, relayFromOutside } from './support/smtp.js'
-import { BASE_URL, MAIL_HOSTNAME, SMTP_PORT, createStack, destroyStack } from './support/stack.js'
+import { deliverDsn, relayFromOutside, smtpGreeting } from './support/smtp.js'
+import { BASE_URL, MAIL_HOSTNAME, SMTP_PORT, createStack, destroyStack, runSetup } from './support/stack.js'
 import type { SmokeStack } from './support/stack.js'
 
 let stack: SmokeStack | undefined
@@ -24,6 +24,10 @@ function current(): SmokeStack {
 
 function withEnvValue(env: string, key: string, value: string): string {
     return env.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${value}`)
+}
+
+function envValue(env: string, key: string): string | undefined {
+    return new RegExp(`^${key}=(.*)$`, 'm').exec(env)?.[1]
 }
 
 beforeAll(async () => {
@@ -108,20 +112,11 @@ describe('boot without the mail server', () => {
 })
 
 describe('mail server', () => {
-    it('mail is up and healthy with the bounce account', async () => {
-        const { mailPassword } = current()
-        await compose.run(['up', '-d', '--pull', 'missing', 'mail'])
-        await compose.run(['exec', '-T', 'mail', 'setup', 'email', 'add', `bounce@${MAIL_HOSTNAME}`, mailPassword])
-        await compose.run([
-            'exec',
-            '-T',
-            'mail',
-            'setup',
-            'alias',
-            'add',
-            `postmaster@${MAIL_HOSTNAME}`,
-            `bounce@${MAIL_HOSTNAME}`,
-        ])
+    it('setup.sh starts mail and creates the bounce account and the postmaster alias', async () => {
+        const output = await runSetup(current())
+        expect(output).not.toContain('Generated')
+        expect(output).toContain(`Created the mailbox bounce@${MAIL_HOSTNAME}.`)
+        expect(output).toContain(`Created the alias postmaster@${MAIL_HOSTNAME} -> bounce@${MAIL_HOSTNAME}.`)
         expect(await compose.waitHealthy('mail', 120_000)).toBe(true)
     })
 
@@ -130,6 +125,58 @@ describe('mail server', () => {
             .poll(async () => (await request(`${BASE_URL}/api/health/ready`)).status, {
                 interval: 1_000,
                 timeout: 30_000,
+            })
+            .toBe(200)
+    })
+
+    it('mail announces MAIL_HOSTNAME in its SMTP greeting', async () => {
+        expect(await smtpGreeting(SMTP_PORT)).toMatch(new RegExp(`^220[ -]${MAIL_HOSTNAME.replaceAll('.', '\\.')} `))
+    })
+
+    it('Docker DNS does not answer for MAIL_HOSTNAME, so the backend resolves it publicly', async () => {
+        const mailIps = (
+            await compose.inspect(
+                await compose.containerId('mail'),
+                '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}',
+            )
+        )
+            .split(' ')
+            .filter((ip) => ip !== '')
+        expect(mailIps.length).toBeGreaterThan(0)
+        const { stdout } = await compose.run([
+            'exec',
+            '-T',
+            'backend',
+            'node',
+            '-e',
+            "require('node:dns').promises.resolve4(process.argv[1]).then((ips) => console.log(ips.join(' ')), (error) => console.log(error.code))",
+            MAIL_HOSTNAME,
+        ])
+        const answer = stdout.trim().split(' ')
+        expect(answer.length).toBeGreaterThan(0)
+        for (const ip of mailIps) {
+            expect(answer).not.toContain(ip)
+        }
+    })
+
+    it('setup.sh run again with an emptied MAIL_PASSWORD generates a new one and rotates it for mail and backend', async () => {
+        const { envFile } = current()
+        const before = await readFile(envFile, 'utf8')
+        await writeFile(envFile, withEnvValue(before, 'MAIL_PASSWORD', ''))
+        const output = await runSetup(current())
+        expect(output).toContain('Generated MAIL_PASSWORD in .env.')
+        expect(output).toContain('Back up .env now: it holds the secrets generated above (MAIL_PASSWORD)')
+        expect(output).toContain(`Updated the password of bounce@${MAIL_HOSTNAME}.`)
+        expect(output).not.toContain('Created the alias')
+        const after = await readFile(envFile, 'utf8')
+        expect(envValue(after, 'MAIL_PASSWORD')).toMatch(/^[A-Za-z0-9+/]{64}$/)
+        for (const key of ['DB_PASSWORD', 'BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET']) {
+            expect(envValue(after, key)).toBe(envValue(before, key))
+        }
+        await expect
+            .poll(async () => (await request(`${BASE_URL}/api/health/ready`)).status, {
+                interval: 1_000,
+                timeout: 90_000,
             })
             .toBe(200)
     })

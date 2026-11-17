@@ -15,12 +15,12 @@ You need **Manage forms** on the form's project, and the form needs a **Sender d
 1. On the form's page, in the card **Receivers**, click **Add receiver**.
 2. Fill in the dialog:
 
-    | Field         | Required | What to enter                                                                                                                                                                                       |
-    | ------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | **Sender**    | Required | `emailFrom`, the `From` address, for example `contact@mail.example.net`. It must end in `@` plus the form's sender domain, exactly: `contact@news.mail.example.net` is refused.                     |
-    | **Recipient** | Required | `emailReceiver`, where the e-mail goes: a fixed address such as `inbox@example.org`, or a placeholder of an **Email** field such as <code v-pre>{{email}}</code>. The list offers the placeholders. |
-    | **Reply-To**  | Optional | `emailReplyTo`, where answers go: a fixed address or a placeholder. Empty (**None**) means answers go to the sender.                                                                                |
-    | **Active**    | Optional | On by default. **Inactive receivers are skipped.**                                                                                                                                                  |
+    | Field         | Required | What to enter                                                                                                                                                                                                          |
+    | ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | **Sender**    | Required | `emailFrom`, the `From` address, for example `contact@mail.example.net`. Any address under the registrable domain of the form's sender domain works, `contact@example.net` included; `contact@example.org` is refused. |
+    | **Recipient** | Required | `emailReceiver`, where the e-mail goes: a fixed address such as `inbox@example.org`, or a placeholder of an **Email** field such as <code v-pre>{{email}}</code>. The list offers the placeholders.                    |
+    | **Reply-To**  | Optional | `emailReplyTo`, where answers go: a fixed address or a placeholder. Empty (**None**) means answers go to the sender.                                                                                                   |
+    | **Active**    | Optional | On by default. **Inactive receivers are skipped.**                                                                                                                                                                     |
 
 3. Click **Add receiver**.
 
@@ -33,7 +33,7 @@ The errors mailer can answer with:
 
 | Message                                                                              | Cause                                                                              |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `Sender address must use the form domain mail.example.net`                           | **Sender** is on another domain.                                                   |
+| `Sender address must use example.net or one of its subdomains`                       | **Sender** is on another domain.                                                   |
 | `"inbox" is neither an email address nor a field placeholder`                        | **Recipient** or **Reply-To** is neither an address nor a placeholder.             |
 | <code v-pre>Placeholder "{{name}}" must reference an email field of this form</code> | The placeholder names a field that does not exist or is not of the type **Email**. |
 

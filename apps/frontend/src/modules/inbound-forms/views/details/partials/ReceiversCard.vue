@@ -104,7 +104,7 @@
         v-model="dialogOpen"
         :receiver="editingReceiver"
         :email-fields="emailFields"
-        :domain-fqdn="senderDomain"
+        :sender-domain="senderDomain"
         :saving="isSaving"
         :error="dialogError"
         @save="saveReceiver"
@@ -125,7 +125,7 @@
         mdiPlayCircleOutline,
         mdiPlus,
     } from '@mdi/js'
-    import type { InboundFormDetailDto, InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
+    import type { DomainDto, InboundFormDetailDto, InboundFormReceiverCreateDto, InboundFormReceiverDto } from 'api'
     import EmptyState from '@/components/EmptyState.vue'
     import IconButton from '@/components/IconButton.vue'
     import ListRow from '@/components/ListRow.vue'
@@ -142,7 +142,11 @@
     import ReceiverDialog from '@/modules/inbound-forms/views/details/partials/ReceiverDialog.vue'
     import { RouteNames } from '@/router/RouteNames.ts'
 
-    const props = defineProps<{ form: InboundFormDetailDto; senderDomain: string | null; canUpdate: boolean }>()
+    const props = defineProps<{
+        form: InboundFormDetailDto
+        senderDomain: Pick<DomainDto, 'fqdn' | 'rootDomain'> | null
+        canUpdate: boolean
+    }>()
 
     const { t } = useI18n()
     const { xs } = useDisplay()

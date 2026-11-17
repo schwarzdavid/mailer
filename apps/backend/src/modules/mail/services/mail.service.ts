@@ -68,12 +68,12 @@ export class MailService {
         private readonly configService: ConfigService<Env, true>,
     ) {}
 
-    async assertFromDomainReady(fqdn: string): Promise<void> {
+    async assertFromDomainReady(senderHost: string): Promise<void> {
         if (!this.configService.get('SEND_REQUIRE_VALID_DNS', { infer: true })) {
             return
         }
 
-        const domain = await this.domainService.getDomainByFqdn(fqdn)
+        const domain = await this.domainService.getDomainForSender(senderHost)
         if (domain) {
             await this.domainService.assertReadyToSend(domain)
         }
@@ -118,7 +118,7 @@ export class MailService {
             throw new Error(`Invalid from address: ${mail.from}`)
         }
 
-        const domain = await this.domainService.getSendingDomainByFqdn(fqdn)
+        const domain = await this.domainService.getSendingDomainForSender(fqdn)
         if (!domain) {
             throw new Error(`No sending domain configured for ${fqdn}`)
         }

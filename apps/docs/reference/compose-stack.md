@@ -30,11 +30,11 @@ The file is the one you downloaded on [Docker Compose](/installation/docker-comp
 
 ### mail
 
-- **Settings:** `hostname` is `MAIL_HOSTNAME`. The environment turns off everything mailer does not need (`ENABLE_OPENDKIM`, `ENABLE_OPENDMARC`, `ENABLE_POLICYD_SPF`, `ENABLE_AMAVIS`, `ENABLE_RSPAMD`, `ENABLE_CLAMAV`, `ENABLE_FAIL2BAN`, `ENABLE_POP3`, `ENABLE_UPDATE_CHECK` all `0`; the backend signs with DKIM itself), trusts no other container as a mail source (`PERMIT_DOCKER: none`) and turns on spoof protection (`SPOOF_PROTECTION: '1'`), so the backend's login may send only with its own address as the envelope sender.
+- **Settings:** `OVERRIDE_HOSTNAME` is `MAIL_HOSTNAME`, the name the mail server greets with and introduces itself as when it delivers mail. It is deliberately not the container's `hostname`: Docker answers DNS queries for a container's `hostname` itself, inside the stack, with the container's internal address. The environment turns off everything mailer does not need (`ENABLE_OPENDKIM`, `ENABLE_OPENDMARC`, `ENABLE_POLICYD_SPF`, `ENABLE_AMAVIS`, `ENABLE_RSPAMD`, `ENABLE_CLAMAV`, `ENABLE_FAIL2BAN`, `ENABLE_POP3`, `ENABLE_UPDATE_CHECK` all `0`; the backend signs with DKIM itself), trusts no other container as a mail source (`PERMIT_DOCKER: none`) and turns on spoof protection (`SPOOF_PROTECTION: '1'`), so the backend's login may send only with its own address as the envelope sender.
 - **Certificate:** `SSL_TYPE: manual` with `SSL_CERT_PATH` and `SSL_KEY_PATH` pointing at the files Caddy keeps for `MAIL_HOSTNAME` in the `caddy-data` volume, which is mounted read-only at `/caddy`. Until Caddy has that certificate, `mail` restarts ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)).
 - **Postfix setting:** the block `x-mail-postfix-main`, mounted as `/tmp/docker-mailserver/postfix-main.cf` through the config `mail-postfix-main`, sets `mydestination = localhost.$mydomain, localhost`. Postfix's default list of local destinations would also contain the server's own name, `MAIL_HOSTNAME`; leaving it out lets mail to `bounce@` plus `MAIL_HOSTNAME` reach the mailbox created with `setup email add`.
 - **Shutdown:** `stop_grace_period: 1m` gives the mail server up to a minute to finish open deliveries when it stops.
-- **Accounts:** the bounce mailbox and the `postmaster` alias are created by hand after the first start ([CLI](/reference/cli#mail-server-accounts)).
+- **Accounts:** `deploy/setup.sh` creates the bounce mailbox and the `postmaster` alias after it started the stack, and sets the password from `MAIL_PASSWORD` again on every run ([CLI](/reference/cli#mail-server-accounts)).
 
 ## Volumes
 
@@ -60,7 +60,7 @@ Besides the volumes, back up `.env`: it holds `BACKEND_ENCRYPTION_SECRET`, witho
 | `default` | `mailer_default` | `postgres`, `redis`, `backend`, `proxy` | The backend reaches Postgres and Redis, and Caddy reaches the backend, by their service names.                                                                                               |
 | `mail`    | `mailer_mail`    | `backend`, `mail`                       | The backend submits mail on port 587 and reads the bounce mailbox on port 143. Only these two services are on it, so no other container reaches the mail server's submission and IMAP ports. |
 
-`mail` is on the `mail` network only, and `postgres`, `redis` and `proxy` on `default` only. The backend reaches the mail server by the service name `mail` and checks its certificate against `MAIL_HOSTNAME`. `MAIL_HOSTNAME` is deliberately not a network alias of the `mail` service, so inside the stack it still resolves through public DNS, and the DNS checks of the domains see the same records as the rest of the world.
+`mail` is on the `mail` network only, and `postgres`, `redis` and `proxy` on `default` only. The backend reaches the mail server by the service name `mail` and checks its certificate against `MAIL_HOSTNAME`. `MAIL_HOSTNAME` is deliberately neither a network alias nor the container hostname of the `mail` service, so inside the stack it still resolves through public DNS, and the DNS checks of the domains see the same records as the rest of the world.
 
 ## Published ports
 

@@ -208,8 +208,8 @@ An `smtp` message with the code `EAUTH` means the login was refused. `setup emai
 **Fix.**
 
 - `mail` not `healthy`: see [`mail` keeps restarting](#mail-keeps-restarting).
-- The mailbox is missing: create it ([Create the bounce mailbox](/installation/docker-compose#create-the-bounce-mailbox)).
-- `EAUTH` with an existing mailbox: set the password from `.env` on the account again, as on [Rotating secrets](/operations/rotating-secrets#mail-password).
+- The mailbox is missing: run `sh setup.sh`, which creates it ([Docker Compose](/installation/docker-compose#start-the-stack-and-create-the-bounce-mailbox)).
+- `EAUTH` with an existing mailbox: run `sh setup.sh`, which sets the password from `.env` on the account again.
 - `redis` down: see [Login answers 503](#login-answers-503).
 
 Readiness reuses its result for 10 seconds, so a fix shows up after that.

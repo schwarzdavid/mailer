@@ -8,6 +8,7 @@ import { InboundFormSecurityModel } from '../models/inbound-form-security.model.
 import { InboundFormReceiverModel } from '../models/inbound-form-receiver.model.js'
 import { DomainService } from '../../domain/services/domain.service.js'
 import { Domain } from '../../domain/interfaces/domain.interface.js'
+import { registrableDomainOf } from '../../domain/helpers/registrable-domain.js'
 import { ProjectService } from '../../project/services/project.service.js'
 import { ProjectModel } from '../../project/models/project.model.js'
 import { InboundForm, InboundFormFull, InboundFormWithReceivers } from '../interfaces/inbound-form.interface.js'
@@ -440,8 +441,8 @@ export class InboundFormService {
         if (!EMAIL_PATTERN.test(emailFrom)) {
             throw new BadRequestException(`"${emailFrom}" is not a valid sender address`)
         }
-        if (!emailFrom.toLowerCase().endsWith(`@${domain.fqdn.toLowerCase()}`)) {
-            throw new BadRequestException(`Sender address must use the form domain ${domain.fqdn}`)
+        if (registrableDomainOf(emailFrom.slice(emailFrom.lastIndexOf('@') + 1)) !== domain.rootDomain) {
+            throw new BadRequestException(`Sender address must use ${domain.rootDomain} or one of its subdomains`)
         }
     }
 
