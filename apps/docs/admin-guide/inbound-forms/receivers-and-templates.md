@@ -15,12 +15,12 @@ You need **Manage forms** on the form's project, and the form needs a **Sender d
 1. On the form's page, in the card **Receivers**, click **Add receiver**.
 2. Fill in the dialog:
 
-    | Field         | Required | What to enter                                                                                                                                                                                                          |
-    | ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | **Sender**    | Required | `emailFrom`, the `From` address, for example `contact@mail.example.net`. Any address under the registrable domain of the form's sender domain works, `contact@example.net` included; `contact@example.org` is refused. |
-    | **Recipient** | Required | `emailReceiver`, where the e-mail goes: a fixed address such as `inbox@example.org`, or a placeholder of an **Email** field such as <code v-pre>{{email}}</code>. The list offers the placeholders.                    |
-    | **Reply-To**  | Optional | `emailReplyTo`, where answers go: a fixed address or a placeholder. Empty (**None**) means answers go to the sender.                                                                                                   |
-    | **Active**    | Optional | On by default. **Inactive receivers are skipped.**                                                                                                                                                                     |
+    | Field         | Required | What to enter                                                                                                                                                                                                                                                |
+    | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | **Sender**    | Required | `emailFrom`, the `From` address. The dialog fills in `noreply@example.net`, the main domain of the form's sender domain `mail.example.net`. Any address under that main domain works, `contact@mail.example.net` included; `contact@example.org` is refused. |
+    | **Recipient** | Required | `emailReceiver`, where the e-mail goes: a fixed address such as `inbox@example.org`, or a placeholder of an **Email** field such as <code v-pre>{{email}}</code>. The list offers the placeholders.                                                          |
+    | **Reply-To**  | Optional | `emailReplyTo`, where answers go: a fixed address or a placeholder. Empty (**None**) means answers go to the sender.                                                                                                                                         |
+    | **Active**    | Optional | On by default. **Inactive receivers are skipped.**                                                                                                                                                                                                           |
 
 3. Click **Add receiver**.
 

@@ -10,6 +10,7 @@ import {
     receiverAddress,
     selectOption,
     senderDomain,
+    senderRootDomain,
 } from './support/fixtures.ts'
 
 interface FieldInput {
@@ -89,13 +90,13 @@ test('an administrator creates an inbound form with fields and a receiver', asyn
     await expect(receivers.getByText('Submissions are accepted but nobody is emailed.')).toBeVisible()
     await receivers.getByRole('button', { name: 'Add receiver' }).click()
     const receiverDialog = dialog(page)
-    await expect(input(receiverDialog, 'emailFrom')).toHaveValue(`noreply@${senderDomain}`)
+    await expect(input(receiverDialog, 'emailFrom')).toHaveValue(`noreply@${senderRootDomain}`)
     await receiverDialog.getByRole('combobox', { name: /^Recipient/ }).fill(receiverAddress)
     await receiverDialog.getByRole('combobox', { name: /^Reply-To/ }).fill('{{email}}')
     await receiverDialog.getByRole('button', { name: 'Add receiver' }).click()
     await expect(receiverDialog).toBeHidden()
 
-    await expect(receivers.getByText(`noreply@${senderDomain} → ${receiverAddress}`)).toBeVisible()
+    await expect(receivers.getByText(`noreply@${senderRootDomain} → ${receiverAddress}`)).toBeVisible()
     await expect(receivers.getByText('{{email}}')).toBeVisible()
     await expect(receivers.getByText('No template')).toBeVisible()
 })
@@ -156,7 +157,7 @@ test('the receiver dialog pre-fills the sender even when the project loads slowl
     await page.reload()
     await card(page, 'Receivers').getByRole('button', { name: 'Add receiver' }).click()
 
-    await expect(input(dialog(page), 'emailFrom')).toHaveValue(`noreply@${senderDomain}`)
+    await expect(input(dialog(page), 'emailFrom')).toHaveValue(`noreply@${senderRootDomain}`)
 })
 
 test('the template editor closes tags, expands emmet and switches layouts', async ({ page }) => {

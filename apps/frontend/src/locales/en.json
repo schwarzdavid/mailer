@@ -964,7 +964,7 @@
                     },
                     "dialog": {
                         "editTitle": "Edit receiver",
-                        "senderHint": "An address on {domain} or one of its subdomains, such as {fqdn}.",
+                        "senderHint": "Any address on {domain} or one of its subdomains.",
                         "noDomain": "Choose a sender domain on the form first.",
                         "senderDomain": "Use an address on {domain} or one of its subdomains.",
                         "recipientHint": "A fixed address or a form field like {placeholder}.",
