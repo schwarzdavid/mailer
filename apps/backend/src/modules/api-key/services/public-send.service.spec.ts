@@ -59,16 +59,16 @@ const mail: PublicSendDto = {
 
 describe('PublicSendService', () => {
     let service: PublicSendService
-    let getDomainByFqdn: Mock<DomainService['getDomainByFqdn']>
-    let getSendingDomainByFqdn: Mock<DomainService['getSendingDomainByFqdn']>
+    let getDomainForSender: Mock<DomainService['getDomainForSender']>
+    let getSendingDomainForSender: Mock<DomainService['getSendingDomainForSender']>
     let hasDomain: Mock<ProjectService['hasDomain']>
     let sendMail: Mock<MailService['sendMail']>
     let assertFromDomainReady: Mock<MailService['assertFromDomainReady']>
 
     beforeEach(async () => {
         vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
-        getDomainByFqdn = vi.fn<typeof getDomainByFqdn>().mockResolvedValue(domain)
-        getSendingDomainByFqdn = vi.fn<typeof getSendingDomainByFqdn>().mockResolvedValue(sendingDomain)
+        getDomainForSender = vi.fn<typeof getDomainForSender>().mockResolvedValue(domain)
+        getSendingDomainForSender = vi.fn<typeof getSendingDomainForSender>().mockResolvedValue(sendingDomain)
         hasDomain = vi.fn<typeof hasDomain>().mockResolvedValue(true)
         sendMail = vi.fn<typeof sendMail>().mockResolvedValue({ mailMessageId: 70, smtpMessageId: '<m@x>' })
         assertFromDomainReady = vi.fn<typeof assertFromDomainReady>().mockResolvedValue(undefined)
@@ -76,7 +76,7 @@ describe('PublicSendService', () => {
         const module = await Test.createTestingModule({
             providers: [
                 PublicSendService,
-                { provide: DomainService, useValue: { getDomainByFqdn, getSendingDomainByFqdn } },
+                { provide: DomainService, useValue: { getDomainForSender, getSendingDomainForSender } },
                 { provide: ProjectService, useValue: { hasDomain } },
                 { provide: MailService, useValue: { sendMail, assertFromDomainReady } },
             ],
@@ -115,16 +115,27 @@ describe('PublicSendService', () => {
     it('matches the from domain case-insensitively and sends with the normalized domain', async () => {
         await service.send(apiKey, { ...mail, from: 'News@Mail.Example.COM' })
 
-        expect(getDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
-        expect(getSendingDomainByFqdn).toHaveBeenCalledWith('mail.example.com')
+        expect(getDomainForSender).toHaveBeenCalledWith('mail.example.com')
+        expect(getSendingDomainForSender).toHaveBeenCalledWith('mail.example.com')
         expect(sendMail).toHaveBeenCalledWith(
             expect.objectContaining({ from: 'News@mail.example.com' }),
             expect.anything(),
         )
     })
 
+    it('sends from the root domain of a project domain registered as a subdomain', async () => {
+        await expect(service.send(apiKey, { ...mail, from: 'info@example.com' })).resolves.toEqual({
+            mailMessageId: 70,
+        })
+
+        expect(getDomainForSender).toHaveBeenCalledWith('example.com')
+        expect(hasDomain).toHaveBeenCalledWith(3, 8)
+        expect(assertFromDomainReady).toHaveBeenCalledWith('example.com')
+        expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ from: 'info@example.com' }), expect.anything())
+    })
+
     it('forbids an unknown from domain without revealing that it is unknown', async () => {
-        getDomainByFqdn.mockResolvedValue(null)
+        getDomainForSender.mockResolvedValue(null)
 
         const error = await sendError()
         expect(error.code).toBe(PublicSendErrorCode.FROM_DOMAIN_NOT_ALLOWED)
@@ -141,7 +152,7 @@ describe('PublicSendService', () => {
     })
 
     it('rejects a project domain without an active dkim key', async () => {
-        getSendingDomainByFqdn.mockResolvedValue(null)
+        getSendingDomainForSender.mockResolvedValue(null)
 
         const error = await sendError()
         expect(error.code).toBe(PublicSendErrorCode.FROM_DOMAIN_NOT_READY)

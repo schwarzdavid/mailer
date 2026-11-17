@@ -65,7 +65,7 @@ export class PublicSendService {
     }
 
     private async assertFromDomainUsable(projectId: number, fqdn: string): Promise<void> {
-        const domain = await this.domainService.getDomainByFqdn(fqdn)
+        const domain = await this.domainService.getDomainForSender(fqdn)
         if (!domain || !(await this.projectService.hasDomain(projectId, domain.domainId))) {
             throw new PublicSendException(
                 PublicSendErrorCode.FROM_DOMAIN_NOT_ALLOWED,
@@ -73,7 +73,7 @@ export class PublicSendService {
             )
         }
 
-        if (!(await this.domainService.getSendingDomainByFqdn(fqdn))) {
+        if (!(await this.domainService.getSendingDomainForSender(fqdn))) {
             throw new PublicSendException(
                 PublicSendErrorCode.FROM_DOMAIN_NOT_READY,
                 'The from domain has no active DKIM key',

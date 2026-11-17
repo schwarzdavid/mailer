@@ -61,7 +61,7 @@ The body is a JSON object with exactly these fields. Any other field, for exampl
 
 Each address is a bare address such as `news@mail.example.net`; a display name (`Acme <news@mail.example.net>`) fails validation. mailer has no fields for several recipients, copies, attachments or custom headers: send one request per recipient.
 
-The domain of `from` must match a sender domain by its full name: `news@mail.example.net` works for the domain `mail.example.net`, while `news@example.net` and `news@shop.mail.example.net` do not.
+The domain of `from` must belong to the registrable domain of a sender domain: for the sender domain `mail.example.net`, `news@mail.example.net`, `news@example.net` and `news@shop.example.net` all work, while `news@example.org` does not. mailer signs every one of them with the DKIM key of `mail.example.net`; [Send from the main domain](/admin-guide/domains#send-from-the-main-domain) explains what that means for DMARC.
 
 The JSON body of this endpoint may be about 8 MB large, enough for `html` and `text` at their maximum length even with characters of 4 bytes each. A larger body is refused with `413`.
 
@@ -88,7 +88,7 @@ Every error body has `statusCode` and `message`. Errors from the send checks add
 | `202`  | none                      | Accepted by mailer's mail server.                                                                                                                                                                                                                                       | yes, **Sent**             |
 | `400`  | none                      | Validation failed: a field is missing, too long, not an address, or not in the table above. `message` is a list with one entry per problem.                                                                                                                             | no                        |
 | `401`  | none                      | `Missing API key`: neither the header nor `?key=` carries a key. `Invalid API key`: the key is malformed, unknown, revoked, or its project is deleted.                                                                                                                  | no                        |
-| `403`  | `FROM_DOMAIN_NOT_ALLOWED` | `The from address must use a domain of this project`: the domain of `from` is not a sender domain, or is not assigned to the key's project.                                                                                                                             | no                        |
+| `403`  | `FROM_DOMAIN_NOT_ALLOWED` | `The from address must use a domain of this project`: the domain of `from` is not under a sender domain's registrable domain, or that sender domain is not assigned to the key's project.                                                                               | no                        |
 | `413`  | none                      | The body is larger than about 8 MB.                                                                                                                                                                                                                                     | no                        |
 | `422`  | `FROM_DOMAIN_NOT_READY`   | `The from domain has no active DKIM key` or `The from domain has DNS records that are not valid yet`, see below.                                                                                                                                                        | no                        |
 | `422`  | `RECIPIENT_BLOCKED`       | `The recipient is blocked after previous bounces`: `to` is on **Blocked addresses**, see [Bounces](/admin-guide/bounces).                                                                                                                                               | yes, **Blocked**          |
@@ -101,7 +101,7 @@ Every error body has `statusCode` and `message`. Errors from the send checks add
 
 mailer checks three things about the `from` domain, in this order:
 
-1. The domain is a sender domain on **Domains** and is assigned to the key's project. If not: `403 FROM_DOMAIN_NOT_ALLOWED`.
+1. The domain is a sender domain on **Domains**, or a name under its registrable domain, and that sender domain is assigned to the key's project. If not: `403 FROM_DOMAIN_NOT_ALLOWED`. The following checks apply to that sender domain.
 2. The domain has an active DKIM key, the key mailer signs its mail with. If not: `422 FROM_DOMAIN_NOT_READY` with the message `The from domain has no active DKIM key`. mailer generates the key when you add the domain and removes the domain again if that fails, so in normal operation this message does not occur.
 3. The domain has at least one DNS record and every record is **Valid**. If not: `422 FROM_DOMAIN_NOT_READY` with the message `The from domain has DNS records that are not valid yet`. This check applies while [`SEND_REQUIRE_VALID_DNS`](/configuration/environment#send-require-valid-dns) is `true`, its default.
 

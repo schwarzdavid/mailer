@@ -21,6 +21,7 @@ import { ProjectDomainModel } from '../../project/models/project-domain.model.js
 import { canOnProject } from '../../permission/helpers/project-access.js'
 import { AppAbility } from '../../permission/interfaces/app-ability.js'
 import { parse } from 'tldts'
+import { registrableDomainOf } from '../helpers/registrable-domain.js'
 
 @Injectable()
 export class DomainService {
@@ -221,9 +222,27 @@ export class DomainService {
         }
     }
 
+    async getDomainForSender(senderHost: string): Promise<Domain | null> {
+        const rootDomain = registrableDomainOf(senderHost)
+
+        return rootDomain ? this.getDomainByRootDomain(rootDomain) : null
+    }
+
+    async getSendingDomainForSender(senderHost: string): Promise<DomainWithActiveDkim | null> {
+        const rootDomain = registrableDomainOf(senderHost)
+
+        return rootDomain ? this.findWithActiveDkim({ rootDomain }) : null
+    }
+
     async getSendingDomainByFqdn(fqdn: string): Promise<DomainWithActiveDkim | null> {
+        return this.findWithActiveDkim({ fqdn })
+    }
+
+    private async findWithActiveDkim(
+        where: Pick<Domain, 'fqdn'> | Pick<Domain, 'rootDomain'>,
+    ): Promise<DomainWithActiveDkim | null> {
         const domain = await this.domainModel.findOne({
-            where: { fqdn },
+            where,
             include: [{ model: DomainDkimModel, as: 'activeDkim' }],
         })
 

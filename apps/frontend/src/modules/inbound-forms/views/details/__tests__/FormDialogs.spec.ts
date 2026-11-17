@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { InboundFormFieldUpsertDto, InboundFormReceiverCreateDto, InboundFormSecurityUpsertDto } from 'api'
+import type {
+    DomainDto,
+    InboundFormFieldUpsertDto,
+    InboundFormReceiverCreateDto,
+    InboundFormSecurityUpsertDto,
+} from 'api'
 import FieldDialog from '../partials/FieldDialog.vue'
 import ReceiverDialog from '../partials/ReceiverDialog.vue'
 import SecurityDialog from '../partials/SecurityDialog.vue'
@@ -297,6 +302,7 @@ describe('SecurityDialog', () => {
 })
 
 describe('ReceiverDialog', () => {
+    const senderDomain: Pick<DomainDto, 'fqdn' | 'rootDomain'> = { fqdn: 'forms.acme.com', rootDomain: 'acme.com' }
     const emailFields = formDetail()
         .fields.filter((field) => field.type === 'email')
         .map((field) => ({ key: field.key, label: field.label }))
@@ -307,7 +313,7 @@ describe('ReceiverDialog', () => {
         mountDialog(ReceiverDialog, {
             receiver: null,
             emailFields,
-            domainFqdn: 'forms.acme.com',
+            senderDomain,
             saving: false,
             onSave,
         })
@@ -329,30 +335,51 @@ describe('ReceiverDialog', () => {
         )
     })
 
+    it('accepts a sender on the root domain of the form domain', async () => {
+        const onSave: Mock<(receiver: InboundFormReceiverCreateDto) => void> =
+            vi.fn<(receiver: InboundFormReceiverCreateDto) => void>()
+        mountDialog(ReceiverDialog, {
+            receiver: null,
+            emailFields,
+            senderDomain,
+            saving: false,
+            onSave,
+        })
+        await waitForInput('emailFrom')
+
+        await setOverlayInput('emailFrom', 'info@Acme.com')
+        await setOverlayInput('emailReceiver', 'sales@acme.com')
+        submitOverlayForm()
+
+        await vi.waitFor(() =>
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ emailFrom: 'info@Acme.com' })),
+        )
+    })
+
     it('rejects a sender outside the form domain', async () => {
         const onSave: Mock<(receiver: InboundFormReceiverCreateDto) => void> =
             vi.fn<(receiver: InboundFormReceiverCreateDto) => void>()
         mountDialog(ReceiverDialog, {
             receiver: null,
             emailFields,
-            domainFqdn: 'forms.acme.com',
+            senderDomain,
             saving: false,
             onSave,
         })
         await waitForInput('emailFrom')
 
-        await setOverlayInput('emailFrom', 'noreply@other.com')
+        await setOverlayInput('emailFrom', 'noreply@acme.com.evil.io')
         await setOverlayInput('emailReceiver', 'sales@acme.com')
         submitOverlayForm()
 
-        await vi.waitFor(() => expect(overlayText()).toContain('Use an address ending in @forms.acme.com.'))
+        await vi.waitFor(() => expect(overlayText()).toContain('Use an address on acme.com or one of its subdomains.'))
         expect(onSave).not.toHaveBeenCalled()
     })
 })
 
 describe('ReceiverDialog while the sender domain loads', () => {
     it('fills the sender once the domain arrives', async () => {
-        const domainFqdn = ref<string | null>(null)
+        const senderDomain = ref<Pick<DomainDto, 'fqdn' | 'rootDomain'> | null>(null)
         const Host = defineComponent({
             setup: () => () =>
                 h(VApp, () =>
@@ -360,7 +387,7 @@ describe('ReceiverDialog while the sender domain loads', () => {
                         modelValue: true,
                         receiver: null,
                         emailFields: [],
-                        domainFqdn: domainFqdn.value,
+                        senderDomain: senderDomain.value,
                         saving: false,
                     }),
                 ),
@@ -369,7 +396,7 @@ describe('ReceiverDialog while the sender domain loads', () => {
         await waitForInput('emailFrom')
         expect(document.body.querySelector<HTMLInputElement>('[name="emailFrom"]')!.value).toBe('')
 
-        domainFqdn.value = 'forms.acme.com'
+        senderDomain.value = { fqdn: 'forms.acme.com', rootDomain: 'acme.com' }
 
         await vi.waitFor(() =>
             expect(document.body.querySelector<HTMLInputElement>('[name="emailFrom"]')!.value).toBe(

@@ -745,6 +745,13 @@ describe('InboundForm management + delivery (e2e)', () => {
                 isActive: false,
             })
 
+            const onRootDomain = await http()
+                .patch(`/api/inbound-form/${formId}/receiver/${echoReceiverId}`)
+                .set('Authorization', asOwner())
+                .send({ emailFrom: 'info@ifm-example.com' })
+                .expect(200)
+            expect(onRootDomain.body).toMatchObject({ emailFrom: 'info@ifm-example.com' })
+
             await http()
                 .patch(`/api/inbound-form/${formId}/receiver/${echoReceiverId}`)
                 .set('Authorization', asOwner())

@@ -454,7 +454,7 @@
             },
             "add": {
                 "title": "New sender domain",
-                "intro": "Use a subdomain that only sends mail, such as {example}. You'll get three DNS records to publish next.",
+                "intro": "Use a subdomain that only sends mail, such as {example}. Addresses on the main domain can still send through it. You'll get three DNS records to publish next.",
                 "submit": "Add domain",
                 "success": "{fqdn} added",
                 "error": "Couldn't add the domain. Check your connection and try again.",
@@ -964,9 +964,9 @@
                     },
                     "dialog": {
                         "editTitle": "Edit receiver",
-                        "senderHint": "Must end in {'@'}{domain}, the form's sender domain.",
+                        "senderHint": "An address on {domain} or one of its subdomains, such as {fqdn}.",
                         "noDomain": "Choose a sender domain on the form first.",
-                        "senderDomain": "Use an address ending in {'@'}{domain}.",
+                        "senderDomain": "Use an address on {domain} or one of its subdomains.",
                         "recipientHint": "A fixed address or a form field like {placeholder}.",
                         "none": "None",
                         "activeHint": "Inactive receivers are skipped."

@@ -12,7 +12,7 @@ In the admin UI these domains are called **sender domains**. Do not confuse them
 
 ## Choose the domain name
 
-**Use a subdomain that only sends mail**, such as `mail.example.net`, rather than the customer's main domain `example.net`. The main domain usually has its own mail, with its own SPF and DMARC records; a dedicated subdomain keeps form mail and regular mail apart, and its records do not clash with existing ones. When you enter a main domain, the dialog warns **Use a subdomain if you can**, but lets you continue.
+**Use a subdomain that only sends mail**, such as `mail.example.net`, rather than the customer's main domain `example.net`. The main domain usually has its own mail, with its own SPF and DMARC records; a dedicated subdomain keeps form mail and regular mail apart, and its records do not clash with existing ones. When you enter a main domain, the dialog warns **Use a subdomain if you can**, but lets you continue. The subdomain does not limit the sender addresses: with `mail.example.net`, websites and forms can still send from `contact@example.net` (see [Send from the main domain](#send-from-the-main-domain)).
 
 **mailer keeps one domain per registrable domain.** The registrable domain is the part you buy at a registrar: `example.net` for `mail.example.net`, `example.co.uk` for `mail.example.co.uk`. Once `mail.example.net` exists, mailer refuses `news.example.net` or `example.net` with the error:
 
@@ -91,7 +91,7 @@ mailer looks the records up through the DNS resolver of the server it runs on. A
 
 ## Sending needs valid records
 
-mailer sends from a sender domain only when it is **ready to send**: the domain has an active DKIM key and at least one DNS record, and every record shows **Valid**. The rule is set by [`SEND_REQUIRE_VALID_DNS`](/configuration/environment#send-require-valid-dns), which is `true` unless you changed it. Besides this, the backend checks that the `From` address uses exactly the domain's name (`anything@mail.example.net`, not `@example.net` or `@news.mail.example.net`) and that the domain is assigned to the sending project.
+mailer sends from a sender domain only when it is **ready to send**: the domain has an active DKIM key and at least one DNS record, and every record shows **Valid**. The rule is set by [`SEND_REQUIRE_VALID_DNS`](/configuration/environment#send-require-valid-dns), which is `true` unless you changed it. Besides this, the backend checks that the `From` address belongs to the domain's registrable domain (`anything@mail.example.net`, `@example.net` or `@news.example.net`, not `@example.org`) and that the domain is assigned to the sending project. The records checked are always those of `mail.example.net`, whichever of these addresses sends.
 
 What happens while a domain is not ready:
 
@@ -114,6 +114,15 @@ Every mail from `mail.example.net` goes out through your server, whose own ident
 - **SPF** of `mail.example.net` includes `mx.example.com`, so it lists your server through the sending domain's record.
 
 A change of the server's IP addresses does not touch the sender domains, because their SPF records name `mx.example.com`, not addresses. If `MAIL_HOSTNAME` changes, mailer rewrites the SPF value of every sender domain to include the new name, and every customer must update the SPF record in their zone. [Settings](/admin-guide/settings#when-mail-hostname-changes) describes the switch.
+
+## Send from the main domain
+
+A sender domain covers its whole registrable domain. With the sender domain `mail.example.net`, the send API and form receivers accept `contact@mail.example.net`, `contact@example.net` and `contact@news.example.net`. Each of these mails is signed with the DKIM key of `mail.example.net`, and the readiness check uses the records of `mail.example.net`; nothing is published at `example.net` itself.
+
+Receivers accept such mail because DMARC compares the DKIM domain with the `From` domain in relaxed mode by default: `mail.example.net` and `example.net` share the registrable domain, so the signature counts as aligned. Two things follow:
+
+- For `contact@example.net`, the DMARC record that applies is `_dmarc.example.net`, the customer's existing one, not the `_dmarc.mail.example.net` that mailer generates. If that record sets `adkim=s` (strict alignment), the signature of `mail.example.net` does not align and the mail fails DMARC. Ask the customer to keep `adkim` unset or at `r`.
+- If `example.net` has no DMARC record, the mail is still signed, but large mailbox providers expect a DMARC record on the `From` domain of bulk mail. Publish at least `v=DMARC1; p=none;` at `_dmarc.example.net`, and before tightening it follow [Going live](/installation/going-live#tighten-dmarc-step-by-step), which applies to `example.net` the same way.
 
 ## Recipient rejections at send time
 

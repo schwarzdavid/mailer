@@ -35,7 +35,7 @@
         <GeneralCard :form="form" :project="project" :can-update="canUpdate" />
         <FieldsCard :form="form" :can-update="canUpdate" />
         <SecurityCard :form="form" :can-update="canUpdate" />
-        <ReceiversCard :form="form" :sender-domain="senderDomain?.fqdn ?? null" :can-update="canUpdate" />
+        <ReceiversCard :form="form" :sender-domain="senderDomain ?? null" :can-update="canUpdate" />
         <FormDangerZone v-if="canUpdate" :form="form" />
     </div>
 </template>

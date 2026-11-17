@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
 import { ensureSendingDomain } from './support/sending-domain.js'
-import { waitForMessagesTo } from './support/mailhog.js'
+import { header, waitForMessagesTo } from './support/mailhog.js'
 import { EmailBlockService } from '../src/modules/bounce/services/email-block.service.js'
 import { MailMessageService } from '../src/modules/mail/services/mail-message.service.js'
 import { MailMessageSource } from '../src/modules/mail/interfaces/mail-message.interface.js'
@@ -197,6 +197,19 @@ describe('Public send API (e2e)', () => {
                     })
                 ).status,
             ).toBe(202)
+        })
+
+        it('sends from the root domain of the project domain, signed for the registered subdomain', async () => {
+            await send({
+                from: 'info@psa-example.com',
+                to: 'reader-root@psa-e2e.test',
+                subject: 'Root',
+                html: '<p>x</p>',
+            }).expect(202)
+
+            const [delivered] = await waitForMessagesTo(mailhogUrl, 'reader-root@psa-e2e.test')
+            expect(header(delivered!, 'From')[0]).toContain('info@psa-example.com')
+            expect(header(delivered!, 'DKIM-Signature')[0]).toContain('d=send.psa-example.com')
         })
 
         it('accepts an html body larger than the default json limit', async () => {
