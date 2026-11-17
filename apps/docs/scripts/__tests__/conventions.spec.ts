@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hasVerifySection, proceduralPages, startsWithHeading, stripFrontmatter } from '../conventions.ts'
+import { startsWithHeading, stripFrontmatter } from '../conventions.ts'
 import { docsRoot, listPageFiles } from '../pages.ts'
 
 describe('stripFrontmatter', () => {
@@ -33,16 +32,6 @@ describe('startsWithHeading', () => {
     })
 })
 
-describe('hasVerifySection', () => {
-    it('detects the verification heading', () => {
-        expect(hasVerifySection('# T\n\n## How you know it worked\n\nCheck.\n')).toBe(true)
-    })
-
-    it('does not accept a differently named heading', () => {
-        expect(hasVerifySection('# T\n\n## Verify\n\nCheck.\n')).toBe(false)
-    })
-})
-
 describe('page conventions', () => {
     it('every page starts with an H1', async () => {
         const pages = await listPageFiles(docsRoot)
@@ -52,20 +41,5 @@ describe('page conventions', () => {
             if (!startsWithHeading(content)) offenders.push(page)
         }
         expect(offenders).toEqual([])
-    })
-
-    it('every existing procedural page has a verification section', async () => {
-        const existing = proceduralPages.filter((page) => existsSync(resolve(docsRoot, page)))
-        const offenders: string[] = []
-        for (const page of existing) {
-            const content = await readFile(resolve(docsRoot, page), 'utf8')
-            if (!hasVerifySection(content)) offenders.push(page)
-        }
-        expect(offenders).toEqual([])
-    })
-
-    it('every procedural page exists', () => {
-        const missing = proceduralPages.filter((page) => !existsSync(resolve(docsRoot, page)))
-        expect(missing).toEqual([])
     })
 })

@@ -54,7 +54,7 @@ tail -n 1 migrations-before-update.txt
 
 The last line is the newest migration the current version applied, for example `020-create-locks`.
 
-Keep a copy of the current `compose.yml`. You need it for a rollback, and it shows any edits you made to it, such as for an [external database](/configuration/external-postgres-redis):
+Keep a copy of the current `compose.yml`. You need it for a rollback, and it shows any edits you made to it, such as for an [external database](/installation/advanced-configuration#database-tls):
 
 ```bash
 cp compose.yml compose.yml.before-update
@@ -86,7 +86,7 @@ diff <(grep -o '^[A-Z_0-9]*=' .env | sort) <(grep -o '^[A-Z_0-9]*=' .env.example
 ```
 
 - No output: the template has no new keys.
-- A line starting with `>` is a key that is new in the release, for example `> NEW_SETTING=`. Add it to `.env` with a value; [Environment variables](/configuration/environment) describes every key.
+- A line starting with `>` is a key that is new in the release, for example `> NEW_SETTING=`. Add it to `.env` with a value; [Advanced configuration](/installation/advanced-configuration) describes every key.
 - A line starting with `<` is a key that your `.env` has and the template does not. That is normal for optional keys you added yourself, such as `DB_SSL` or `NODE_EXTRA_CA_CERTS`, and for optional keys that older templates listed, such as `LOG_LEVEL` or the rate limits; they keep working. If the release notes say a key was renamed, rename it in `.env`.
 
 ## Pin the new version
@@ -220,6 +220,6 @@ While `mail` restarts (compose gives it up to a minute to shut down), it accepts
     docker compose run --rm -T backend node dist/migrate.js executed | tail -n 1
     ```
 
-- `https://app.example.com/api/health/ready` answers `"status":"ok"`, and a test mail as on [Verify the installation](/installation/verify#send-a-test-mail) arrives.
+- `https://app.example.com/api/health/ready` answers `"status":"ok"`, and a test mail through the [send API](/admin-guide/send-api#send-a-mail) arrives.
 
-Run the remaining checks of [Verify the installation](/installation/verify) after every update. If the new version misbehaves after a successful start, [roll back](/operations/rollback).
+If the new version misbehaves after a successful start, [roll back](/operations/rollback).

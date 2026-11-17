@@ -204,8 +204,8 @@ Google says a reCAPTCHA token expires after two minutes, so request it when the 
 
 ## Rate limits
 
-Every form endpoint is rate limited, whatever checks the form has: by default 5 submissions per 10 minutes per form and visitor IP address, a separate 5 token requests per 10 minutes, and a general limit of 10 requests per minute per IP address. Requests over the limit get `429`. The numbers, how to change them with `FORM_SUBMIT_RATE_LIMIT`, `FORM_SUBMIT_RATE_TTL`, `FORM_TOKEN_RATE_LIMIT` and `FORM_TOKEN_RATE_TTL`, and what happens while Redis is down are on [Rate limits](/configuration/rate-limits).
+Every form endpoint is rate limited, whatever checks the form has: by default 5 submissions per 10 minutes per form and visitor IP address, a separate 5 token requests per 10 minutes, and a general limit of 10 requests per minute per IP address. Requests over the limit get `429`. The numbers, how to change them with `FORM_SUBMIT_RATE_LIMIT`, `FORM_SUBMIT_RATE_TTL`, `FORM_TOKEN_RATE_LIMIT` and `FORM_TOKEN_RATE_TTL`, and what happens while Redis is down are on [Advanced configuration](/installation/advanced-configuration#rate-limit-pairs).
 
 The limits apply to all forms of the installation alike; a single form cannot have its own limit yet. If one website needs more, for example because its visitors share an office network, raise the values for the whole installation.
 
-Rate limits are not counted correctly when the backend sees the proxy's address instead of the visitor's. Check `TRUST_PROXY` as described on [Reverse proxy](/configuration/reverse-proxy) when many visitors get `429` at once.
+Rate limits are not counted correctly when the backend sees the proxy's address instead of the visitor's. Check `TRUST_PROXY` as described on [Advanced configuration](/installation/advanced-configuration#trust-proxy) when many visitors get `429` at once.

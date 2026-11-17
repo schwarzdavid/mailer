@@ -17,7 +17,7 @@ mailer has two public health endpoints. Point an outside uptime monitor (for exa
 | Liveness  | `https://app.example.com/api/health`       | `200`   | `503` (no database), `502` (backend down)           | At once: mailer is down for everyone.                          |
 | Readiness | `https://app.example.com/api/health/ready` | `200`   | `503`, the body names `database`, `redis` or `smtp` | After 2 or 3 failures in a row: sending or forms are affected. |
 
-Liveness only asks the database; it is what Docker's own health check of the `backend` container uses. Readiness also checks Redis and the mail server, so it fails while the site itself still works, for example while `mail` restarts. Neither endpoint needs a login, counts against a rate limit or appears in the request log, so a probe every minute costs nothing. [Health checks](/configuration/health-checks) explains every answer and why readiness must never become the container health check.
+Liveness only asks the database; it is what Docker's own health check of the `backend` container uses. Readiness also checks Redis and the mail server, so it fails while the site itself still works, for example while `mail` restarts. Neither endpoint needs a login, counts against a rate limit or appears in the request log, so a probe every minute costs nothing. Never make readiness the container health check: it would restart a working backend whenever `mail` is down.
 
 To see the answer yourself:
 
@@ -45,7 +45,7 @@ redis      Up 3 days (healthy)
 
 ## Logs
 
-Every service logs to Docker, and `docker compose logs` reads it. The format, the rotation (at most 50 MB per container) and what is never logged are on [Logging](/configuration/logging).
+Every service logs to Docker, and `docker compose logs` reads it. The format, the rotation (at most 50 MB per container) and what is never logged are on [Advanced configuration](/installation/advanced-configuration#log-level).
 
 **The backend** writes one JSON object per line. Show only warnings and errors of the last day, with `jq` installed (`apt-get install -y jq`):
 
@@ -98,7 +98,7 @@ A record that turns **Invalid** after it was **Valid** means someone changed or 
 Two pages of the admin UI show whether mail actually gets through:
 
 - **Sent mail** on each project page lists every mail the project sent, through the send API and through forms, with its status: **Sent** (the mail server accepted it), **Failed** (with the error below the subject) or **Blocked** (the recipient is blocked after bounces). A run of **Failed** entries points to the mail server or the network; see [Sent mail](/admin-guide/projects#sent-mail).
-- **Bounces** lists the bounce reports for the whole installation: **Permanent** ones (the address does not exist) and **Transient** ones (a full mailbox, a temporary refusal). A sudden rise, or reports that mention spam, blocklists or reputation, means receivers distrust your mail; see [Bounces](/admin-guide/bounces) and [Going live](/installation/going-live#when-mail-lands-in-spam).
+- **Bounces** lists the bounce reports for the whole installation: **Permanent** ones (the address does not exist) and **Transient** ones (a full mailbox, a temporary refusal). A sudden rise, or reports that mention spam, blocklists or reputation, means receivers distrust your mail; see [Bounces](/admin-guide/bounces) and [Deliverability](/operations/deliverability#when-mail-lands-in-spam).
 
 Form deliveries that fail before they reach the mail server, such as a deleted receiver, appear on neither page. Check for failed and long-pending deliveries from time to time with the query on [Deliveries](/admin-guide/inbound-forms/deliveries#list-failed-deliveries).
 

@@ -16,13 +16,10 @@ export default defineConfig({
     themeConfig: {
         logo: '/logo.svg',
         nav: [
-            { text: 'Introduction', link: '/introduction/what-is-mailer', activeMatch: '^/introduction/' },
-            { text: 'Installation', link: '/installation/prepare-server', activeMatch: '^/installation/' },
-            { text: 'Configuration', link: '/configuration/environment', activeMatch: '^/configuration/' },
+            { text: 'Installation', link: '/installation/', activeMatch: '^/installation/' },
             { text: 'Admin guide', link: '/admin-guide/overview', activeMatch: '^/admin-guide/' },
             { text: 'Operations', link: '/operations/updating', activeMatch: '^/operations/' },
             { text: 'API', link: '/api/overview', activeMatch: '^/api/' },
-            { text: 'Reference', link: '/reference/cli', activeMatch: '^/reference/' },
         ],
         sidebar,
         outline: [2, 3],

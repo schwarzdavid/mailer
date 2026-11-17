@@ -41,7 +41,7 @@ mailer-backend-1   Up 5 minutes (healthy)
 mailer-backend-2   Up 1 minute (healthy)
 ```
 
-Running instances on several servers needs a Postgres and a Redis that all of them reach ([External Postgres and Redis](/configuration/external-postgres-redis)), a proxy in front of all of them, and SMTP and IMAP access to the one mail server. The production `compose.yml` covers none of this.
+Running instances on several servers needs a Postgres and a Redis that all of them reach ([Advanced configuration](/installation/advanced-configuration#database-tls)), a proxy in front of all of them, and SMTP and IMAP access to the one mail server. The production `compose.yml` covers none of this.
 
 ## Background jobs run on one instance
 
@@ -89,4 +89,4 @@ plus the connections of your own tools. The bundled Postgres allows 100 connecti
 (set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SHOW max_connections;')
 ```
 
-Managed databases often allow fewer; see [Size the connection pool](/configuration/external-postgres-redis#size-the-connection-pool). To change `DB_POOL_MAX`, set it in `.env` and recreate the backend with `docker compose up -d --scale backend=2`.
+Managed databases often allow fewer; see [Size the connection pool](/installation/advanced-configuration#database-tls). To change `DB_POOL_MAX`, set it in `.env` and recreate the backend with `docker compose up -d --scale backend=2`.

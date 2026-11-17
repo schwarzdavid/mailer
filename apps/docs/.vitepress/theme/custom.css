@@ -814,3 +814,52 @@ html .VPSidebar .VPSidebarItem.level-0 {
     line-height: 22px;
     font-weight: 400;
 }
+
+.VPFeatures .item .VPFeature .box .icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--mailer-primary-container);
+    color: var(--mailer-on-primary-container);
+}
+
+.VPFeatures .item .VPFeature .box .icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.VPHome .vp-doc h2 {
+    margin-top: 56px;
+    border-top: none;
+}
+
+.mailer-steps ol {
+    counter-reset: mailer-step;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    padding: 0;
+    list-style: none;
+}
+
+.mailer-steps ol li {
+    counter-increment: mailer-step;
+    margin: 0;
+    padding: 20px 24px 24px;
+    border: 1px solid var(--mailer-border);
+    border-radius: 10px;
+    background: var(--mailer-surface);
+}
+
+.mailer-steps ol li::before {
+    content: counter(mailer-step);
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 12px;
+    border-radius: 50%;
+    background: var(--mailer-primary);
+    color: var(--mailer-on-primary);
+    font-weight: 600;
+}

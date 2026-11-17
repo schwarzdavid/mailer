@@ -1,15 +1,10 @@
-# Environment variables
+# Advanced configuration
 
-This page lists every setting mailer reads from its environment: what it does, whether you must set it, its default, and whether the production compose file already fixes it for you. After reading it you can fill in `.env` without looking anything up elsewhere.
+This page lists every setting mailer reads from its environment, with its default and whether the production `compose.yml` already fixes it. The [installation](/installation/) needs only the keys in the `.env` template; everything here is for when you want to change a default.
 
 ## Where the settings live
 
-All settings are plain `KEY=value` lines in one file named `.env`.
-
-- **Production (Docker Compose):** `.env` sits next to `compose.yml`, for example in `/opt/mailer/.env`. You create it by copying `deploy/.env.example`. Compose reads it for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on.
-- **Local development:** `.env` sits in the repository root. You create it by copying `.env.example`, whose values already match the Docker services that the root `compose.yml` starts.
-
-Both templates hold only the required variables and the values that differ from the backend's defaults. Every other variable on this page can be added to `.env` when you need it.
+All settings are plain `KEY=value` lines in `/opt/mailer/.env`, next to `compose.yml`. Compose reads the file for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on. After a change, run `docker compose up -d` to apply it.
 
 Every table has the same columns.
 
@@ -165,7 +160,7 @@ When it is unset, empty or `false`, the backend ignores `X-Forwarded-For`.
 Do not set `TRUST_PROXY=true` unless the backend can only be reached through the proxy. It then trusts the left-most address in `X-Forwarded-For`, which any visitor can forge to get around the rate limits.
 :::
 
-With Docker Compose, `TRUST_PROXY` is fixed to `1` in `compose.yml`, because Caddy is the single proxy hop, and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, change the value in `compose.yml` to match the number of proxies, and also list the CDN's address ranges as `trusted_proxies` in the Caddyfile, because Caddy otherwise replaces the incoming `X-Forwarded-For`. [Reverse proxy](/configuration/reverse-proxy#put-a-cdn-or-another-proxy-in-front-of-caddy) shows both edits.
+With Docker Compose, `TRUST_PROXY` is fixed to `1` in `compose.yml`, because Caddy is the single proxy hop, and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, change the value in `compose.yml` to match the number of proxies, and also list the CDN's address ranges as `trusted_proxies` in the Caddyfile, because Caddy otherwise replaces the incoming `X-Forwarded-For`.
 
 Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, login and first-user setup answer `503`, so that nobody can guess passwords while the limit is down. Every other rate-limited route is let through without a limit, and the backend logs a warning. The exception is forms with the timed token, which refuse submissions with `403 Form token could not be verified` until Redis is back.
 

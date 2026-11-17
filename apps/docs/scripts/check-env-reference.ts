@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { composeVariables, documentedVariables, findDrift, runtimeVariables } from './env-reference.ts'
 
 const schemaKeysPath = resolve(import.meta.dirname, '..', '..', 'backend', 'env-keys.json')
-const pagePath = resolve(import.meta.dirname, '..', 'configuration', 'environment.md')
+const pagePath = resolve(import.meta.dirname, '..', 'installation', 'advanced-configuration.md')
 
 if (!existsSync(schemaKeysPath)) {
     console.error('Run "pnpm build --filter docs" first')
@@ -15,7 +15,7 @@ const expected = [...schemaKeys, ...composeVariables, ...runtimeVariables]
 const drift = findDrift(documentedVariables(readFileSync(pagePath, 'utf8')), expected)
 
 if (drift.missing.length > 0) {
-    console.error(`Missing from configuration/environment.md: ${drift.missing.join(', ')}`)
+    console.error(`Missing from installation/advanced-configuration.md: ${drift.missing.join(', ')}`)
 }
 if (drift.stale.length > 0) {
     console.error(`No longer exist: ${drift.stale.join(', ')}`)
@@ -24,5 +24,5 @@ if (drift.stale.length > 0) {
 if (drift.missing.length > 0 || drift.stale.length > 0) {
     process.exitCode = 1
 } else {
-    console.log(`environment.md covers all ${new Set(expected).size} variables`)
+    console.log(`advanced-configuration.md covers all ${new Set(expected).size} variables`)
 }
