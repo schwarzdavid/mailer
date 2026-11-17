@@ -51,6 +51,15 @@ describe('requestJson', () => {
         expect(new Headers(init?.headers).has('Content-Type')).toBe(false)
     })
 
+    it('calls the given fetch without binding it to the options object', async () => {
+        const { fetchMock, options } = setup()
+        respond(fetchMock, 200, '{}')
+
+        await requestJson(options, '/x', { method: 'POST' })
+
+        expect(fetchMock.mock.contexts[0]).toBeUndefined()
+    })
+
     it('appends the query string', async () => {
         const { fetchMock, options } = setup()
         respond(fetchMock, 200, '{}')

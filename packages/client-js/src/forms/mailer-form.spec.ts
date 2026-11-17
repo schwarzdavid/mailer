@@ -213,13 +213,13 @@ describe('MailerForm', () => {
         expect(sentBody(1).security).toEqual({ formToken: 't2' })
     })
 
-    it('drops the token after 403', async () => {
+    it.each([403, 500, 503])('drops the token after %i', async (status) => {
         const form = createForm()
-        submitResponses.push(jsonResponse(403, {}))
+        submitResponses.push(jsonResponse(status, {}))
 
         form.prepare()
         await vi.advanceTimersByTimeAsync(1000)
-        await expect(form.submit({ data: {} })).rejects.toMatchObject({ status: 403 })
+        await expect(form.submit({ data: {} })).rejects.toMatchObject({ status })
         const second = form.submit({ data: {} })
         await vi.advanceTimersByTimeAsync(1000)
         await second
@@ -228,13 +228,38 @@ describe('MailerForm', () => {
         expect(sentBody(1).security).toEqual({ formToken: 't2' })
     })
 
-    it('keeps the token after 400', async () => {
+    it('drops the token when the submit request fails without a response', async () => {
         const form = createForm()
-        submitResponses.push(jsonResponse(400, {}))
+        let failNextSubmit = true
+        fetchMock.mockImplementation((input) => {
+            if (input === tokenUrl) {
+                return Promise.resolve(tokenResponse(tokens.shift() ?? 'tx', waitMs))
+            }
+            if (failNextSubmit) {
+                failNextSubmit = false
+                return Promise.reject(new TypeError('Failed to fetch'))
+            }
+            return Promise.resolve(acceptedResponse())
+        })
 
         form.prepare()
         await vi.advanceTimersByTimeAsync(1000)
-        await expect(form.submit({ data: {} })).rejects.toMatchObject({ status: 400 })
+        await expect(form.submit({ data: {} })).rejects.toMatchObject({ status: 0 })
+        const second = form.submit({ data: {} })
+        await vi.advanceTimersByTimeAsync(1000)
+        await second
+
+        expect(tokenCalls()).toBe(2)
+        expect(sentBody(1).security).toEqual({ formToken: 't2' })
+    })
+
+    it.each([400, 404, 413, 429])('keeps the token after %i', async (status) => {
+        const form = createForm()
+        submitResponses.push(jsonResponse(status, {}))
+
+        form.prepare()
+        await vi.advanceTimersByTimeAsync(1000)
+        await expect(form.submit({ data: {} })).rejects.toMatchObject({ status })
         await form.submit({ data: {} })
 
         expect(tokenCalls()).toBe(1)

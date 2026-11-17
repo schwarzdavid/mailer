@@ -162,7 +162,7 @@ Without a bundler, load `client.js` instead of the package. The script provides 
 ```
 
 - `timedToken` carries the key and the location of the form's timed token check. Leave it out for a form without that check.
-- A token works once. `MailerForm` drops it after every answer except `400`, which leaves the token unused, so the visitor can correct a field and send again without a new one. It also asks for a new token when the old one has expired.
+- A token works once. `MailerForm` keeps it after `400`, `404`, `413` and `429`, which mailer sends before it uses the token, so the visitor can correct a field or wait and send again without a new one. After any other answer, and when no answer arrives, it drops the token. It also asks for a new token when the old one has expired.
 - Load `client.js` with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. The browser may cache it for a day.
 - With reCAPTCHA instead of, or in addition to, the timed token, request Google's token in the submit handler with `await grecaptcha.execute('SITE_KEY', { action: 'submit' })` after loading `https://www.google.com/recaptcha/api.js?render=SITE_KEY`, and add it to `security` under the check's key. The info dialog of the reCAPTCHA check shows the exact lines.
 

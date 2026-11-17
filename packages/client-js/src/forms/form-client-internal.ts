@@ -2,7 +2,7 @@ import type { ClientOptions } from '../core/options.ts'
 import { requestJson, resolveRequestOptions } from '../core/request.ts'
 import type { FormClient, FormSubmission, FormSubmitResult, FormValues, IssuedToken } from './types.ts'
 
-interface TokenResponseBody {
+export interface TokenResponseBody {
     token: string
     notBefore: string
     expiresAt: string

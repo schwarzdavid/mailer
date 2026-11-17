@@ -48,7 +48,7 @@ const result = await form.submit({
 - **`timedToken` switches the token handling on.** Without it, the client never asks for a token, which is right for a form without the timed token check: the token endpoint answers `404` `Unknown form` for such a form.
 - **`prepare()` is optional but recommended.** It starts requesting the token in the background and never throws. Call it when the visitor first touches the form, so the token's minimum delay (3 seconds by default) has passed by the time they click send. Without `prepare()`, `submit` requests the token itself and waits out the delay, so sending takes that long.
 - **The client never requests a token on its own.** Token requests are limited to 5 per 10 minutes per form and visitor IP address, see [Limits](./overview#limits); a client that asked for one on every page load would hit `429` after five pages.
-- **A token works once.** The client drops it after every answer except `400`, which leaves it unused, so the visitor can correct a field and send again. It also asks for a new one when the cached token has expired, so a form that stayed open for hours still works.
+- **A token works once.** The client keeps it after `400`, `404`, `413` and `429`, which mailer sends before it uses the token, so the visitor can correct a field or wait and send again with the same token. After any other answer, and when no answer arrives, it drops the token and fetches a new one. It also asks for a new one when the cached token has expired, so a form that stayed open for hours still works.
 
 `MailerForm` takes optional type arguments for `data` and `security`, so you can type your own form. The client does not validate them.
 

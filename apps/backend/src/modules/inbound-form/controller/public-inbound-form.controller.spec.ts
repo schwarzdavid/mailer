@@ -15,16 +15,18 @@ describe('PublicInboundFormController', () => {
     let controller: PublicInboundFormController
     let submitForm: Mock<InboundFormSubmissionService['submitForm']>
     let issueToken: Mock<InboundFormSubmissionService['issueToken']>
+    let clientScript: { source: InboundFormClientScript['source'] }
 
     beforeEach(async () => {
         submitForm = vi.fn<typeof submitForm>().mockResolvedValue(undefined)
         issueToken = vi.fn<typeof issueToken>()
+        clientScript = { source: 'script' }
 
         module = await Test.createTestingModule({
             controllers: [PublicInboundFormController],
             providers: [
                 { provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } },
-                { provide: InboundFormClientScript, useValue: { source: 'script' } },
+                { provide: InboundFormClientScript, useValue: clientScript },
             ],
         })
             .overrideGuard(AppThrottlerGuard)
@@ -95,8 +97,19 @@ describe('PublicInboundFormController', () => {
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')
+            expect(response.headers['cross-origin-resource-policy']).toBe('cross-origin')
             expect(response.text).toBe('script')
             expect(submitForm).not.toHaveBeenCalled()
+        })
+
+        it('answers 404 without caching headers while the client script is not built', async () => {
+            clientScript.source = undefined
+
+            const response = await request(app.getHttpServer()).get('/v1/forms/client.js').expect(404)
+
+            expect(response.headers['content-type']).toMatch(/^application\/json/)
+            expect(response.headers['cache-control']).toBeUndefined()
+            expect(response.headers['cross-origin-resource-policy']).toBeUndefined()
         })
     })
 })

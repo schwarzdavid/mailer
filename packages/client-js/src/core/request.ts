@@ -82,10 +82,11 @@ export async function requestJson<T>(options: ResolvedRequestOptions, path: stri
             : { ...withoutContentType(init.headers), 'Content-Type': 'application/json' }
 
     const { signal, clear } = timeoutSignal(options.timeoutMs)
+    const send = options.fetch
     try {
         let response: Response
         try {
-            response = await options.fetch(`${options.apiBase}${path}${search}`, {
+            response = await send(`${options.apiBase}${path}${search}`, {
                 method: init.method,
                 headers,
                 body: init.body === undefined ? undefined : JSON.stringify(init.body),

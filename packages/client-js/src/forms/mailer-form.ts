@@ -15,6 +15,8 @@ interface CachedToken {
 
 const EXPIRY_MARGIN_MS = 5000
 
+const REJECTED_BEFORE_CONSUMING_TOKEN = new Set([400, 404, 413, 429])
+
 function isExpired(issued: IssuedToken): boolean {
     const lifetimeMs = issued.expiresAt.getTime() - issued.notBefore.getTime()
     return Date.now() > issued.receivedAt + issued.waitMs + lifetimeMs - EXPIRY_MARGIN_MS
@@ -50,7 +52,7 @@ export class MailerForm<TData extends FormValues = FormValues, TSecurity extends
         try {
             return await this.#client.submit(this.formKey, placeToken(submission, placement, token))
         } catch (error) {
-            if (error instanceof MailerError && error.status === 400 && !this.#cached) {
+            if (error instanceof MailerError && REJECTED_BEFORE_CONSUMING_TOKEN.has(error.status) && !this.#cached) {
                 this.#cached = cached
             }
             throw error
