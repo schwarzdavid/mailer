@@ -39,7 +39,7 @@
     const send = 'await form.submit({ data })'
     const withoutBundler = computed(
         () =>
-            `${scriptTag(formClientScriptUrl())}\n${inlineScript(scriptTagConstruction(props.form.formKey, props.scheme))}`,
+            `${scriptTag(formClientScriptUrl())}\n${inlineScript(scriptTagConstruction(formBaseUrl(), props.form.formKey, props.scheme))}`,
     )
 </script>
 

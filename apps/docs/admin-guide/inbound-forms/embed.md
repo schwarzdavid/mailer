@@ -123,12 +123,13 @@ formElement.addEventListener('submit', async (event) => {
 })
 ```
 
-Without a bundler, load `client.js` instead of the package. The script provides `InboundForm.MailerForm`, which finds mailer's address through the script's own URL:
+Without a bundler, load `client.js` instead of the package. The script provides the package's exports on the global `MailerClient`, so the code stays the same apart from the prefix:
 
 ```html
 <script src="https://app.example.com/api/v1/forms/client.js"></script>
 <script>
-    const form = new InboundForm.MailerForm({
+    const form = new MailerClient.MailerForm({
+        baseUrl: 'https://app.example.com',
         formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
         timedToken: { key: 'formToken', location: 'body' },
     })
@@ -152,10 +153,9 @@ Without a bundler, load `client.js` instead of the package. The script provides 
             status.textContent = 'Thank you, your message was sent.'
             formElement.reset()
         } catch (error) {
+            const failedStatus = error instanceof MailerClient.MailerError ? error.status : 0
             status.textContent =
-                (error.status ?? 0) === 400
-                    ? 'Please check your input.'
-                    : 'Sending failed. Please try again in a few minutes.'
+                failedStatus === 400 ? 'Please check your input.' : 'Sending failed. Please try again in a few minutes.'
         }
     })
 </script>
@@ -163,7 +163,7 @@ Without a bundler, load `client.js` instead of the package. The script provides 
 
 - `timedToken` carries the key and the location of the form's timed token check. Leave it out for a form without that check.
 - A token works once. `MailerForm` drops it after every answer except `400`, which leaves the token unused, so the visitor can correct a field and send again without a new one. It also asks for a new token when the old one has expired.
-- Load `client.js` with a normal `<script src="…">` tag, not `type="module"`: it finds mailer's address through its own URL. The browser may cache it for a day.
+- Load `client.js` with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. The browser may cache it for a day.
 - With reCAPTCHA instead of, or in addition to, the timed token, request Google's token in the submit handler with `await grecaptcha.execute('SITE_KEY', { action: 'submit' })` after loading `https://www.google.com/recaptcha/api.js?render=SITE_KEY`, and add it to `security` under the check's key. The info dialog of the reCAPTCHA check shows the exact lines.
 
 ## Example 3: a complete static page
@@ -233,7 +233,8 @@ A whole page, for example `contact.html` on a static site without a bundler. It 
 
         <script src="https://app.example.com/api/v1/forms/client.js"></script>
         <script>
-            const form = new InboundForm.MailerForm({
+            const form = new MailerClient.MailerForm({
+                baseUrl: 'https://app.example.com',
                 formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
                 timedToken: { key: 'formToken', location: 'body' },
             })
@@ -281,7 +282,8 @@ A whole page, for example `contact.html` on a static site without a bundler. It 
                     show('Thank you, your message was sent.', 'ok')
                     formElement.reset()
                 } catch (error) {
-                    show(describeFailure(error.status ?? 0, error.messages ?? []), 'error')
+                    const failure = error instanceof MailerClient.MailerError ? error : { status: 0, messages: [] }
+                    show(describeFailure(failure.status, failure.messages), 'error')
                 } finally {
                     button.disabled = false
                 }

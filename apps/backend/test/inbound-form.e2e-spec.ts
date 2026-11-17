@@ -445,15 +445,14 @@ describe('InboundForm (e2e)', () => {
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')
-            expect(response.text).toContain('InboundForm')
+            expect(response.text).toContain('MailerClient')
         })
 
-        it('the served client script fetches a token and submits', async () => {
+        it('the served client script submits through its global MailerForm', async () => {
             const script = (await http().get('/api/v1/forms/client.js').buffer(true).expect(200)).text
             const window: Record<string, unknown> = {}
             Object.assign(window, {
                 window,
-                document: { currentScript: { src: `${baseUrl}/api/v1/forms/client.js` } },
                 fetch: originFetch,
                 setTimeout,
                 clearTimeout,
@@ -464,16 +463,14 @@ describe('InboundForm (e2e)', () => {
                 Response,
             })
             runInNewContext(script, window)
-            const inboundForm = window.InboundForm as {
-                getToken(key: string): Promise<string>
-                submit(key: string, body: Record<string, unknown>): Promise<unknown>
-            }
+            const mailerClient = window.MailerClient as { MailerForm: typeof MailerForm }
+            const form = new mailerClient.MailerForm({
+                baseUrl,
+                formKey: timedFormKey,
+                timedToken: { key: 'formToken', location: 'body' },
+            })
 
-            const formToken = await inboundForm.getToken(timedFormKey)
-            const result = await inboundForm.submit(timedFormKey, { data: validData, security: { formToken } })
-
-            expect(typeof formToken).toBe('string')
-            expect(result).toEqual({ status: 'accepted' })
+            await expect(form.submit({ data: validData })).resolves.toEqual({ status: 'accepted' })
         })
 
         it('MailerForm fetches the token and submits', async () => {

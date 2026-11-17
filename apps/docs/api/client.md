@@ -129,26 +129,20 @@ The statuses and codes are explained on [Errors](./errors). Branch on `status` a
 
 ## Script tag
 
-A website without a bundler loads the script that mailer itself serves. The script derives the address from its own URL, so no `baseUrl` is needed:
+A website without a bundler loads the script that mailer itself serves. It is the same package built as one file, and it defines the global `MailerClient` with exactly the package's exports: `MailerForm`, `createFormClient`, `MailerSender` and `MailerError`. Everything on this page applies unchanged, with the `MailerClient.` prefix instead of an `import`:
 
 ```html
 <script src="https://app.example.com/api/v1/forms/client.js"></script>
+<script>
+    const form = new MailerClient.MailerForm({
+        baseUrl: 'https://app.example.com',
+        formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
+        timedToken: { key: 'formToken', location: 'body' },
+    })
+</script>
 ```
 
-It defines the global `InboundForm`:
-
-- `InboundForm.getToken(formKey)` requests a timed token and resolves with it after the minimum delay, as before.
-- `InboundForm.submit(formKey, submission)` is the low-level `submit`.
-- `InboundForm.MailerForm` is `MailerForm` with `baseUrl` preset:
-
-```js
-const form = new InboundForm.MailerForm({
-    formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
-    timedToken: { key: 'formToken', location: 'body' },
-})
-```
-
-Load it with a normal `<script src="…">` tag, not `type="module"`. Rejections carry a numeric `status` and a `messages` list; read those, because the script exposes no `MailerError` class to test with `instanceof`. The script has no send client.
+Load it with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. `MailerSender` is in the script too, but its browser guard applies there as well: an API key belongs on a server.
 
 ## Versions
 

@@ -84,11 +84,11 @@ describe('formConstruction', () => {
 })
 
 describe('scriptTagConstruction', () => {
-    it('builds the form from the global without a base url', () => {
-        expect(scriptTagConstruction(formKey, { key: 'formToken', location: 'body' })).toBe(
-            `const form = new InboundForm.MailerForm({\n    formKey: '${formKey}',\n    timedToken: { key: 'formToken', location: 'body' },\n})`,
+    it('builds the form from the global MailerClient with the base url', () => {
+        expect(scriptTagConstruction(baseUrl, formKey, { key: 'formToken', location: 'body' })).toBe(
+            `const form = new MailerClient.MailerForm({\n    baseUrl: '${baseUrl}',\n    formKey: '${formKey}',\n    timedToken: { key: 'formToken', location: 'body' },\n})`,
         )
-        expect(scriptTagConstruction(formKey)).not.toContain('timedToken')
+        expect(scriptTagConstruction(baseUrl, formKey)).not.toContain('timedToken')
     })
 })
 

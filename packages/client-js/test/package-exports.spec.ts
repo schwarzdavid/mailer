@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
+import * as entry from '../src/index.ts'
 
 interface PackageJson {
     license: string
@@ -53,7 +54,7 @@ describe('package shape', () => {
         expect(script).not.toMatch(/\bimport\s*\(|\bexport\s*\{/)
     })
 
-    it('installs window.InboundForm when the script bundle runs', async () => {
+    it('exposes the package exports as the global MailerClient', async () => {
         const script = readFileSync(join(packageRoot, 'dist', 'client.iife.js'), 'utf8')
         const fetchStub = vi.fn<typeof fetch>(() =>
             Promise.resolve(
@@ -69,7 +70,6 @@ describe('package shape', () => {
             ),
         )
         const context: Record<string, unknown> = {
-            document: { currentScript: { src: 'https://api.example.com/api/v1/forms/client.js?v=1' } },
             fetch: fetchStub,
             setTimeout,
             clearTimeout,
@@ -82,9 +82,10 @@ describe('package shape', () => {
 
         runInNewContext(script, context)
 
-        const inboundForm = context.InboundForm as { getToken(formKey: string): Promise<string> }
-        expect(typeof inboundForm.getToken).toBe('function')
-        await expect(inboundForm.getToken('kontakt')).resolves.toBe('stubbed')
+        const mailerClient = context.MailerClient as typeof entry
+        expect(Object.keys(mailerClient).sort()).toEqual(Object.keys(entry).sort())
+        const client = mailerClient.createFormClient({ baseUrl: 'https://api.example.com' })
+        await expect(client.getToken('kontakt')).resolves.toBe('stubbed')
         expect(fetchStub.mock.calls[0]?.[0]).toBe('https://api.example.com/api/v1/forms/kontakt/token')
     })
 

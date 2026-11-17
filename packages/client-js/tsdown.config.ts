@@ -10,8 +10,9 @@ export default defineConfig([
         clean: true,
     },
     {
-        entry: { 'client.iife': 'src/script/client-script.ts' },
+        entry: { 'client.iife': 'src/index.ts' },
         format: 'iife',
+        globalName: 'MailerClient',
         platform: 'browser',
         target: 'es2022',
         minify: true,

@@ -41,8 +41,9 @@ browsers and in Node alike.
 
 - An API key reaching a browser bundle or a URL by accident. The send client never uses the
   `?key=` fallback and refuses to run where a DOM is present unless the caller opts in explicitly.
-- Existing embeds breaking: the `client.js` URL, its script-tag behaviour and
-  `InboundForm.getToken` stay as they are.
+- Existing embeds breaking: the `client.js` URL stays. (Its global `InboundForm` was first kept
+  for compatibility; on 2026-11-17 the owner replaced it with `MailerClient`, because there are no
+  users of the old global yet.)
 - A client that compiles against a backend contract that no longer exists.
 
 ## Approaches
@@ -233,12 +234,11 @@ and `client-js#test` depend on `api#build`, as explicit entries in `turbo.json`.
 
 - `apps/backend/src/modules/inbound-form/client/inbound-form-client.ts` (the `toString()`-serialised
   installer) is removed. Its behaviour moves into `client-js`.
-- `client-js` builds an IIFE bundle that derives the base URL from `document.currentScript.src`
-  (stripping `/api/v1/forms/client.js` and any query or hash) and assigns
-  `window.InboundForm = { ...createFormClient({ baseUrl }), MailerForm }`, with `MailerForm`
-  defaulting its `baseUrl` to the derived one. `InboundForm.getToken` keeps its behaviour; `submit`
-  and `new InboundForm.MailerForm({ formKey, timedToken })` become available to script-tag users
-  as well.
+- `client-js` builds its single entry a second time as an IIFE bundle with the global name
+  `MailerClient`, so script-tag users get exactly the package's exports
+  (`new MailerClient.MailerForm({ baseUrl, formKey, timedToken })`, `MailerClient.MailerError`, …)
+  and pass `baseUrl` like npm users. There is no script-specific installer and no base URL derived
+  from the script URL.
 - The backend gets `client-js` as a regular dependency (so `pnpm --filter backend deploy --prod`
   ships it into the image), resolves `@schwarzdavid/mailer-client/client.iife.js` once at startup, and serves it
   from the existing route with the existing headers (`Cache-Control: public, max-age=86400`,
@@ -276,8 +276,8 @@ alternative for sites without a bundler. Copy goes into `en.json` under the exis
   `MailerForm`'s lazy fetch, token placement per location and reuse rule (including expiry), error normalisation for every status
   in the docs' tables, non-JSON bodies, timeouts, `MailerSender`'s DOM guard, its `dangerouslyAllowBrowser` override and Bearer header.
   The existing `inbound-form-client.spec.ts` cases move here.
-- The IIFE bundle gets a test that loads it in a jsdom-like context with a `currentScript` and
-  checks `window.InboundForm.getToken` against a stub `fetch`.
+- The IIFE bundle gets a test that runs it in a VM context, checks that `MailerClient` has exactly
+  the entry's exports and fetches a token through it against a stub `fetch`.
 - Backend e2e (`inbound-form.e2e-spec.ts`, `public-send` tests): the existing `client.js` route
   tests stay; add one test per feature (forms, send) that runs the real `client-js` against the e2e app
   (token → submit → `202`; send → `202` and a `MailerError` with `code` for a refused From domain).
@@ -289,7 +289,7 @@ alternative for sites without a bundler. Copy goes into `en.json` under the exis
 `CLAUDE.md` requires the operator docs to change with a public endpoint's behaviour:
 
 - `apps/docs/admin-guide/inbound-forms/embed.md`: example 2 uses `MailerForm` from the npm package; the script-tag
-  variant stays, shortened through `InboundForm.MailerForm`; example 3 keeps its full page but
+  variant stays, shortened through `MailerClient.MailerForm`; example 3 keeps its full page but
   uses `MailerForm`.
 - `apps/docs/admin-guide/inbound-forms/security.md` (timed token section): mention the package
   next to `client.js`.

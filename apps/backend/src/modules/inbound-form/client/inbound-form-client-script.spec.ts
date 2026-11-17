@@ -3,7 +3,7 @@ import { InboundFormClientScript, loadInboundFormClientScript } from './inbound-
 
 describe('loadInboundFormClientScript', () => {
     it('returns the bundled script', () => {
-        expect(loadInboundFormClientScript()).toContain('InboundForm')
+        expect(loadInboundFormClientScript()).toContain('MailerClient')
     })
 
     it('propagates a resolve failure', () => {

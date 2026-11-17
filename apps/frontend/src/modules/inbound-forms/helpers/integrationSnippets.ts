@@ -26,14 +26,17 @@ function constructionOptions(options: string[], timedToken?: TimedTokenScheme): 
     return lines.map((line) => `    ${line},`).join('\n')
 }
 
-export function formConstruction(baseUrl: string, formKey: string, timedToken?: TimedTokenScheme): string {
+function construction(className: string, baseUrl: string, formKey: string, timedToken?: TimedTokenScheme): string {
     const options = constructionOptions([`baseUrl: '${baseUrl}'`, `formKey: '${formKey}'`], timedToken)
-    return `const form = new MailerForm({\n${options}\n})`
+    return `const form = new ${className}({\n${options}\n})`
 }
 
-export function scriptTagConstruction(formKey: string, timedToken?: TimedTokenScheme): string {
-    const options = constructionOptions([`formKey: '${formKey}'`], timedToken)
-    return `const form = new InboundForm.MailerForm({\n${options}\n})`
+export function formConstruction(baseUrl: string, formKey: string, timedToken?: TimedTokenScheme): string {
+    return construction('MailerForm', baseUrl, formKey, timedToken)
+}
+
+export function scriptTagConstruction(baseUrl: string, formKey: string, timedToken?: TimedTokenScheme): string {
+    return construction('MailerClient.MailerForm', baseUrl, formKey, timedToken)
 }
 
 export function exampleRequest(
