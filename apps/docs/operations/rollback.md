@@ -62,7 +62,7 @@ Everything the newer version stored in tables or columns that its migrations cre
     docker compose run --rm backend node dist/migrate.js down --to 021-example
     ```
 
-    The command prints a `reverting` and a `reverted` line for each migration. If one of them fails, the whole run is rolled back and the database stays as it was; the error names the migration. The [CLI](/reference/cli#migrations) page in the Reference section lists every command of the migration tool.
+    The command prints a `reverting` and a `reverted` line for each migration. If one of them fails, the whole run is rolled back and the database stays as it was; the error names the migration.
 
 4. Check that the list matches the one from before the update again. `diff` prints nothing:
 
@@ -122,4 +122,4 @@ docker image prune -f
     docker compose logs backend | grep 'Migration '
     ```
 
-- `https://app.example.com/api/health/ready` answers `"status":"ok"`, and the checks on [Verify the installation](/installation/verify) pass.
+- `https://app.example.com/api/health/ready` answers `"status":"ok"`, and a test mail through the [send API](/admin-guide/send-api#send-a-mail) arrives.

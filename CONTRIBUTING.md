@@ -1,6 +1,6 @@
 # Contributing
 
-This file covers working on the code: the local setup, the commands that keep the build green, and the CI and release pipeline. Installation, configuration and operations live on the documentation site at https://schwarzdavid.github.io/mailer/, and [`CLAUDE.md`](CLAUDE.md) describes the repository layout, the architecture and the testing conventions. How to build the documentation site and regenerate its screenshots is on its [Development](https://schwarzdavid.github.io/mailer/reference/development) page.
+This file covers working on the code: the local setup, the commands that keep the build green, and the CI and release pipeline. Installation, configuration and operations live on the documentation site at https://schwarzdavid.github.io/mailer/, and [`CLAUDE.md`](CLAUDE.md) describes the repository layout, the architecture and the testing conventions. How to build the documentation site and regenerate its screenshots is under [Documentation site](#documentation-site).
 
 ## Local setup
 
@@ -26,7 +26,7 @@ cp .env.example .env
 
 Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values of at least 32 characters. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
 
-Every other variable, with its default, is described in the [environment reference](https://schwarzdavid.github.io/mailer/configuration/environment). Besides the required keys, the template points `SMTP_*` at MailHog and `IMAP_*` at GreenMail and departs from the defaults only where the local services need it: MailHog has no STARTTLS (`SMTP_REQUIRE_TLS=false`), GreenMail serves IMAP without TLS (`IMAP_SECURE=false`), the local domains never resolve (`SEND_REQUIRE_VALID_DNS=false`), and the backend logs at `debug`.
+Every other variable, with its default, is described in the [environment reference](https://schwarzdavid.github.io/mailer/installation/advanced-configuration). Besides the required keys, the template points `SMTP_*` at MailHog and `IMAP_*` at GreenMail and departs from the defaults only where the local services need it: MailHog has no STARTTLS (`SMTP_REQUIRE_TLS=false`), GreenMail serves IMAP without TLS (`IMAP_SECURE=false`), the local domains never resolve (`SEND_REQUIRE_VALID_DNS=false`), and the backend logs at `debug`.
 
 ### 3. Start the infrastructure
 
@@ -87,6 +87,27 @@ pnpm --filter backend test:e2e    # backend e2e tests (needs Docker, uses Testco
 pnpm --filter frontend test:e2e   # full-stack Playwright tests (needs Docker; once: pnpm --filter frontend exec playwright install chromium)
 pnpm check                        # lint + typecheck + test + format check
 ```
+
+## Documentation site
+
+The operator docs are the VitePress workspace `apps/docs`. Build them once; Turbo first builds the backend and generates the OpenAPI document and the list of environment variables the site reads:
+
+```bash
+pnpm build --filter docs   # output in apps/docs/.vitepress/dist
+pnpm dev --filter docs     # http://localhost:5180/mailer/
+pnpm --filter docs test
+```
+
+The build fails when `installation/advanced-configuration.md` misses a variable the backend or `compose.yml` reads or lists one that no longer exists, and when a page links to a page that does not exist. The installation page embeds `deploy/compose.yml`, `deploy/.env.example` and `deploy/setup.sh` at build time, so it always shows the files of the commit it was built from. The tests check that every page is in the sidebar exactly once and starts with a heading, that every referenced screenshot exists, and that the API reference has exactly one page per public tag (`public-send`, `public-form`).
+
+The screenshots under `apps/docs/public/screenshots/` are taken from a real backend and admin UI with demo data. With Docker running, install the browser once and take them all:
+
+```bash
+pnpm --filter docs exec playwright install chromium
+pnpm --filter docs screenshots
+```
+
+The run starts throwaway Postgres, Redis, MailHog and GreenMail containers, walks through the setup wizard, seeds the demo project **Acme Website** with the domain `mail.example.net` and overwrites the PNG files. Its build and server logs are in `apps/frontend/node_modules/.tmp/e2e/`.
 
 ## CI and release pipeline
 

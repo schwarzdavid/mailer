@@ -18,7 +18,7 @@ Three things cannot be recreated if the server is lost:
 
 Keep `compose.yml` as well, or note the release tag it came from, so you can download the same file again.
 
-`compose.yml` has eight volumes; the [Compose stack](/reference/compose-stack) page in the Reference section describes them together with every service. Docker names each volume `mailer_` plus its name in the file, for example `mailer_postgres-data`:
+`compose.yml` has eight volumes. Docker names each volume `mailer_` plus its name in the file, for example `mailer_postgres-data`:
 
 | Volume          | Holds                                                                                            | Back up  | Why                                                                                                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -60,7 +60,7 @@ CRON
 
 The `%` sign is escaped as `\%` because cron treats a bare `%` as the end of the command. Copy the dumps off the server as well, for example with `scp` or your provider's backup storage: a dump on the same disk does not survive the loss of that server.
 
-With an [external Postgres](/configuration/external-postgres-redis) there is no `postgres` container. Run `pg_dump` from a throwaway `postgres:17-alpine` container instead, the same way that page runs `pg_restore` and `psql`, with your database host in place of `db.example.com`, and use this form in the cron line too:
+With an [external Postgres](/installation/advanced-configuration#database-tls) there is no `postgres` container. Run `pg_dump` from a throwaway `postgres:17-alpine` container instead, with your database host in place of `db.example.com`, and use this form in the cron line too:
 
 ```bash
 (set -a; . ./.env; docker run --rm -i -e PGPASSWORD="$DB_PASSWORD" postgres:17-alpine pg_dump -h db.example.com -p 5432 -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F).dump"
@@ -75,7 +75,7 @@ cat /opt/mailer/.env
 ```
 
 ::: danger A dump without its BACKEND_ENCRYPTION_SECRET is incomplete
-If the server is lost and the `.env` file with it, a database dump alone brings back users, projects and forms, but not the DKIM keys and reCAPTCHA secrets: they cannot be decrypted without the original `BACKEND_ENCRYPTION_SECRET`. Every sender domain then needs a new DKIM key and new DNS records, and every reCAPTCHA check its secret again ([Rotating secrets](/operations/rotating-secrets#backend-encryption-secret) shows what that involves). Keep `.env` together with the dumps.
+If the server is lost and the `.env` file with it, a database dump alone brings back users, projects and forms, but not the DKIM keys and reCAPTCHA secrets: they cannot be decrypted without the original `BACKEND_ENCRYPTION_SECRET`. Every sender domain then needs a new DKIM key and new DNS records, and every reCAPTCHA check its secret again. Keep `.env` together with the dumps.
 :::
 
 If you want the mail server's accounts as well, pack the `mail-config` volume into an archive:
@@ -92,7 +92,7 @@ The procedure sets up a new server from the backups: the same `.env`, the same r
 The backend creates every table itself the first time it starts. If it starts before the restore, the restore collides with those tables and fails. Start only `postgres` until the restore is done. Never restore into the database of a running installation; on the old server, `docker compose down -v` would delete all its volumes, including the database, so never run it there while you still need its data.
 :::
 
-1. **Prepare the server and DNS** as on [Prepare the server](/installation/prepare-server): Docker, the firewall, outbound port 25 and the PTR record for the new IP address. Point the A and AAAA records of `app.example.com` and `mx.example.com` to the new server ([DNS records](/installation/dns)).
+1. **Prepare the server and DNS** as on [Installation](/installation/#before-you-start): Docker, outbound port 25, and the A and AAAA records of `app.example.com` and `mx.example.com` pointing to the new server. Set the PTR record of the new IP address to `mx.example.com` at your hosting provider.
 
 2. **Download the same release** that wrote the dump, with the tag from your notes. Take only `compose.yml` and `setup.sh` this time, because you bring your own `.env`:
 
@@ -133,7 +133,11 @@ The backend creates every table itself the first time it starts. If it starts be
 
     No output means success. `--no-owner` gives every restored object to the database user from `.env`, so the restore also works if the user name changed.
 
-    If the new installation uses an external Postgres instead of the bundled one, restore into that database with the `docker run --rm -it -v "$PWD":/backup postgres:17-alpine pg_restore …` command on [External Postgres and Redis](/configuration/external-postgres-redis#if-mailer-already-runs), before you start the backend.
+    If the new installation uses an external Postgres instead of the bundled one, restore into that database from a throwaway container before you start the backend:
+
+    ```bash
+    (set -a; . ./.env; docker run --rm -i -e PGPASSWORD="$DB_PASSWORD" postgres:17-alpine pg_restore -h db.example.com -p 5432 -U "$DB_USERNAME" -d "$DB_DATABASE" --no-owner) < mailer.dump
+    ```
 
 7. **Restore the mail accounts, if you backed them up.** Skip this step if you did not; step 8 recreates them instead. The archive must go into the volume before `mail` starts for the first time. `docker compose create mail` creates the `mail` container and its volumes without starting it; copy `mail-config.tar.gz` to `/opt/mailer` and unpack it into the volume:
 
@@ -148,7 +152,7 @@ The backend creates every table itself the first time it starts. If it starts be
     sh setup.sh
     ```
 
-    The backend applies no migrations, because the restored database already has them, and logs no setup token, because users exist. `mail` restarts until Caddy has obtained the certificate for `mx.example.com` ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)); the script waits for it. It then creates the bounce mailbox and the `postmaster` alias, or, if you restored the mail accounts in step 7, sets the password from `.env` on the restored mailbox.
+    The backend applies no migrations, because the restored database already has them, and logs no setup token, because users exist. `mail` restarts until Caddy has obtained the certificate for `mx.example.com` ([Start mailer](/installation/#start-mailer)); the script waits for it. It then creates the bounce mailbox and the `postmaster` alias, or, if you restored the mail accounts in step 7, sets the password from `.env` on the restored mailbox.
 
 9. **Update the server addresses** if the new server has a different IP address: in the admin UI, follow [Change the server IP addresses](/admin-guide/settings#change-the-server-ip-addresses). The SPF record of `mx.example.com` lists the addresses, so it must be updated too.
 
@@ -183,5 +187,5 @@ Then follow [Restore on a new server](#restore-on-a-new-server). Form submission
     ```
 
 - You can log in to `https://app.example.com` with your existing account, and **Projects**, **Domains** and **Bounces** show your data.
-- A test mail through the send API from one of your sender domains arrives and passes DKIM ([Verify the installation](/installation/verify#send-a-test-mail)). This proves that the backend can decrypt the DKIM keys, so `BACKEND_ENCRYPTION_SECRET` is the right one. A wrong secret shows up as **Failed** on the project's **Sent mail** page and `502` with `DELIVERY_FAILED` from the send API.
+- A test mail through the send API from one of your sender domains arrives and passes DKIM ([Send API](/admin-guide/send-api#send-a-mail)). This proves that the backend can decrypt the DKIM keys, so `BACKEND_ENCRYPTION_SECRET` is the right one. A wrong secret shows up as **Failed** on the project's **Sent mail** page and `502` with `DELIVERY_FAILED` from the send API.
 - `pg_restore --list` on your latest nightly dump prints its table of contents, so the routine keeps producing usable backups.

@@ -46,30 +46,14 @@ These come from `POST /api/v1/send`.
 
 ## Errors without a `code`
 
-| Status | Meaning                               | Typical cause                                                                                      |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 400    | Validation failed                     | A field is missing, has the wrong type or length, or is not in the schema                          |
-| 401    | Authentication failed                 | `Missing API key`, `Invalid API key`, `Invalid token` or, on login, `Invalid credentials.`         |
-| 413    | Payload too large                     | A JSON body over the limit: about 8 MB on `/api/v1/send`, 100 kB elsewhere                         |
-| 429    | Too many requests                     | A rate limit was hit, see [Limits](./overview#limits). Wait for the window to pass before retrying |
-| 503    | Rate limiting temporarily unavailable | Only on login and first-user registration, when Redis is down. Retry later                         |
-
-Admin endpoints also answer `403` when the user lacks a permission, `404` when a resource does not exist and `409` when it already exists. Each reference page shows the responses of its operations.
+| Status | Meaning               | Typical cause                                                                                      |
+| ------ | --------------------- | -------------------------------------------------------------------------------------------------- |
+| 400    | Validation failed     | A field is missing, has the wrong type or length, or is not in the schema                          |
+| 401    | Authentication failed | `Missing API key` or `Invalid API key`                                                             |
+| 413    | Payload too large     | A JSON body over the limit: about 8 MB on `/api/v1/send`, 100 kB elsewhere                         |
+| 429    | Too many requests     | A rate limit was hit, see [Limits](./overview#limits). Wait for the window to pass before retrying |
 
 ## Which errors to retry
 
-- Retry after a pause: `502`, `503`, `429` and network failures. A `502` means the attempt was recorded but the relay did not accept the mail, so a retry creates another entry on the **Sent mail** page.
+- Retry after a pause: `502`, `429` and network failures. A `502` means the attempt was recorded but the relay did not accept the mail, so a retry creates another entry on the **Sent mail** page.
 - Fix first, then retry: `400`, `401`, `403`, `413`, `422`.
-
-## How you know it worked
-
-Send a request with a wrong key:
-
-```bash
-curl -i -X POST https://app.example.com/api/v1/send \
-  -H "Authorization: Bearer sdm_wrongkey" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-You get `401` with `"message": "Invalid API key"`. With a valid key and a `from` address on a domain that is not assigned to the key's project you get `403` with `"code": "FROM_DOMAIN_NOT_ALLOWED"`.

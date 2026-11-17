@@ -61,7 +61,7 @@ What each record protects:
 
 - **SPF** (Sender Policy Framework) lists the servers allowed to send mail for the domain. `include:mx.example.com` points to the SPF record of your platform sending domain, which lists your server's IP addresses, so the customer's record stays correct even when your server's addresses change. `~all` asks receivers to treat mail from any other server with suspicion rather than reject it outright.
 - **DKIM** (DomainKeys Identified Mail) publishes the public key that matches the private key mailer signs every mail from this domain with. A receiver uses it to check that the mail really comes from your server and was not changed on the way. The value is generated for this domain only: copy it from the domain's page, never from this page or from another domain.
-- **DMARC** (Domain-based Message Authentication, Reporting and Conformance) tells receivers what to do with mail that claims to come from the domain but fails SPF and DKIM. `p=none` only observes: receivers take no action and, because the record names no report address, send no reports. Tighten it once the domain has sent mail without problems for a while; [Going live](/installation/going-live#tighten-dmarc-step-by-step) explains the steps.
+- **DMARC** (Domain-based Message Authentication, Reporting and Conformance) tells receivers what to do with mail that claims to come from the domain but fails SPF and DKIM. `p=none` only observes: receivers take no action and, because the record names no report address, send no reports. Tighten it once the domain has sent mail without problems for a while; [Deliverability](/operations/deliverability#tighten-dmarc-step-by-step) explains the steps.
 
 ::: warning One SPF record per name
 A name may have only one SPF record. If `mail.example.net` already has one, keep it and add the include to it instead of creating a second record. mailer checks SPF by content: the record is **Valid** when it is the only SPF record at the name and contains the generated `include:` (or `ip4:`/`ip6:`) mechanisms. The qualifier of the closing `all` term (`~all`, `-all`) and any further mechanisms do not matter. This is one more reason to use a dedicated subdomain without an SPF record of its own.
@@ -91,7 +91,7 @@ mailer looks the records up through the DNS resolver of the server it runs on. A
 
 ## Sending needs valid records
 
-mailer sends from a sender domain only when it is **ready to send**: the domain has an active DKIM key and at least one DNS record, and every record shows **Valid**. The rule is set by [`SEND_REQUIRE_VALID_DNS`](/configuration/environment#send-require-valid-dns), which is `true` unless you changed it. Besides this, the backend checks that the `From` address belongs to the domain's registrable domain (`anything@mail.example.net`, `@example.net` or `@news.example.net`, not `@example.org`) and that the domain is assigned to the sending project. The records checked are always those of `mail.example.net`, whichever of these addresses sends.
+mailer sends from a sender domain only when it is **ready to send**: the domain has an active DKIM key and at least one DNS record, and every record shows **Valid**. The rule is set by [`SEND_REQUIRE_VALID_DNS`](/installation/advanced-configuration#send-require-valid-dns), which is `true` unless you changed it. Besides this, the backend checks that the `From` address belongs to the domain's registrable domain (`anything@mail.example.net`, `@example.net` or `@news.example.net`, not `@example.org`) and that the domain is assigned to the sending project. The records checked are always those of `mail.example.net`, whichever of these addresses sends.
 
 What happens while a domain is not ready:
 
@@ -122,7 +122,7 @@ A sender domain covers its whole registrable domain. With the sender domain `mai
 Receivers accept such mail because DMARC compares the DKIM domain with the `From` domain in relaxed mode by default: `mail.example.net` and `example.net` share the registrable domain, so the signature counts as aligned. Two things follow:
 
 - For `contact@example.net`, the DMARC record that applies is `_dmarc.example.net`, the customer's existing one, not the `_dmarc.mail.example.net` that mailer generates. If that record sets `adkim=s` (strict alignment), the signature of `mail.example.net` does not align and the mail fails DMARC. Ask the customer to keep `adkim` unset or at `r`.
-- If `example.net` has no DMARC record, the mail is still signed, but large mailbox providers expect a DMARC record on the `From` domain of bulk mail. Publish at least `v=DMARC1; p=none;` at `_dmarc.example.net`, and before tightening it follow [Going live](/installation/going-live#tighten-dmarc-step-by-step), which applies to `example.net` the same way.
+- If `example.net` has no DMARC record, the mail is still signed, but large mailbox providers expect a DMARC record on the `From` domain of bulk mail. Publish at least `v=DMARC1; p=none;` at `_dmarc.example.net`, and before tightening it follow [Deliverability](/operations/deliverability#tighten-dmarc-step-by-step), which applies to `example.net` the same way.
 
 ## Recipient rejections at send time
 

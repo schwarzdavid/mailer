@@ -6,6 +6,8 @@ interface SpecWithPaths {
     paths: Record<string, Record<string, SpecOperation>>
 }
 
+export const publicTags: readonly string[] = ['public-form', 'public-send']
+
 export function specTags(spec: SpecWithPaths): string[] {
     const tags = Object.values(spec.paths).flatMap((operations) =>
         Object.values(operations).flatMap((operation) => operation.tags ?? []),

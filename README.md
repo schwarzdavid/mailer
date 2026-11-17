@@ -15,7 +15,7 @@ What works so far:
 - **Bounce handling.** Bounces are collected from a dedicated mailbox and from rejections at send time. Recipients that keep bouncing are blocked automatically, and admins can lift blocks in the UI.
 - **Projects, users & roles.** Projects group forms and domains. Global and project roles, including custom ones, control who can do what.
 
-[What is mailer](https://schwarzdavid.github.io/mailer/introduction/what-is-mailer) and [How it works](https://schwarzdavid.github.io/mailer/introduction/how-it-works) explain these in detail.
+The [documentation site](https://schwarzdavid.github.io/mailer/) explains these in detail.
 
 ### Tech stack
 
@@ -30,7 +30,7 @@ A pnpm + Turborepo monorepo:
 
 ## Documentation
 
-Installation, configuration, the admin guide, operations and the API reference live on the documentation site at https://schwarzdavid.github.io/mailer/.
+Installation, the admin guide, operations and the public API live on the documentation site at https://schwarzdavid.github.io/mailer/.
 
 ## Contributing
 

@@ -31,7 +31,7 @@ docker compose logs proxy | grep -i error
 dig +short A mx.example.com @1.1.1.1
 ```
 
-**Fix.** Right after the first start, wait a few minutes: `mail` comes up on its own once the certificate is there ([Why mail restarts at first](/installation/docker-compose#why-mail-restarts-at-first)). If there is no folder for `mx.example.com` after ten minutes, make the A record point to the server's address and open ports 80 and 443 ([Open the firewall](/installation/prepare-server#open-the-firewall)); Caddy retries by itself.
+**Fix.** Right after the first start, wait a few minutes: `mail` comes up on its own once the certificate is there ([Start mailer](/installation/#start-mailer)). If there is no folder for `mx.example.com` after ten minutes, make the A record point to the server's address and open ports 80 and 443 ([Before you start](/installation/#before-you-start)); Caddy retries by itself.
 
 ## Nothing is delivered
 
@@ -61,7 +61,7 @@ dig +short -x 203.0.113.10
 
 The second command must print `mx.example.com.`.
 
-**Fix.** Ask your provider to unblock outbound port 25 ([Make sure outbound port 25 is open](/installation/prepare-server#make-sure-outbound-port-25-is-open)), and set the PTR record in the provider's console ([Set the reverse DNS](/installation/prepare-server#set-the-reverse-dns-ptr-record)). Mail still in the queue is retried by the mail server on its own; to retry at once:
+**Fix.** Ask your provider to unblock outbound port 25 ([Before you start](/installation/#before-you-start)), and set the PTR record in the provider's console ([First-run setup](/installation/first-run-setup#step-2-dns-records)). Mail still in the queue is retried by the mail server on its own; to retry at once:
 
 ```bash
 docker compose exec mail postqueue -f
@@ -81,7 +81,7 @@ docker compose logs --tail 50 backend | grep -E 'Migration |Config validation|Mu
 
 `MigrationError: Migration <name> (up) failed: …` names the failed migration.
 
-**Fix.** A failed migration run is rolled back as a whole, so the database is unchanged. Go back to the previous version or fix forward, as on [If a migration fails](/operations/updating#if-a-migration-fails). If the log names a setting instead, correct it in `.env` (see [Environment variables](/configuration/environment)) and run `docker compose up -d`.
+**Fix.** A failed migration run is rolled back as a whole, so the database is unchanged. Go back to the previous version or fix forward, as on [If a migration fails](/operations/updating#if-a-migration-fails). If the log names a setting instead, correct it in `.env` (see [Advanced configuration](/installation/advanced-configuration)) and run `docker compose up -d`.
 
 ## No setup token in the log
 
@@ -138,7 +138,7 @@ docker compose exec backend node -e "require('node:dns').promises.resolveTxt('_d
 - Several SPF records: the domain shows **Several SPF records were found.** Merge them into one record; a name may have only one.
 - The SPF record lacks the include: the domain shows **Found a different value**. Open it and copy the merged value under **This domain already has an SPF record. Keep it and add the mailer include; this is the merged value:** into your existing record.
 - Several DMARC records: the domain shows **Several DMARC records were found.** Merge them into one record at `_dmarc.mail.example.net`; a name may have only one.
-- A DMARC record without a `p=` tag: add `p=none`, `p=quarantine` or `p=reject`. Any policy is valid ([Going live](/installation/going-live#tighten-dmarc-step-by-step)).
+- A DMARC record without a `p=` tag: add `p=none`, `p=quarantine` or `p=reject`. Any policy is valid ([Deliverability](/operations/deliverability#tighten-dmarc-step-by-step)).
 - The right value: wait for the record's TTL to run out, then click **Check again**.
 
 [Domains](/admin-guide/domains#check-the-records) explains every state.
@@ -155,7 +155,7 @@ docker compose exec backend node -e "require('node:dns').promises.resolveTxt('_d
 (set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", attempts, error FROM inbound_form_delivery WHERE status = 'pending' AND error LIKE '%not valid yet%'")
 ```
 
-**Fix.** Repair the invalid records as described under [DNS records stay invalid](#dns-records-stay-invalid) and click **Check again** on the domain's page; waiting deliveries then go out on their next attempt, and failed ones can be resent ([Resend a failed delivery](/admin-guide/inbound-forms/deliveries#resend-a-failed-delivery)). After a `MAIL_HOSTNAME` change every customer must publish the new SPF include ([Change MAIL_HOSTNAME](/admin-guide/settings#change-mail-hostname)). To send without this rule, set `SEND_REQUIRE_VALID_DNS=false` ([SEND_REQUIRE_VALID_DNS](/configuration/environment#send-require-valid-dns)); receivers are then likely to reject the mail.
+**Fix.** Repair the invalid records as described under [DNS records stay invalid](#dns-records-stay-invalid) and click **Check again** on the domain's page; waiting deliveries then go out on their next attempt, and failed ones can be resent ([Resend a failed delivery](/admin-guide/inbound-forms/deliveries#resend-a-failed-delivery)). After a `MAIL_HOSTNAME` change every customer must publish the new SPF include ([Change MAIL_HOSTNAME](/admin-guide/settings#change-mail-hostname)). To send without this rule, set `SEND_REQUIRE_VALID_DNS=false` ([SEND_REQUIRE_VALID_DNS](/installation/advanced-configuration#send-require-valid-dns)); receivers are then likely to reject the mail.
 
 ## Form deliveries stay `pending`
 
@@ -187,7 +187,7 @@ docker compose logs --tail 50 redis
 docker compose logs --since 1h backend | grep 'Rate limit not enforced'
 ```
 
-**Fix.** Start Redis again with `docker compose up -d redis`. If its log reports a full disk or a failed write of its append-only file, free disk space first ([Disk space](/operations/monitoring#disk-space)). Logins work as soon as Redis answers. [Rate limits](/configuration/rate-limits#when-redis-is-down) has the details.
+**Fix.** Start Redis again with `docker compose up -d redis`. If its log reports a full disk or a failed write of its append-only file, free disk space first ([Disk space](/operations/monitoring#disk-space)). Logins work as soon as Redis answers. [Advanced configuration](/installation/advanced-configuration#trust-proxy) has the details.
 
 ## Readiness answers 503 while the site works
 
@@ -208,7 +208,7 @@ An `smtp` message with the code `EAUTH` means the login was refused. `setup emai
 **Fix.**
 
 - `mail` not `healthy`: see [`mail` keeps restarting](#mail-keeps-restarting).
-- The mailbox is missing: run `sh setup.sh`, which creates it ([Docker Compose](/installation/docker-compose#start-the-stack-and-create-the-bounce-mailbox)).
+- The mailbox is missing: run `sh setup.sh`, which creates it ([Installation](/installation/#start-mailer)).
 - `EAUTH` with an existing mailbox: run `sh setup.sh`, which sets the password from `.env` on the account again.
 - `redis` down: see [Login answers 503](#login-answers-503).
 
@@ -231,7 +231,7 @@ for list in zen.spamhaus.org b.barracudacentral.org bl.spamcop.net; do
 done
 ```
 
-**Fix.** Work through [When mail lands in spam](/installation/going-live#when-mail-lands-in-spam), in its order.
+**Fix.** Work through [When mail lands in spam](/operations/deliverability#when-mail-lands-in-spam), in its order.
 
 ## `A domain for example.com already exists`
 

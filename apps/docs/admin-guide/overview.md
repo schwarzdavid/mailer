@@ -14,7 +14,7 @@ Enter your **Email address** and **Password** and click **Log in**.
 
 - If the email address or password is wrong, the page shows **Email or password is wrong. Check both and try again.** and selects the password field.
 - A login is valid for 31 days. After that, or after the session ends for another reason, the next page you open leads back to the login page with **Your session expired. Log in again to continue where you left off.** After logging in you land on the page you wanted to open.
-- The login allows 10 attempts per minute for one IP address and email address, successful ones included. After that, further attempts are blocked for 5 minutes. If Redis is down, the login refuses every attempt with an error instead of letting them through. [Rate limits](/configuration/rate-limits) has the details.
+- The login allows 10 attempts per minute for one IP address and email address, successful ones included. After that, further attempts are blocked for 5 minutes. If Redis is down, the login refuses every attempt with an error instead of letting them through. [Advanced configuration](/installation/advanced-configuration#rate-limit-pairs) has the details.
 
 There is no "forgot password" link, and mailer sends no mail to its own users. A user who forgot the password asks an administrator with the **Update users** permission to set a new one, as described on [Users and roles](/admin-guide/users-and-roles#the-user-page).
 

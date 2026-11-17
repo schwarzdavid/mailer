@@ -21,7 +21,7 @@ The backend sets these headers on every response, through the library [helmet](h
 | `X-Permitted-Cross-Domain-Policies` | `none`             | Old plug-ins get no cross-domain access.                                                   |
 | `X-XSS-Protection`                  | `0`                | Turns off a broken filter of old browsers.                                                 |
 
-The backend also leaves out the `X-Powered-By` header. Caddy adds `X-Robots-Tag: noindex, nofollow` to every response, so search engines do not index the admin UI ([Reverse proxy](/configuration/reverse-proxy#what-caddy-does)).
+The backend also leaves out the `X-Powered-By` header. Caddy adds `X-Robots-Tag: noindex, nofollow` to every response, so search engines do not index the admin UI.
 
 `Strict-Transport-Security` leaves out `includeSubDomains` on purpose: if `SITE_ADDRESS` is an apex domain such as `example.com`, the header does not force HTTPS on every other name under it.
 
@@ -75,7 +75,7 @@ The backend's request log keeps the method, the path without the query string, t
 - e-mail addresses in log messages: records are named by their id, and errors that can carry an address are logged with their type and code only;
 - the health checks, which are not logged at all.
 
-[What is never logged](/configuration/logging#what-is-never-logged) has the details. The exceptions you should know: the setup token is logged on purpose while no user exists, and the mail server's own log names the sender and recipient of every delivery, as every mail server does. Treat `docker compose logs mail` and the `mail-logs` volume as personal data.
+[What is never logged](/installation/advanced-configuration#log-level) has the details. The exceptions you should know: the setup token is logged on purpose while no user exists, and the mail server's own log names the sender and recipient of every delivery, as every mail server does. Treat `docker compose logs mail` and the `mail-logs` volume as personal data.
 
 ## API keys
 
@@ -85,7 +85,7 @@ The backend's request log keeps the method, the path without the query string, t
 - **Revocable.** Revoke a key on the project page as soon as it may have leaked ([Revoke an API key](/admin-guide/projects#revoke-an-api-key)); the next request with it answers `401`.
 - **Header, not query string.** Send the key as `Authorization: Bearer sdm_…`. The query parameter `?key=sdm_…` works too, for clients that cannot set headers, but URLs end up in logs of proxies and tools between the client and mailer.
 
-mailer itself keeps the query string out of every log: the backend logs paths only, and the Caddyfile in `compose.yml` replaces the `key` parameter with `REDACTED` in every entry Caddy writes, including the error entries for requests it could not forward. If you turn on Caddy access logs, add the same filter to them ([Turn on Caddy access logs](/configuration/reverse-proxy#turn-on-caddy-access-logs)). If you put your own proxy or a CDN in front, make sure it does not log the `key` parameter either.
+mailer itself keeps the query string out of every log: the backend logs paths only, and the Caddyfile in `compose.yml` replaces the `key` parameter with `REDACTED` in every entry Caddy writes, including the error entries for requests it could not forward. If you turn on Caddy access logs, add the same filter to them. If you put your own proxy or a CDN in front, make sure it does not log the `key` parameter either.
 
 ## No open relay on port 25
 
@@ -101,7 +101,7 @@ The answer to `RCPT TO` is a line with `Relay access denied`.
 
 ## Container hardening
 
-The backend image runs as the unprivileged user `node` (set in the image itself). `compose.yml` adds a read-only file system (only `/tmp` is writable, in memory) and a minimal init process that forwards signals and reaps child processes. The backend, Postgres and Redis publish no ports; only Caddy (80 and 443) and the mail server (25) are reachable from outside. Keep `.env` readable only by `root` (`chmod 600 /opt/mailer/.env`), because it holds every secret ([Rotating secrets](/operations/rotating-secrets)).
+The backend image runs as the unprivileged user `node` (set in the image itself). `compose.yml` adds a read-only file system (only `/tmp` is writable, in memory) and a minimal init process that forwards signals and reaps child processes. The backend, Postgres and Redis publish no ports; only Caddy (80 and 443) and the mail server (25) are reachable from outside. Keep `.env` readable only by `root` (`chmod 600 /opt/mailer/.env`), because it holds every secret.
 
 ## Verify the image you run
 

@@ -134,7 +134,7 @@ Change `30d` to keep a longer or shorter history in the mailbox. Unread mails ar
 
 ### Bounces are not linked to the mail that caused them
 
-A bounce report names the recipient, but mailer does not record which project, form delivery or API request the bounced mail came from: every mail uses the same return path, `bounce@mx.example.com`. **Bounces** is therefore one list for the whole installation, and a bounce does not change the status of the original entry on **Sent mail**, which stays **Sent**. Linking them would need a separate return path per mail (VERP), which is [planned](/reference/roadmap#link-bounces-to-the-mail-that-caused-them).
+A bounce report names the recipient, but mailer does not record which project, form delivery or API request the bounced mail came from: every mail uses the same return path, `bounce@mx.example.com`. **Bounces** is therefore one list for the whole installation, and a bounce does not change the status of the original entry on **Sent mail**, which stays **Sent**. Linking them would need a separate return path per mail (VERP), which is planned.
 
 To find the mail behind a bounce, search the recipient on the **Sent mail** page of the projects that may have sent to it, and compare the times.
 
