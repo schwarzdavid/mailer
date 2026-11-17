@@ -1,3 +1,4 @@
+import { connect } from 'node:net'
 import { createTransport } from 'nodemailer'
 
 type SmtpError = Error & { command?: string; responseCode?: number; response?: string }
@@ -23,6 +24,19 @@ export async function relayFromOutside(port: number): Promise<string> {
         transport.close()
     }
     throw new Error('port 25 relayed mail for victim@example.org')
+}
+
+export function smtpGreeting(port: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const socket = connect({ host: 'localhost', port })
+        socket.setEncoding('utf8')
+        socket.setTimeout(10_000, () => socket.destroy(new Error(`no SMTP greeting on port ${port} within 10 s`)))
+        socket.once('data', (line: string) => {
+            socket.end('QUIT\r\n')
+            resolve(line.trim())
+        })
+        socket.once('error', reject)
+    })
 }
 
 export async function deliverDsn(port: number, recipient: string, raw: string): Promise<void> {

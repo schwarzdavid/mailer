@@ -6,7 +6,7 @@ import { Compose } from './support/compose.js'
 import { issueLeaf, serialOf, servedImapSerial, servedSmtpSerial } from './support/pki.js'
 import { request, statusOf } from './support/http.js'
 import { requestLogEntry, setupTokenFrom } from './support/logs.js'
-import { deliverDsn, relayFromOutside } from './support/smtp.js'
+import { deliverDsn, relayFromOutside, smtpGreeting } from './support/smtp.js'
 import { BASE_URL, MAIL_HOSTNAME, SMTP_PORT, createStack, destroyStack, runSetup } from './support/stack.js'
 import type { SmokeStack } from './support/stack.js'
 
@@ -127,6 +127,36 @@ describe('mail server', () => {
                 timeout: 30_000,
             })
             .toBe(200)
+    })
+
+    it('mail announces MAIL_HOSTNAME in its SMTP greeting', async () => {
+        expect(await smtpGreeting(SMTP_PORT)).toMatch(new RegExp(`^220[ -]${MAIL_HOSTNAME.replaceAll('.', '\\.')} `))
+    })
+
+    it('Docker DNS does not answer for MAIL_HOSTNAME, so the backend resolves it publicly', async () => {
+        const mailIps = (
+            await compose.inspect(
+                await compose.containerId('mail'),
+                '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}',
+            )
+        )
+            .split(' ')
+            .filter((ip) => ip !== '')
+        expect(mailIps.length).toBeGreaterThan(0)
+        const { stdout } = await compose.run([
+            'exec',
+            '-T',
+            'backend',
+            'node',
+            '-e',
+            "require('node:dns').promises.resolve4(process.argv[1]).then((ips) => console.log(ips.join(' ')), (error) => console.log(error.code))",
+            MAIL_HOSTNAME,
+        ])
+        const answer = stdout.trim().split(' ')
+        expect(answer.length).toBeGreaterThan(0)
+        for (const ip of mailIps) {
+            expect(answer).not.toContain(ip)
+        }
     })
 
     it('setup.sh run again with an emptied MAIL_PASSWORD generates a new one and rotates it for mail and backend', async () => {

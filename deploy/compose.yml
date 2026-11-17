@@ -92,11 +92,7 @@ services:
             - /tmp
         init: true
         healthcheck:
-            test:
-                - CMD
-                - node
-                - -e
-                - fetch('http://127.0.0.1:8000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))
+            test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
             interval: 10s
             timeout: 5s
             retries: 6
@@ -132,13 +128,13 @@ services:
 
     mail:
         image: ghcr.io/docker-mailserver/docker-mailserver:16.0.1
-        hostname: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
         restart: unless-stopped
         logging: *logging
         labels:
             mailer.postfix-main: *mail-postfix-main
         stop_grace_period: 1m
         environment:
+            OVERRIDE_HOSTNAME: ${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}
             SSL_TYPE: manual
             SSL_CERT_PATH: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}.crt
             SSL_KEY_PATH: /caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}/${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}.key
