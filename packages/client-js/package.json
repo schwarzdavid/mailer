@@ -1,0 +1,59 @@
+{
+  "name": "@schwarzdavid/mailer-client",
+  "version": "0.0.0",
+  "description": "Browser and Node client for the mailer form and send APIs",
+  "keywords": [
+    "mailer",
+    "email",
+    "forms",
+    "smtp",
+    "client"
+  ],
+  "homepage": "https://schwarzdavid.github.io/mailer/api/client",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schwarzdavid/mailer.git",
+    "directory": "packages/client-js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client.iife.js": "./dist/client.iife.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch --no-clean",
+    "lint": "eslint src test",
+    "lint:fix": "eslint src test --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@vitest/eslint-plugin": "^1.6.20",
+    "api": "workspace:*",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "tsdown": "^0.23.7",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0",
+    "vitest": "^4.1.9"
+  }
+}

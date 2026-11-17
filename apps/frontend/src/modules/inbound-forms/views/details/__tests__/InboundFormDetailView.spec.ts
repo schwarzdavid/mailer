@@ -53,14 +53,14 @@ describe('InboundFormDetailView', () => {
         expect(titles).toEqual(['Endpoint', 'General', 'Fields', 'Security', 'Receivers', 'Delete form'])
     })
 
-    it('shows a fetch example on the endpoint card instead of an HTML form', async () => {
+    it('shows a client example on the endpoint card instead of an HTML form', async () => {
         mockApis()
         const wrapper = mountInApp(InboundFormDetailView)
 
         await vi.waitFor(() => expect(findButton(wrapper, 'Example request')).toBeDefined())
         await findButton(wrapper, 'Example request')!.trigger('click')
 
-        await vi.waitFor(() => expect(wrapper.text()).toContain('fetch('))
+        await vi.waitFor(() => expect(wrapper.text()).toContain('await form.submit({ data })'))
         expect(wrapper.text()).not.toContain('<form')
     })
 

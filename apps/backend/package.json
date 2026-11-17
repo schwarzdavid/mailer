@@ -49,6 +49,7 @@
     "@nestjs/terminus": "^12.1.0",
     "@nestjs/throttler": "^6.7.1",
     "@redis/client": "^5.12.1",
+    "@schwarzdavid/mailer-client": "workspace:*",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.4.0",
     "cache-manager": "^7.2.9",

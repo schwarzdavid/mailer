@@ -2,6 +2,7 @@
     <div class="security-info">
         <p>{{ t('module.inboundForms.details.security.info.honeypot.intro') }}</p>
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.field')" :value="field" />
+        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.create')" :value="create" />
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.send')" :value="send" />
         <p>{{ t('module.inboundForms.details.security.info.honeypot.note') }}</p>
     </div>
@@ -11,8 +12,8 @@
     import { computed } from 'vue'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormDetailDto, InboundFormSecurityDto } from 'api'
-    import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
-    import { securityPlacement } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
+    import { formBaseUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import { createFormSnippet, securityPlacement } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import SnippetStep from '@/modules/inbound-forms/views/details/partials/security-info/SnippetStep.vue'
 
     const props = defineProps<{ scheme: InboundFormSecurityDto; form: InboundFormDetailDto }>()
@@ -23,13 +24,8 @@
         () =>
             `<input name="${props.scheme.key}" tabindex="-1" autocomplete="off" style="position: absolute; left: -9999px">`,
     )
-    const send = computed(() =>
-        securityPlacement(
-            formEndpointUrl(props.form.formKey),
-            props.scheme,
-            `form.elements['${props.scheme.key}'].value`,
-        ),
-    )
+    const create = computed(() => createFormSnippet(formBaseUrl(), props.form))
+    const send = computed(() => securityPlacement(props.scheme, `formElement.elements['${props.scheme.key}'].value`))
 </script>
 
 <style scoped>

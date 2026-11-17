@@ -42,6 +42,28 @@ A successful call answers `202 Accepted`:
 
 `mailMessageId` is the id of the entry on the project's **Sent mail** page. The call is synchronous: it returns once the mail was handed to the mail relay, and it answers `502` with the code `DELIVERY_FAILED` if the relay did not accept it. Your code is responsible for retrying failed requests.
 
+### Send with the JavaScript client
+
+From Node, use the npm package instead of `curl`; see [JavaScript client](./client#send) for the details:
+
+```ts
+import { MailerSender } from '@schwarzdavid/mailer-client'
+
+const sender = new MailerSender({
+    baseUrl: 'https://app.example.com',
+    apiKey: process.env.MAILER_API_KEY!,
+})
+
+const { mailMessageId, status } = await sender.send({
+    from: 'news@mail.example.net',
+    to: 'reader@example.org',
+    subject: 'Hello',
+    html: '<p>Hi</p>',
+})
+```
+
+It resolves with the same body as above and rejects with a `MailerError` for every error answer. Keep the key on a server: the constructor refuses to run in a browser.
+
 ### Request fields
 
 | Field     | Required | Rule                                                    |

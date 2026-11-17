@@ -2,10 +2,13 @@
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
+import { runInNewContext } from 'node:vm'
+import { MailerError, MailerForm } from '@schwarzdavid/mailer-client'
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, seedUser, type Credentials } from './support/session.js'
 import { ensureSendingDomain } from './support/sending-domain.js'
+import { listenOnLoopback } from './support/listen.js'
 import { resetThrottleCounters } from './support/throttle-counters.js'
 import { InboundFormSubmissionModel } from '../src/modules/inbound-form/models/inbound-form-submission.model.js'
 import { InboundFormDeliveryModel } from '../src/modules/inbound-form/models/inbound-form-delivery.model.js'
@@ -307,6 +310,7 @@ describe('InboundForm (e2e)', () => {
 
     describe('timed token', () => {
         let timedFormKey = ''
+        let baseUrl = ''
         const origin = 'https://kunde.at'
         const validData = { firstName: 'Max', email: 'max@example.com' }
 
@@ -335,8 +339,12 @@ describe('InboundForm (e2e)', () => {
         const submit = (formToken: string, data: Record<string, unknown>) =>
             http().post(`/api/v1/forms/${timedFormKey}`).set('Origin', origin).send({ security: { formToken }, data })
 
+        const originFetch: typeof fetch = (input, init) =>
+            fetch(input, { ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), Origin: origin } })
+
         beforeAll(async () => {
             await resetThrottleCounters()
+            baseUrl = await listenOnLoopback(app)
 
             const formResponse = await http()
                 .post('/api/inbound-form')
@@ -438,6 +446,54 @@ describe('InboundForm (e2e)', () => {
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')
             expect(response.text).toContain('InboundForm')
+        })
+
+        it('the served client script fetches a token and submits', async () => {
+            const script = (await http().get('/api/v1/forms/client.js').buffer(true).expect(200)).text
+            const window: Record<string, unknown> = {}
+            Object.assign(window, {
+                window,
+                document: { currentScript: { src: `${baseUrl}/api/v1/forms/client.js` } },
+                fetch: originFetch,
+                setTimeout,
+                clearTimeout,
+                AbortSignal,
+                URL,
+                URLSearchParams,
+                Headers,
+                Response,
+            })
+            runInNewContext(script, window)
+            const inboundForm = window.InboundForm as {
+                getToken(key: string): Promise<string>
+                submit(key: string, body: Record<string, unknown>): Promise<unknown>
+            }
+
+            const formToken = await inboundForm.getToken(timedFormKey)
+            const result = await inboundForm.submit(timedFormKey, { data: validData, security: { formToken } })
+
+            expect(typeof formToken).toBe('string')
+            expect(result).toEqual({ status: 'accepted' })
+        })
+
+        it('MailerForm fetches the token and submits', async () => {
+            const form = new MailerForm({
+                baseUrl,
+                formKey: timedFormKey,
+                timedToken: { key: 'formToken', location: 'body' },
+                fetch: originFetch,
+            })
+
+            await expect(form.submit({ data: validData })).resolves.toEqual({ status: 'accepted' })
+
+            const failure: unknown = await form
+                .submit({ data: { firstName: 'Max', email: 'broken' } })
+                .catch((e: unknown) => e)
+            expect(failure).toBeInstanceOf(MailerError)
+            expect(failure).toMatchObject({
+                status: 400,
+                messages: expect.arrayContaining([expect.stringMatching(/^email:/)]) as unknown,
+            })
         })
     })
 })

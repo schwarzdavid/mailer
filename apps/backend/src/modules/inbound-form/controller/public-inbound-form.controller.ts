@@ -20,13 +20,16 @@ import { InboundFormSubmissionService } from '../services/inbound-form-submissio
 import { InboundFormSubmitDto, InboundFormSubmitResultDto } from '../dtos/inbound-form-submit.dto.js'
 import { InboundFormTokenDto } from '../dtos/inbound-form-token.dto.js'
 import { FormThrottle } from '../helpers/form-throttle.js'
-import { INBOUND_FORM_CLIENT_SCRIPT } from '../client/inbound-form-client.js'
+import { InboundFormClientScript } from '../client/inbound-form-client-script.js'
 
 @ApiTags('public-form')
 @UseGuards(AppThrottlerGuard)
 @Controller('v1/forms')
 export class PublicInboundFormController {
-    constructor(private readonly submissionService: InboundFormSubmissionService) {}
+    constructor(
+        private readonly submissionService: InboundFormSubmissionService,
+        private readonly clientScript: InboundFormClientScript,
+    ) {}
 
     @SkipThrottle()
     @Get('client.js')
@@ -36,7 +39,7 @@ export class PublicInboundFormController {
     @ApiProduces('application/javascript')
     @ApiOkResponse({ schema: { type: 'string' } })
     getInboundFormClient(): string {
-        return INBOUND_FORM_CLIENT_SCRIPT
+        return this.clientScript.source
     }
 
     @ResponseDto(InboundFormTokenDto)

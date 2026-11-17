@@ -39,8 +39,8 @@
     import ReadonlyValue from '@/components/ReadonlyValue.vue'
     import SectionCard from '@/components/SectionCard.vue'
     import { useNotify } from '@/composables/useNotify.ts'
-    import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
-    import { exampleRequest } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
+    import { formBaseUrl, formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import { exampleRequest, timedTokenSchemeOf } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import { useInboundFormUpdateMutation } from '@/modules/inbound-forms/mutations/useInboundFormUpdateMutation.ts'
 
     const props = defineProps<{ form: InboundFormDetailDto; canUpdate: boolean }>()
@@ -52,7 +52,10 @@
     const isActive = ref(props.form.isActive)
 
     const endpointUrl = computed(() => formEndpointUrl(props.form.formKey))
-    const example = computed(() => exampleRequest(endpointUrl.value, props.form.fields))
+    const timedTokenScheme = computed(() => timedTokenSchemeOf(props.form))
+    const example = computed(() =>
+        exampleRequest(formBaseUrl(), props.form.formKey, props.form.fields, timedTokenScheme.value),
+    )
 
     watch(
         () => props.form.isActive,

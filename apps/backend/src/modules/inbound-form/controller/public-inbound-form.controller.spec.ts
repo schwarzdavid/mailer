@@ -7,7 +7,7 @@ import type { App } from 'supertest/types.js'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { PublicInboundFormController } from './public-inbound-form.controller.js'
 import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
-import { installInboundFormClient } from '../client/inbound-form-client.js'
+import { InboundFormClientScript } from '../client/inbound-form-client-script.js'
 import { IssuedFormToken } from '../interfaces/inbound-form-token.interface.js'
 
 describe('PublicInboundFormController', () => {
@@ -22,7 +22,10 @@ describe('PublicInboundFormController', () => {
 
         module = await Test.createTestingModule({
             controllers: [PublicInboundFormController],
-            providers: [{ provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } }],
+            providers: [
+                { provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } },
+                { provide: InboundFormClientScript, useValue: { source: 'script' } },
+            ],
         })
             .overrideGuard(AppThrottlerGuard)
             .useValue({ canActivate: () => true })
@@ -92,8 +95,7 @@ describe('PublicInboundFormController', () => {
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
             expect(response.headers['cache-control']).toBe('public, max-age=86400')
-            expect(response.text).toContain(installInboundFormClient.toString())
-            expect(response.text).toContain('document.currentScript')
+            expect(response.text).toBe('script')
             expect(submitForm).not.toHaveBeenCalled()
         })
     })

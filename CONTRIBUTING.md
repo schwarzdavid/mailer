@@ -65,7 +65,17 @@ The OpenAPI spec (`apps/backend/openapi.json`) and the generated client (`packag
 pnpm build --filter api
 ```
 
-### 6. Start the apps
+### 6. The JavaScript client
+
+`packages/client-js` is the npm package `@schwarzdavid/mailer-client` (MIT, zero runtime dependencies). `tsdown` builds its single ESM entry point with its type declarations and `dist/client.iife.js`, the script the backend serves as `client.js`; the backend depends on the package and refuses to start without that bundle. The build needs nothing else from the workspace, so Turbo runs `@schwarzdavid/mailer-client#build` without dependencies (an explicit override in `turbo.json`, which avoids the cycle through `api#build` and `backend#generate`). The package depends on `api` only as a dev dependency, for the type test that keeps its request and response types equal to the backend's contract, so a changed DTO fails `pnpm typecheck` and `pnpm test` there. Under `pnpm dev` the package runs `tsdown --watch --no-clean`: the build that Turbo runs first leaves `dist/` complete, and the watcher only overwrites files, so the backend never boots without `client.iife.js`. A rebuild does not reload the backend, which reads the bundle once at startup, so restart it to serve the change; renamed chunks leave stale files in `dist/` that `pnpm build` clears. Work on it with:
+
+```bash
+pnpm build --filter @schwarzdavid/mailer-client
+pnpm --filter @schwarzdavid/mailer-client test
+pnpm --filter @schwarzdavid/mailer-client typecheck
+```
+
+### 7. Start the apps
 
 ```bash
 pnpm dev
@@ -111,7 +121,14 @@ The run starts throwaway Postgres, Redis, MailHog and GreenMail containers, walk
 
 ## CI and release pipeline
 
-`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs the smoke test (`pnpm --filter e2e test:smoke`) against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`.
+`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in five jobs, the fifth (`npm-publish`, described below) only for a published release. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs the smoke test (`pnpm --filter e2e test:smoke`) against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`.
+
+A published release also publishes the client package to npm: the `npm-publish` job writes the release version into `packages/client-js`, drops its `devDependencies` (`pnpm pack` cannot resolve the unversioned `workspace:*` link to `api`) and publishes it with that version, under the dist-tag `next` for pre-releases and `latest` otherwise. Pushes and pull requests never publish. The package name `@schwarzdavid/mailer-client` is on the public npm registry, where the owner's user holds the `@schwarzdavid` scope.
+
+Owner steps before the first release that publishes the package:
+
+1. Publish a bootstrap version by hand, because npm can only attach a trusted publisher to a package that exists. Build the package (`pnpm build --filter @schwarzdavid/mailer-client`), then in `packages/client-js`, logged in to npm, run the job's own commands: `npm version 0.0.0-bootstrap.0 --no-git-tag-version`, `npm pkg delete devDependencies`, `pnpm pack`, `npm publish ./schwarzdavid-mailer-client-0.0.0-bootstrap.0.tgz --access public --tag bootstrap` and `npm deprecate @schwarzdavid/mailer-client@0.0.0-bootstrap.0 "Bootstrap release for trusted publishing; install a released version"`. Afterwards discard the local changes to `packages/client-js/package.json` and delete the tarball; never commit them. npm points `latest` at the only existing version, so `latest` names the bootstrap version until the first release that is not a pre-release.
+2. On npmjs.com, open the package's settings and add a trusted publisher: GitHub Actions, repository `schwarzdavid/mailer`, workflow `ci.yml`. From then on the `npm-publish` job authenticates through OIDC and needs no stored npm token.
 
 `.github/workflows/docs.yml` builds the documentation site (`apps/docs`) on every push and pull request to `main` and deploys it to GitHub Pages on pushes to `main`.
 

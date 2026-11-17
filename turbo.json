@@ -34,6 +34,14 @@
             "dependsOn": ["backend#generate"],
             "outputs": ["dist/**"]
         },
+        "@schwarzdavid/mailer-client#build": {
+            "dependsOn": [],
+            "outputs": ["dist/**"]
+        },
+        "@schwarzdavid/mailer-client#test": {
+            "dependsOn": ["build", "^build"],
+            "outputs": []
+        },
         "generate": {
             "dependsOn": ["build"],
             "outputs": ["openapi.json", "env-keys.json"]
