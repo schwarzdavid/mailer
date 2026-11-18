@@ -56,6 +56,7 @@ export const sidebar: DefaultTheme.Sidebar = {
             text: 'API',
             items: [
                 { text: 'Overview', link: '/api/overview' },
+                { text: 'JavaScript client', link: '/api/client' },
                 { text: 'Errors', link: '/api/errors' },
             ],
         },

@@ -10,13 +10,13 @@ _The card **Security** with one allowed domain, a honeypot and a timed token._
 
 ## Choose the checks
 
-| Protection                            | Stops                                                                                             | Does not stop                                                                          | Needs on the website                      |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [Allowed domains](#allowed-domains)   | Other websites embedding your form in their visitors' browsers                                    | Scripts outside a browser, which can send any `Origin` header                          | Nothing                                   |
-| [Honeypot](#honeypot)                 | Simple bots that fill in every input of a page                                                    | Bots written for your form, and people                                                 | One hidden input                          |
-| [Timed token](#timed-token)           | Bots that post without loading the page, posting faster than a person, replaying the same request | Bots that run a real browser and wait; a single visitor sending a few messages by hand | `client.js` and a few lines of JavaScript |
-| [Google reCAPTCHA](#google-recaptcha) | Most automated traffic, scored by Google                                                          | Determined attackers using solving services; it also sends visitor data to Google      | Google's script and a Google account      |
-| [Rate limits](#rate-limits)           | One address sending many submissions                                                              | Many addresses sending a few each                                                      | Nothing                                   |
+| Protection                            | Stops                                                                                             | Does not stop                                                                          | Needs on the website                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------ |
+| [Allowed domains](#allowed-domains)   | Other websites embedding your form in their visitors' browsers                                    | Scripts outside a browser, which can send any `Origin` header                          | Nothing                              |
+| [Honeypot](#honeypot)                 | Simple bots that fill in every input of a page                                                    | Bots written for your form, and people                                                 | One hidden input                     |
+| [Timed token](#timed-token)           | Bots that post without loading the page, posting faster than a person, replaying the same request | Bots that run a real browser and wait; a single visitor sending a few messages by hand | The JavaScript client or `client.js` |
+| [Google reCAPTCHA](#google-recaptcha) | Most automated traffic, scored by Google                                                          | Determined attackers using solving services; it also sends visitor data to Google      | Google's script and a Google account |
+| [Rate limits](#rate-limits)           | One address sending many submissions                                                              | Many addresses sending a few each                                                      | Nothing                              |
 
 A good default for a contact form is **allowed domains, a honeypot and the timed token**: together they stop most bot traffic without anything the visitor notices and without a third party. Add reCAPTCHA if spam still gets through.
 
@@ -123,7 +123,7 @@ It answers:
 - `notBefore` and `expiresAt` are the times from which and until which it is accepted.
 - `waitMs` is how many milliseconds the website still has to wait until `notBefore`.
 
-You do not have to handle this yourself. mailer serves a small script, `https://app.example.com/api/v1/forms/client.js`, that provides `InboundForm.getToken('<form-key>')`: it requests the token, waits `waitMs`, and then returns the token. Load the script with a normal `<script src="…">` tag (not `type="module"`), because it finds the endpoint through its own URL. [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
+You do not have to handle this yourself. The [JavaScript client](/api/client), the npm package `@schwarzdavid/mailer-client`, requests the token, waits `waitMs`, places the token under the check's key and location and sends it with the submission: pass the check's key and location as `timedToken` to `MailerForm`. It also drops a used token and asks for a new one when the old one has expired. A website without a bundler loads the script `https://app.example.com/api/v1/forms/client.js` instead, which provides the same classes on the global `MailerClient` (`new MailerClient.MailerForm({ baseUrl, formKey, timedToken })`). Load the script with a normal `<script src="…">` tag, not `type="module"`. [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
 
 The token endpoint also checks the allowed domains. It answers `403` `Origin not allowed` when the request comes from another website, and `404` `Unknown form` when the form does not exist, does not accept submissions or has no timed token.
 
@@ -131,7 +131,7 @@ The token endpoint also checks the allowed domains. It answers `403` `Origin not
 
 Nothing, as long as the website asks for the token while the visitor fills in the form, as the examples on [Embed the form](/admin-guide/inbound-forms/embed) do: the minimum delay has passed long before they click send. If the website asks only when the visitor clicks send, sending takes about as long as the minimum delay, 3 seconds by default.
 
-Fetch a fresh token for every submission. A token that was used, expired, or fetched from a different IP address is rejected.
+Fetch a fresh token for every submission; the JavaScript client does this for you. A token that was used, expired, or fetched from a different IP address is rejected.
 
 ### Errors
 

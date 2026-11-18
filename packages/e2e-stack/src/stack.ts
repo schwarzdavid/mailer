@@ -47,6 +47,13 @@ async function buildBackend(): Promise<void> {
     })
 }
 
+async function buildClientPackage(): Promise<void> {
+    await runCommand('pnpm turbo run build --filter=@schwarzdavid/mailer-client', {
+        cwd: repoRoot,
+        logFile: join(workDir, 'client-build.log'),
+    })
+}
+
 export async function startStack(options: StackOptions): Promise<RunningStack> {
     const log = options.log ?? (() => undefined)
     await mkdir(workDir, { recursive: true })
@@ -60,7 +67,7 @@ export async function startStack(options: StackOptions): Promise<RunningStack> {
     }
 
     try {
-        log('Starting containers and building the backend')
+        log('Starting containers and building the backend and the client package')
         const [infrastructure] = await Promise.all([
             startInfrastructure({
                 mailHostname: options.mailHostname,
@@ -73,6 +80,7 @@ export async function startStack(options: StackOptions): Promise<RunningStack> {
                 return infra
             }),
             buildBackend(),
+            buildClientPackage(),
         ])
 
         log('Generating the OpenAPI spec')

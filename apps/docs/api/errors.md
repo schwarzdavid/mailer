@@ -55,5 +55,7 @@ These come from `POST /api/v1/send`.
 
 ## Which errors to retry
 
-- Retry after a pause: `502`, `429` and network failures. A `502` means the attempt was recorded but the relay did not accept the mail, so a retry creates another entry on the **Sent mail** page.
+- Retry after a pause: `502`, `503`, `429` and network failures. A `502` means the attempt was recorded but the relay did not accept the mail, so a retry creates another entry on the **Sent mail** page.
 - Fix first, then retry: `400`, `401`, `403`, `413`, `422`.
+
+The `retryable` field of the `MailerError` of the [JavaScript client](./client#errors) follows this list: it is `true` for network failures and timeouts (`status` `0`), `429`, `502` and `503`.

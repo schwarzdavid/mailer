@@ -27,7 +27,9 @@ describe('SecurityInfoDialog', () => {
         await openInfo(scheme({ type: 'honeypot', key: 'website' }))
 
         expect(overlayText()).toContain('<input name="website" tabindex="-1" autocomplete="off"')
-        expect(overlayText()).toContain("security: { website: form.elements['website'].value }")
+        expect(overlayText()).toContain("security: { website: formElement.elements['website'].value }")
+        expect(overlayText()).toContain('new MailerForm({')
+        expect(overlayText()).toContain("formKey: 'c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b'")
         expect(overlayText()).not.toContain('grecaptcha')
     })
 
@@ -43,14 +45,20 @@ describe('SecurityInfoDialog', () => {
 
         expect(overlayText()).toContain('https://www.google.com/recaptcha/api.js?render=SITE_KEY')
         expect(overlayText()).toContain("grecaptcha.execute('SITE_KEY', { action: 'contact' })")
-        expect(overlayText()).toContain("'x-captcha': token")
+        expect(overlayText()).toContain("headers: { 'x-captcha': token }")
+        expect(overlayText()).toContain('new MailerForm({')
+        expect(overlayText()).toContain("formKey: 'c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b'")
     })
 
-    it('shows the client script and the token call for the form key', async () => {
+    it('shows the client install, the form construction and the script tag alternative', async () => {
         await openInfo(scheme({ type: 'timed-token', location: 'query', key: 'formToken' }))
 
+        expect(overlayText()).toContain('npm install @schwarzdavid/mailer-client')
+        expect(overlayText()).toContain("formKey: 'c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b'")
+        expect(overlayText()).toContain("timedToken: { key: 'formToken', location: 'query' }")
+        expect(overlayText()).toContain('form.prepare()')
         expect(overlayText()).toContain('/api/v1/forms/client.js')
-        expect(overlayText()).toContain("InboundForm.getToken('c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b')")
-        expect(overlayText()).toContain('?formToken=${encodeURIComponent(token)}')
+        expect(overlayText()).toContain('new MailerClient.MailerForm(')
+        expect(overlayText()).toMatch(/<script>\s*const form = new MailerClient\.MailerForm\([\s\S]*\}\)\s*<\/script>/)
     })
 })

@@ -1,6 +1,8 @@
 import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
+import { MailerError, MailerSender } from '@schwarzdavid/mailer-client'
+import { listenOnLoopback } from './support/listen.js'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createTestApp } from './support/app.js'
 import { login, projectRoleId, seedUser, type Credentials } from './support/session.js'
@@ -382,6 +384,20 @@ describe('Public send API (e2e)', () => {
             expect((await send({ from, to: 'x@psa-e2e.test', subject: 'x', html: 'x' }, revocable.key)).status).toBe(
                 401,
             )
+        })
+
+        it('MailerSender sends and reports refused domains', async () => {
+            const sender = new MailerSender({ baseUrl: await listenOnLoopback(app), apiKey: key })
+
+            const sent = await sender.send({ from, to: 'sdk@psa-e2e.test', subject: 'SDK', html: '<p>sdk</p>' })
+            expect(sent.status).toBe('sent')
+            expect(typeof sent.mailMessageId).toBe('number')
+
+            const failure: unknown = await sender
+                .send({ from: 'news@other.psa-example.org', to: 'sdk@psa-e2e.test', subject: 'SDK', html: 'x' })
+                .catch((e: unknown) => e)
+            expect(failure).toBeInstanceOf(MailerError)
+            expect(failure).toMatchObject({ status: 403, code: 'FROM_DOMAIN_NOT_ALLOWED', retryable: false })
         })
 
         it('throttles a key after the configured limit without letting forged secrets of its prefix drain it', async () => {

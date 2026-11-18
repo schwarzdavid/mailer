@@ -2,41 +2,51 @@ import {
     Body,
     Controller,
     Get,
-    Header,
     HttpCode,
     HttpStatus,
+    NotFoundException,
     Param,
     Post,
     Req,
+    Res,
     SerializeOptions,
     UseGuards,
 } from '@nestjs/common'
 import { ApiAcceptedResponse, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger'
 import { SkipThrottle } from '@nestjs/throttler'
 import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 import { ResponseDto } from '../../../decorators/ResponseDto.js'
 import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
 import { InboundFormSubmitDto, InboundFormSubmitResultDto } from '../dtos/inbound-form-submit.dto.js'
 import { InboundFormTokenDto } from '../dtos/inbound-form-token.dto.js'
 import { FormThrottle } from '../helpers/form-throttle.js'
-import { INBOUND_FORM_CLIENT_SCRIPT } from '../client/inbound-form-client.js'
+import { InboundFormClientScript } from '../client/inbound-form-client-script.js'
 
 @ApiTags('public-form')
 @UseGuards(AppThrottlerGuard)
 @Controller('v1/forms')
 export class PublicInboundFormController {
-    constructor(private readonly submissionService: InboundFormSubmissionService) {}
+    constructor(
+        private readonly submissionService: InboundFormSubmissionService,
+        private readonly clientScript: InboundFormClientScript,
+    ) {}
 
     @SkipThrottle()
     @Get('client.js')
-    @Header('Content-Type', 'application/javascript; charset=utf-8')
-    @Header('Cache-Control', 'public, max-age=86400')
-    @Header('Cross-Origin-Resource-Policy', 'cross-origin')
     @ApiProduces('application/javascript')
     @ApiOkResponse({ schema: { type: 'string' } })
-    getInboundFormClient(): string {
-        return INBOUND_FORM_CLIENT_SCRIPT
+    getInboundFormClient(@Res({ passthrough: true }) response: Response): string {
+        const source = this.clientScript.source
+        if (source === undefined) {
+            throw new NotFoundException('client.js is not built')
+        }
+        response.set({
+            'Content-Type': 'application/javascript; charset=utf-8',
+            'Cache-Control': this.clientScript.cacheControl,
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+        })
+        return source
     }
 
     @ResponseDto(InboundFormTokenDto)

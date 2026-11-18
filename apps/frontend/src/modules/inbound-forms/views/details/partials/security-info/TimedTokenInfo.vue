@@ -1,9 +1,13 @@
 <template>
     <div class="security-info">
         <p>{{ t('module.inboundForms.details.security.info.timed-token.intro') }}</p>
-        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.import')" :value="importTag" />
-        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.token')" :value="token" />
+        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.install')" :value="install" />
+        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.prepare')" :value="prepare" />
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.send')" :value="send" />
+        <SnippetStep
+            :label="t('module.inboundForms.details.security.info.steps.withoutBundler')"
+            :value="withoutBundler"
+        />
         <p>{{ t('module.inboundForms.details.security.info.timed-token.note') }}</p>
     </div>
 </template>
@@ -12,17 +16,31 @@
     import { computed } from 'vue'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormDetailDto, InboundFormSecurityDto } from 'api'
-    import { formClientScriptUrl, formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
-    import { scriptTag, securityPlacement } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
+    import { formBaseUrl, formClientScriptUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import {
+        clientImport,
+        formConstruction,
+        inlineScript,
+        installCommand,
+        scriptTag,
+        scriptTagConstruction,
+    } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import SnippetStep from '@/modules/inbound-forms/views/details/partials/security-info/SnippetStep.vue'
 
     const props = defineProps<{ scheme: InboundFormSecurityDto; form: InboundFormDetailDto }>()
 
     const { t } = useI18n()
 
-    const importTag = scriptTag(formClientScriptUrl())
-    const token = computed(() => `const token = await InboundForm.getToken('${props.form.formKey}')`)
-    const send = computed(() => securityPlacement(formEndpointUrl(props.form.formKey), props.scheme, 'token'))
+    const install = `${installCommand()}\n${clientImport()}`
+    const prepare = computed(
+        () =>
+            `${formConstruction(formBaseUrl(), props.form.formKey, props.scheme)}\n\nformElement.addEventListener('focusin', () => form.prepare())`,
+    )
+    const send = 'await form.submit({ data })'
+    const withoutBundler = computed(
+        () =>
+            `${scriptTag(formClientScriptUrl())}\n${inlineScript(scriptTagConstruction(formBaseUrl(), props.form.formKey, props.scheme))}`,
+    )
 </script>
 
 <style scoped>

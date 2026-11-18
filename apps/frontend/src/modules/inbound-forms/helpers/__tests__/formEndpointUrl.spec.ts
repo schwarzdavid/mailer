@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formClientScriptUrl, formEndpointPath, formEndpointUrl } from '../formEndpointUrl.ts'
+import { formBaseUrl, formClientScriptUrl, formEndpointPath, formEndpointUrl } from '../formEndpointUrl.ts'
 
 describe('formEndpointUrl', () => {
     it('builds the public submission endpoint on the current origin', () => {
@@ -16,5 +16,9 @@ describe('formEndpointUrl', () => {
 
     it('serves the client script next to the form endpoints', () => {
         expect(formClientScriptUrl()).toBe(`${location.origin}/api/v1/forms/client.js`)
+    })
+
+    it('uses the current origin as the base url', () => {
+        expect(formBaseUrl()).toBe(location.origin)
     })
 })

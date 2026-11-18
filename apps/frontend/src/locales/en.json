@@ -880,6 +880,10 @@
                         "title": "{type} integration",
                         "steps": {
                             "field": "Add the field",
+                            "install": "Install the client",
+                            "create": "Install the client and create the form",
+                            "prepare": "Create the form and fetch the token early",
+                            "withoutBundler": "Without a bundler, load the script instead",
                             "import": "Load the script",
                             "token": "Get the token",
                             "send": "Send it with the submission"
@@ -894,7 +898,7 @@
                         },
                         "timed-token": {
                             "intro": "A single-use token that is bound to the visitor's IP and only becomes valid after the minimum delay, so instant bot submissions are rejected. It requires allowed domains.",
-                            "note": "Fetch a fresh token for every submission."
+                            "note": "The client fetches a fresh token for every submission and waits out the minimum delay."
                         }
                     },
                     "hostnames": {
