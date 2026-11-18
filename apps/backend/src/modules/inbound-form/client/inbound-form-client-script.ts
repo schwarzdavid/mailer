@@ -6,6 +6,8 @@ import type { Env } from '../../../config/env.schema.js'
 import { describeError } from '../../../helpers/describe-error.js'
 
 const CLIENT_SCRIPT_MODULE = '@schwarzdavid/mailer-client/client.iife.js'
+const PRODUCTION_CACHE_CONTROL = 'public, max-age=86400'
+const REVALIDATE_CACHE_CONTROL = 'no-cache'
 
 export function loadInboundFormClientScript(
     resolve: (id: string) => string = createRequire(import.meta.url).resolve,
@@ -25,12 +27,15 @@ function tryLoadInboundFormClientScript(): string | undefined {
 export class InboundFormClientScript {
     private readonly logger = new Logger(InboundFormClientScript.name)
     private readonly cachedSource: string | undefined
+    readonly cacheControl: string
 
     constructor(configService: ConfigService<Env, true>) {
         if (configService.get('NODE_ENV', { infer: true }) === 'production') {
             this.cachedSource = loadInboundFormClientScript()
+            this.cacheControl = PRODUCTION_CACHE_CONTROL
             return
         }
+        this.cacheControl = REVALIDATE_CACHE_CONTROL
         try {
             loadInboundFormClientScript()
         } catch (error) {

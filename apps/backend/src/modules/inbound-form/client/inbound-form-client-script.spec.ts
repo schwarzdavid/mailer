@@ -81,6 +81,18 @@ describe('InboundFormClientScript', () => {
         expect(readFileSync).toHaveBeenCalledTimes(1)
     })
 
+    it('lets browsers cache the script for a day under production', () => {
+        readFileSync.mockReturnValue('bundle')
+
+        expect(new InboundFormClientScript(configFor('production')).cacheControl).toBe('public, max-age=86400')
+    })
+
+    it.each(['development', 'test'] as const)('makes browsers revalidate the script under %s', (nodeEnv) => {
+        readFileSync.mockReturnValue('bundle')
+
+        expect(new InboundFormClientScript(configFor(nodeEnv)).cacheControl).toBe('no-cache')
+    })
+
     it('refuses to start under production without the bundle', () => {
         readFileSync.mockImplementation(missingBundle)
 

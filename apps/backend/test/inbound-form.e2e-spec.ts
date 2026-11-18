@@ -444,7 +444,7 @@ describe('InboundForm (e2e)', () => {
             const response = await http().get('/api/v1/forms/client.js').buffer(true).expect(200)
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
-            expect(response.headers['cache-control']).toBe('public, max-age=86400')
+            expect(response.headers['cache-control']).toBe('no-cache')
             expect(response.text).toContain('MailerClient')
         })
 

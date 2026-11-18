@@ -43,7 +43,7 @@ export class PublicInboundFormController {
         }
         response.set({
             'Content-Type': 'application/javascript; charset=utf-8',
-            'Cache-Control': 'public, max-age=86400',
+            'Cache-Control': this.clientScript.cacheControl,
             'Cross-Origin-Resource-Policy': 'cross-origin',
         })
         return source

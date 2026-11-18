@@ -15,12 +15,15 @@ describe('PublicInboundFormController', () => {
     let controller: PublicInboundFormController
     let submitForm: Mock<InboundFormSubmissionService['submitForm']>
     let issueToken: Mock<InboundFormSubmissionService['issueToken']>
-    let clientScript: { source: InboundFormClientScript['source'] }
+    let clientScript: {
+        source: InboundFormClientScript['source']
+        cacheControl: InboundFormClientScript['cacheControl']
+    }
 
     beforeEach(async () => {
         submitForm = vi.fn<typeof submitForm>().mockResolvedValue(undefined)
         issueToken = vi.fn<typeof issueToken>()
-        clientScript = { source: 'script' }
+        clientScript = { source: 'script', cacheControl: 'public, max-age=60' }
 
         module = await Test.createTestingModule({
             controllers: [PublicInboundFormController],
@@ -96,7 +99,7 @@ describe('PublicInboundFormController', () => {
             const response = await request(app.getHttpServer()).get('/v1/forms/client.js').buffer(true).expect(200)
 
             expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
-            expect(response.headers['cache-control']).toBe('public, max-age=86400')
+            expect(response.headers['cache-control']).toBe('public, max-age=60')
             expect(response.headers['cross-origin-resource-policy']).toBe('cross-origin')
             expect(response.text).toBe('script')
             expect(submitForm).not.toHaveBeenCalled()
