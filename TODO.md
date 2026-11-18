@@ -6,7 +6,7 @@
 
 ## Documentation
 
-- [ ] **Revise the operator docs (`apps/docs`).** Go through the pages for accuracy and gaps. Known gap: `operations/updating.md` only describes the full release-to-release update (backup, recorded revision and migrations, new `compose.yml`). It lacks the short path for a running stack that only needs the newest image of its current tag: `docker compose pull backend` + `docker compose up -d` (or `up -d --pull always`), what a pinned `IMAGE_TAG` changes, and that `up -d` alone (`--pull missing`) does not fetch a newer image.
+- [x] **Revise the operator docs (`apps/docs`).** Go through the pages for accuracy and gaps. Known gap: `operations/updating.md` only describes the full release-to-release update (backup, recorded revision and migrations, new `compose.yml`). It lacks the short path for a running stack that only needs the newest image of its current tag: `docker compose pull backend` + `docker compose up -d` (or `up -d --pull always`), what a pinned `IMAGE_TAG` changes, and that `up -d` alone (`--pull missing`) does not fetch a newer image.
 
 ## Inbound forms
 
