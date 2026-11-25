@@ -1,6 +1,6 @@
 {
   "name": "@schwarzdavid/mailer-client",
-  "version": "0.0.0",
+  "version": "0.0.0-bootrstrap.1",
   "description": "Browser and Node client for the mailer form and send APIs",
   "keywords": [
     "mailer",
