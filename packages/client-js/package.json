@@ -14,8 +14,9 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
+  "author": "David Schwarz <hi@schwarzdavid.at>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/schwarzdavid/mailer.git",

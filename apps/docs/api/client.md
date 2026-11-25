@@ -2,7 +2,7 @@
 
 This page shows how to call mailer from JavaScript or TypeScript with the npm package `@schwarzdavid/mailer-client` instead of hand-written `fetch` calls: to submit an inbound form from a website, and to send a mail from a server. After reading it you can install the package, configure it with your mailer's address and handle its errors.
 
-The package has no runtime dependencies, works in browsers and in Node 20 or newer, and ships its own TypeScript types. Everything is imported from `@schwarzdavid/mailer-client`; a bundler drops the parts a website does not use. Websites without a bundler can use [the script tag](#script-tag) instead.
+The package has no runtime dependencies, works in browsers and in Node 22 or newer, and ships its own TypeScript types. Everything is imported from `@schwarzdavid/mailer-client`; a bundler drops the parts a website does not use. Websites without a bundler can use [the script tag](#script-tag) instead.
 
 ## Install
 

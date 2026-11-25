@@ -1,6 +1,6 @@
 # @schwarzdavid/mailer-client
 
-Browser and Node client for the [mailer](https://github.com/schwarzdavid/mailer) form and send APIs. Zero runtime dependencies, ESM only, Node 20 or newer.
+Browser and Node client for the [mailer](https://github.com/schwarzdavid/mailer) form and send APIs. Zero runtime dependencies, ESM only, Node 22 or newer.
 
 ```bash
 pnpm add @schwarzdavid/mailer-client
