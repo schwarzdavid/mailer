@@ -111,7 +111,6 @@ jobs:
                   persist-credentials: false
             - uses: ./.github/actions/setup
             - run: npm --version
-            - run: pnpm turbo run build --filter=@schwarzdavid/mailer-client
             - working-directory: packages/client-js
               env:
                   TAG: ${{ github.event.release.tag_name }}

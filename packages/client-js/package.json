@@ -44,7 +44,9 @@
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "preversion": "turbo run lint typecheck test --filter=@schwarzdavid/mailer-client",
+    "prepack": "tsdown"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
