@@ -57,13 +57,6 @@ describe('application bootstrap (shared configureApp)', () => {
         expect(response.headers['access-control-allow-headers']).toBe('content-type,x-form-check')
     })
 
-    it('lets other sites load the form client script', async () => {
-        await request(app.getHttpServer())
-            .get('/api/v1/forms/client.js')
-            .expect('Cross-Origin-Resource-Policy', 'cross-origin')
-            .expect(200)
-    })
-
     it('sends the helmet security headers', async () => {
         const response = await request(app.getHttpServer()).get('/api/setup/status').expect(200)
         expect(response.headers['x-content-type-options']).toBe('nosniff')

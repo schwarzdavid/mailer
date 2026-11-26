@@ -1,6 +1,6 @@
 # Contributing
 
-This file covers working on the code: the local setup, the commands that keep the build green, and the CI and release pipeline. Installation, configuration and operations live on the documentation site at https://schwarzdavid.github.io/mailer/, and [`CLAUDE.md`](CLAUDE.md) describes the repository layout, the architecture and the testing conventions. How to build the documentation site and regenerate its screenshots is on its [Development](https://schwarzdavid.github.io/mailer/reference/development) page.
+This file covers working on the code: the local setup, the commands that keep the build green, and the CI and release pipeline. Installation, configuration and operations live on the documentation site at https://schwarzdavid.github.io/mailer/, and [`CLAUDE.md`](CLAUDE.md) describes the repository layout, the architecture and the testing conventions. How to build the documentation site and regenerate its screenshots is under [Documentation site](#documentation-site).
 
 ## Local setup
 
@@ -26,7 +26,7 @@ cp .env.example .env
 
 Change `BACKEND_JWT_SECRET` and `BACKEND_ENCRYPTION_SECRET` to any non-trivial values of at least 32 characters. The encryption secret encrypts stored secrets at rest (DKIM private keys and reCAPTCHA secrets), so if you change it later, they can no longer be decrypted.
 
-Every other variable, with its default, is described in the [environment reference](https://schwarzdavid.github.io/mailer/configuration/environment). Besides the required keys, the template points `SMTP_*` at MailHog and `IMAP_*` at GreenMail and departs from the defaults only where the local services need it: MailHog has no STARTTLS (`SMTP_REQUIRE_TLS=false`), GreenMail serves IMAP without TLS (`IMAP_SECURE=false`), the local domains never resolve (`SEND_REQUIRE_VALID_DNS=false`), and the backend logs at `debug`.
+Every other variable, with its default, is described in the [environment reference](https://schwarzdavid.github.io/mailer/installation/advanced-configuration). Besides the required keys, the template points `SMTP_*` at MailHog and `IMAP_*` at GreenMail and departs from the defaults only where the local services need it: MailHog has no STARTTLS (`SMTP_REQUIRE_TLS=false`), GreenMail serves IMAP without TLS (`IMAP_SECURE=false`), the local domains never resolve (`SEND_REQUIRE_VALID_DNS=false`), and the backend logs at `debug`.
 
 ### 3. Start the infrastructure
 
@@ -65,7 +65,17 @@ The OpenAPI spec (`apps/backend/openapi.json`) and the generated client (`packag
 pnpm build --filter api
 ```
 
-### 6. Start the apps
+### 6. The JavaScript client
+
+`packages/client-js` is the npm package `@schwarzdavid/mailer-client` (MIT, zero runtime dependencies). `tsdown` builds its single ESM entry point with its type declarations and `dist/client.iife.js`, the script build for websites without a bundler (the global `MailerClient`, loaded from npm through a CDN such as jsDelivr; mailer itself does not serve it). The backend depends on the package only as a dev dependency: its e2e suite runs `MailerForm` and `MailerSender` against the real API, so the Turbo task `backend#test:e2e` depends on `^build`. The build needs nothing else from the workspace, so Turbo runs `@schwarzdavid/mailer-client#build` without dependencies (an explicit override in `turbo.json`, which avoids the cycle through `api#build` and `backend#generate`). The package depends on `api` only as a dev dependency, for the type test that keeps its request and response types equal to the backend's contract, so a changed DTO fails `pnpm typecheck` and `pnpm test` there. Under `pnpm dev` the package runs `tsdown --watch --no-clean`; renamed chunks leave stale files in `dist/` that `pnpm build` clears. Work on it with:
+
+```bash
+pnpm build --filter @schwarzdavid/mailer-client
+pnpm --filter @schwarzdavid/mailer-client test
+pnpm --filter @schwarzdavid/mailer-client typecheck
+```
+
+### 7. Start the apps
 
 ```bash
 pnpm dev
@@ -83,14 +93,51 @@ On first start the frontend sends you to the onboarding wizard. There you create
 pnpm lint                         # ESLint (+ oxlint in the frontend)
 pnpm typecheck                    # tsc / vue-tsc
 pnpm test                         # unit tests across all workspaces
-pnpm --filter backend test:e2e    # backend e2e tests (needs Docker, uses Testcontainers)
+pnpm turbo run test:e2e --filter=backend   # backend e2e tests (needs Docker, uses Testcontainers; Turbo builds the client package first)
 pnpm --filter frontend test:e2e   # full-stack Playwright tests (needs Docker; once: pnpm --filter frontend exec playwright install chromium)
 pnpm check                        # lint + typecheck + test + format check
 ```
 
+## Claude Code
+
+The repository configures two code-intelligence tools for [Claude Code](https://claude.com/claude-code), both run from the root dev dependencies, so `pnpm install` is the only setup and no global install is needed:
+
+- `.mcp.json` registers the ESLint MCP server `eslint` (`npx -y @eslint/mcp`, the installed `@eslint/mcp`). It lints files against the repository's `eslint.config.ts`. Claude Code asks once to approve the project's MCP servers.
+- `.claude/settings.json` enables the plugin `typescript-lsp@claude-plugins-official`, which gives Claude go-to-definition, references and diagnostics. The plugin starts `typescript-language-server`, which Claude Code finds in the root `node_modules/.bin`.
+
+Personal settings and permissions belong in `.claude/settings.local.json`, which is gitignored.
+
+## Documentation site
+
+The operator docs are the VitePress workspace `apps/docs`. Build them once; Turbo first builds the backend and generates the OpenAPI document and the list of environment variables the site reads:
+
+```bash
+pnpm build --filter docs   # output in apps/docs/.vitepress/dist
+pnpm dev --filter docs     # http://localhost:5180/mailer/
+pnpm --filter docs test
+```
+
+The build fails when `installation/advanced-configuration.md` misses a variable the backend or `compose.yml` reads or lists one that no longer exists, and when a page links to a page that does not exist. The installation page embeds `deploy/compose.yml`, `deploy/.env.example` and `deploy/setup.sh` at build time, so it always shows the files of the commit it was built from. The tests check that every page is in the sidebar exactly once and starts with a heading, that every referenced screenshot exists, and that the API reference has exactly one page per public tag (`public-send`, `public-form`).
+
+The screenshots under `apps/docs/public/screenshots/` are taken from a real backend and admin UI with demo data. With Docker running, install the browser once and take them all:
+
+```bash
+pnpm --filter docs exec playwright install chromium
+pnpm --filter docs screenshots
+```
+
+The run starts throwaway Postgres, Redis, MailHog and GreenMail containers, walks through the setup wizard, seeds the demo project **Acme Website** with the domain `mail.example.net` and overwrites the PNG files. Its build and server logs are in `apps/frontend/node_modules/.tmp/e2e/`.
+
 ## CI and release pipeline
 
-`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in four jobs. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm --filter backend test:e2e`, and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs the smoke test (`pnpm --filter e2e test:smoke`) against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`.
+`.github/workflows/ci.yml` runs on every push to `main`, on every pull request against `main` and when a GitHub release is published, in five jobs, the fifth (`npm-publish`, described below) only for a published release. `check` runs `pnpm check` (lint, typecheck, unit tests and the format check), `backend-e2e` runs `pnpm turbo run test:e2e --filter=backend` (Turbo builds the client package the suite imports first), and `frontend-e2e` runs the Playwright suite (`pnpm --filter frontend test:e2e`) and uploads the Playwright report and the e2e logs as an artifact when it fails. The three jobs share the composite action `.github/actions/setup`, which installs the Node version pinned in the `Dockerfile` (`ARG NODE_VERSION`, the single place that names it), so CI and the image always run the same Node. The `image` job starts only after all three have passed. It builds the `backend` Docker target once, the only image, and runs the smoke test (`pnpm --filter e2e test:smoke`) against it (the stock Caddy and docker-mailserver images are pulled for the test). On pushes and pull requests it stops there and publishes nothing. For a published release it then pushes that same tested image to GHCR, tagged with the release version (`v1.4.0` becomes `1.4.0`, so release tags must be semver), `sha-<7-char sha>` and, unless the release is marked as a pre-release, `latest`.
+
+A published release also publishes the client package to npm: the `npm-publish` job writes the release version into `packages/client-js`, drops its `devDependencies` (`pnpm pack` cannot resolve the unversioned `workspace:*` link to `api`) and publishes it with that version, under the dist-tag `next` for pre-releases and `latest` otherwise. Two lifecycle scripts of the package guard every publish, by hand as well as in CI: `preversion` runs `lint`, `typecheck` and `test` for the package through Turbo (which first builds the backend, the OpenAPI spec and `api`, because the contract type test needs them), so `npm version` refuses to bump a package that fails them, and `prepack` rebuilds `dist/` with `tsdown`, so `pnpm pack`, `pnpm publish` and `npm publish` never ship a stale build. Pushes and pull requests never publish. The package name `@schwarzdavid/mailer-client` is on the public npm registry, where the owner's user holds the `@schwarzdavid` scope.
+
+Owner steps before the first release that publishes the package:
+
+1. Publish a bootstrap version by hand, because npm can only attach a trusted publisher to a package that exists. In `packages/client-js`, logged in to npm, run the job's own commands (the lifecycle scripts check and build the package on the way): `npm version 0.0.0-bootstrap.0 --no-git-tag-version`, `npm pkg delete devDependencies`, `pnpm pack`, `npm publish ./schwarzdavid-mailer-client-0.0.0-bootstrap.0.tgz --access public --tag bootstrap` and `npm deprecate @schwarzdavid/mailer-client@0.0.0-bootstrap.0 "Bootstrap release for trusted publishing; install a released version"`. Afterwards discard the local changes to `packages/client-js/package.json` and delete the tarball; never commit them. npm points `latest` at the only existing version, so `latest` names the bootstrap version until the first release that is not a pre-release.
+2. On npmjs.com, open the package's settings and add a trusted publisher: GitHub Actions, repository `schwarzdavid/mailer`, workflow `ci.yml`. From then on the `npm-publish` job authenticates through OIDC and needs no stored npm token.
 
 `.github/workflows/docs.yml` builds the documentation site (`apps/docs`) on every push and pull request to `main` and deploys it to GitHub Pages on pushes to `main`.
 

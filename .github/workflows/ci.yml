@@ -30,7 +30,7 @@ jobs:
         steps:
             - uses: actions/checkout@v7
             - uses: ./.github/actions/setup
-            - run: pnpm --filter backend test:e2e
+            - run: pnpm turbo run test:e2e --filter=backend
 
     frontend-e2e:
         runs-on: ubuntu-latest
@@ -95,3 +95,30 @@ jobs:
               env:
                   TAGS: ${{ steps.meta.outputs.tags }}
               run: xargs -n1 docker push <<<"$TAGS"
+
+    npm-publish:
+        needs: [image]
+        if: github.event_name == 'release'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+            - uses: ./.github/actions/setup
+            - run: npm --version
+            - working-directory: packages/client-js
+              env:
+                  TAG: ${{ github.event.release.tag_name }}
+              run: |
+                  npm version "${TAG#v}" --no-git-tag-version
+                  npm pkg delete devDependencies
+            - working-directory: packages/client-js
+              run: pnpm pack
+            - working-directory: packages/client-js
+              env:
+                  DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+              run: npm publish ./schwarzdavid-mailer-client-*.tgz --provenance --access public --tag "$DIST_TAG"

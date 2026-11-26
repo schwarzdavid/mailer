@@ -3,6 +3,7 @@
         <p>{{ t('module.inboundForms.details.security.info.google-recaptcha.intro') }}</p>
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.import')" :value="importTag" />
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.token')" :value="token" />
+        <SnippetStep :label="t('module.inboundForms.details.security.info.steps.create')" :value="create" />
         <SnippetStep :label="t('module.inboundForms.details.security.info.steps.send')" :value="send" />
         <p>{{ t('module.inboundForms.details.security.info.google-recaptcha.note') }}</p>
     </div>
@@ -12,8 +13,12 @@
     import { computed } from 'vue'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormDetailDto, InboundFormSecurityDto } from 'api'
-    import { formEndpointUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
-    import { scriptTag, securityPlacement } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
+    import { formBaseUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import {
+        createFormSnippet,
+        scriptTag,
+        securityPlacement,
+    } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import SnippetStep from '@/modules/inbound-forms/views/details/partials/security-info/SnippetStep.vue'
 
     const props = defineProps<{ scheme: InboundFormSecurityDto; form: InboundFormDetailDto }>()
@@ -25,7 +30,8 @@
         const action = props.scheme.config?.expectedAction || 'submit'
         return `const token = await grecaptcha.execute('SITE_KEY', { action: '${action}' })`
     })
-    const send = computed(() => securityPlacement(formEndpointUrl(props.form.formKey), props.scheme, 'token'))
+    const create = computed(() => createFormSnippet(formBaseUrl(), props.form))
+    const send = computed(() => securityPlacement(props.scheme, 'token'))
 </script>
 
 <style scoped>

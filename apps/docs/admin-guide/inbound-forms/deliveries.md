@@ -114,7 +114,7 @@ cd /opt/mailer
 docker compose logs backend | grep 'Delivery '
 ```
 
-[Logging](/configuration/logging) explains the log format.
+[Advanced configuration](/installation/advanced-configuration#log-level) explains the log format.
 
 ## List failed deliveries
 

@@ -19,10 +19,7 @@
             :label="requiredLabel(t('module.inboundForms.details.receivers.from'))"
             :hint="
                 senderDomain
-                    ? t('module.inboundForms.details.receivers.dialog.senderHint', {
-                          domain: senderDomain.rootDomain,
-                          fqdn: senderDomain.fqdn,
-                      })
+                    ? t('module.inboundForms.details.receivers.dialog.senderHint', { domain: senderDomain.rootDomain })
                     : t('module.inboundForms.details.receivers.dialog.noDomain')
             "
             persistent-hint
@@ -136,15 +133,15 @@
         return parse(host).domain === props.senderDomain?.rootDomain
     }
 
-    function defaultSender(fqdn: string | undefined): string {
-        return fqdn ? `noreply@${fqdn}` : ''
+    function defaultSender(rootDomain: string | undefined): string {
+        return rootDomain ? `noreply@${rootDomain}` : ''
     }
 
     watch(
-        () => props.senderDomain?.fqdn,
-        (fqdn) => {
-            if (model.value && !props.receiver && fqdn && !emailFrom.value) {
-                resetField('emailFrom', { value: defaultSender(fqdn) })
+        () => props.senderDomain?.rootDomain,
+        (rootDomain) => {
+            if (model.value && !props.receiver && rootDomain && !emailFrom.value) {
+                resetField('emailFrom', { value: defaultSender(rootDomain) })
             }
         },
     )
@@ -157,7 +154,7 @@
             }
             resetForm({
                 values: {
-                    emailFrom: props.receiver?.emailFrom ?? defaultSender(props.senderDomain?.fqdn),
+                    emailFrom: props.receiver?.emailFrom ?? defaultSender(props.senderDomain?.rootDomain),
                     emailReceiver: props.receiver?.emailReceiver ?? '',
                     emailReplyTo: props.receiver?.emailReplyTo ?? null,
                     isActive: props.receiver?.isActive ?? true,

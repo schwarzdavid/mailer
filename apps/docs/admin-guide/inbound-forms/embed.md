@@ -1,6 +1,6 @@
 # Embed the form
 
-This page shows three ways to connect a website's contact form to mailer, each as a complete example you can paste: a plain HTML form, a form sent with JavaScript `fetch` and the timed token, and a complete static page. At the end your website submits to `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` and you have seen an e-mail arrive.
+This page shows three ways to connect a website's contact form to mailer, each as a complete example you can paste: a plain HTML form, a form sent with the JavaScript client and the timed token, and a complete static page. At the end your website submits to `https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` and you have seen an e-mail arrive.
 
 The examples use the form from the other pages of this guide: form key `3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c` (yours is on the form's **Endpoint** card), the fields `name`, `email` and `message`, a honeypot with the key `website` and a timed token with the key `formToken`, both with the location **Body**, and the allowed domain `www.example.org`. Replace these with your form's values; the info button of each check on the form's page (**How to integrate _type_**) shows the exact keys.
 
@@ -59,9 +59,13 @@ A plain HTML form needs no JavaScript at all. It works only for forms whose fiel
 After sending, the browser shows mailer's raw answer, `{"status":"accepted"}` or an error, on `app.example.com`. mailer cannot redirect back to a thank-you page. Use the plain form only where that is acceptable, for example on an internal site; for a public website, use one of the JavaScript examples below.
 :::
 
-## Example 2: fetch with client.js and the timed token
+## Example 2: a form with the JavaScript client
 
-This is a form block for an existing page. It loads mailer's `client.js`, which provides `InboundForm.getToken('<form-key>')`: the function requests a timed token and resolves only once the token's minimum delay has passed. The script asks for the token as soon as the visitor starts filling in the form, so the delay has passed by the time they click send, and sends it in the `security` object together with the empty honeypot.
+This is a form block for an existing page that is built with a bundler. It uses mailer's npm package, [the JavaScript client](/api/client): `MailerForm` asks for the timed token as soon as the visitor starts filling in the form, so the token's minimum delay has passed by the time they click send, and sends it in the `security` object together with the empty honeypot.
+
+```bash
+npm install @schwarzdavid/mailer-client
+```
 
 ```html
 <form id="contact-form">
@@ -81,68 +85,90 @@ This is a form block for an existing page. It loads mailer's `client.js`, which 
     <button type="submit">Send</button>
     <p id="contact-status" role="status"></p>
 </form>
+```
 
-<script src="https://app.example.com/api/v1/forms/client.js"></script>
-<script>
-    const endpoint = 'https://app.example.com/api/v1/forms/3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c'
-    const form = document.getElementById('contact-form')
-    const status = document.getElementById('contact-status')
-    let tokenRequest = null
+```js
+import { MailerError, MailerForm } from '@schwarzdavid/mailer-client'
 
-    function requestToken() {
-        if (!tokenRequest) {
-            tokenRequest = InboundForm.getToken('3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c')
-            tokenRequest.catch(() => {
-                tokenRequest = null
-            })
-        }
-        return tokenRequest
+const form = new MailerForm({
+    baseUrl: 'https://app.example.com',
+    formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
+    timedToken: { key: 'formToken', location: 'body' },
+})
+
+const formElement = document.getElementById('contact-form')
+const status = document.getElementById('contact-status')
+
+formElement.addEventListener('focusin', () => form.prepare())
+
+formElement.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    status.textContent = 'Sending…'
+    try {
+        await form.submit({
+            data: {
+                name: formElement.elements.name.value,
+                email: formElement.elements.email.value,
+                message: formElement.elements.message.value,
+            },
+            security: { website: formElement.elements.website.value },
+        })
+        status.textContent = 'Thank you, your message was sent.'
+        formElement.reset()
+    } catch (error) {
+        const failedStatus = error instanceof MailerError ? error.status : 0
+        status.textContent =
+            failedStatus === 400 ? 'Please check your input.' : 'Sending failed. Please try again in a few minutes.'
     }
+})
+```
 
-    form.addEventListener('focusin', requestToken)
+Without a bundler, load the package's script build from the CDN jsDelivr instead, with your mailer's version in place of `1.4.0`. The script provides the package's exports on the global `MailerClient`, so the code stays the same apart from the prefix:
 
-    form.addEventListener('submit', async (event) => {
+```html
+<script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client@1.4.0/dist/client.iife.js"></script>
+<script>
+    const form = new MailerClient.MailerForm({
+        baseUrl: 'https://app.example.com',
+        formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
+        timedToken: { key: 'formToken', location: 'body' },
+    })
+    const formElement = document.getElementById('contact-form')
+    const status = document.getElementById('contact-status')
+
+    formElement.addEventListener('focusin', () => form.prepare())
+
+    formElement.addEventListener('submit', async (event) => {
         event.preventDefault()
         status.textContent = 'Sending…'
         try {
-            const token = await requestToken()
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    data: {
-                        name: form.elements.name.value,
-                        email: form.elements.email.value,
-                        message: form.elements.message.value,
-                    },
-                    security: {
-                        website: form.elements.website.value,
-                        formToken: token,
-                    },
-                }),
+            await form.submit({
+                data: {
+                    name: formElement.elements.name.value,
+                    email: formElement.elements.email.value,
+                    message: formElement.elements.message.value,
+                },
+                security: { website: formElement.elements.website.value },
             })
-            if (response.status !== 400) {
-                tokenRequest = null
-            }
-            if (!response.ok) {
-                throw new Error(`Submit failed with status ${response.status}`)
-            }
             status.textContent = 'Thank you, your message was sent.'
-            form.reset()
+            formElement.reset()
         } catch (error) {
-            status.textContent = 'Sending failed. Please try again in a few minutes.'
+            const failedStatus = error instanceof MailerClient.MailerError ? error.status : 0
+            status.textContent =
+                failedStatus === 400 ? 'Please check your input.' : 'Sending failed. Please try again in a few minutes.'
         }
     })
 </script>
 ```
 
-- Load `client.js` with a normal `<script src="…">` tag, not `type="module"`: it finds the token endpoint through its own URL. The browser may cache it for a day.
-- A token works once. The script drops it after every answer except `400`, which leaves the token unused, so the visitor can correct a field and send again without a new one.
+- `timedToken` carries the key and the location of the form's timed token check. Leave it out for a form without that check.
+- A token works once. `MailerForm` keeps it after `400`, `404`, `413` and `429`, which mailer sends before it uses the token, so the visitor can correct a field or wait and send again without a new one. After any other answer, and when no answer arrives, it drops the token. It also asks for a new token when the old one has expired.
+- Load the script with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. Keep the version in the URL: without it jsDelivr serves the newest release, which may not match your mailer. If you would rather not load anything from a CDN, host `dist/client.iife.js` from the npm package on your own website.
 - With reCAPTCHA instead of, or in addition to, the timed token, request Google's token in the submit handler with `await grecaptcha.execute('SITE_KEY', { action: 'submit' })` after loading `https://www.google.com/recaptcha/api.js?render=SITE_KEY`, and add it to `security` under the check's key. The info dialog of the reCAPTCHA check shows the exact lines.
 
 ## Example 3: a complete static page
 
-A whole page, for example `contact.html` on a static site. It adds to example 2 a status line in colour, a disabled button while sending, and messages for each kind of error. Save it, replace the URLs and keys if yours differ, and open it from `https://www.example.org/contact.html`; opened from disk or from another host it gets `403` because of the allowed domains.
+A whole page, for example `contact.html` on a static site without a bundler. It adds to example 2 a status line in colour, a disabled button while sending, and messages for each kind of error. Save it, replace the URLs and keys if yours differ, and open it from `https://www.example.org/contact.html`; opened from disk or from another host it gets `403` because of the allowed domains.
 
 ```html
 <!doctype html>
@@ -205,33 +231,25 @@ A whole page, for example `contact.html` on a static site. It adds to example 2 
             <p id="contact-status" role="status"></p>
         </form>
 
-        <script src="https://app.example.com/api/v1/forms/client.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client@1.4.0/dist/client.iife.js"></script>
         <script>
-            const formKey = '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c'
-            const endpoint = `https://app.example.com/api/v1/forms/${formKey}`
-            const form = document.getElementById('contact-form')
-            const button = form.querySelector('button')
+            const form = new MailerClient.MailerForm({
+                baseUrl: 'https://app.example.com',
+                formKey: '3f9a0c1e7b2d4a6f8e5c9b0d1a2f4e6c',
+                timedToken: { key: 'formToken', location: 'body' },
+            })
+            const formElement = document.getElementById('contact-form')
+            const button = formElement.querySelector('button')
             const status = document.getElementById('contact-status')
-            let tokenRequest = null
-
-            function requestToken() {
-                if (!tokenRequest) {
-                    tokenRequest = InboundForm.getToken(formKey)
-                    tokenRequest.catch(() => {
-                        tokenRequest = null
-                    })
-                }
-                return tokenRequest
-            }
 
             function show(text, tone) {
                 status.textContent = text
                 status.className = tone
             }
 
-            function describeFailure(statusCode, body) {
-                if (statusCode === 400 && Array.isArray(body.message)) {
-                    const fields = body.message.map((line) => line.split(':')[0])
+            function describeFailure(statusCode, messages) {
+                if (statusCode === 400 && messages.length > 0) {
+                    const fields = messages.map((line) => line.split(':')[0])
                     return `Please check these fields: ${[...new Set(fields)].join(', ')}.`
                 }
                 if (statusCode === 429) {
@@ -243,44 +261,29 @@ A whole page, for example `contact.html` on a static site. It adds to example 2 
                 return 'Sending failed. Please try again later.'
             }
 
-            form.addEventListener('focusin', requestToken)
+            formElement.addEventListener('focusin', () => form.prepare())
 
-            form.addEventListener('submit', async (event) => {
+            formElement.addEventListener('submit', async (event) => {
                 event.preventDefault()
-                if (!form.reportValidity()) {
+                if (!formElement.reportValidity()) {
                     return
                 }
                 button.disabled = true
                 show('Sending…', '')
                 try {
-                    const token = await requestToken()
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            data: {
-                                name: form.elements.name.value.trim(),
-                                email: form.elements.email.value.trim(),
-                                message: form.elements.message.value.trim(),
-                            },
-                            security: {
-                                website: form.elements.website.value,
-                                formToken: token,
-                            },
-                        }),
+                    await form.submit({
+                        data: {
+                            name: formElement.elements.name.value.trim(),
+                            email: formElement.elements.email.value.trim(),
+                            message: formElement.elements.message.value.trim(),
+                        },
+                        security: { website: formElement.elements.website.value },
                     })
-                    if (response.status !== 400) {
-                        tokenRequest = null
-                    }
-                    if (response.ok) {
-                        show('Thank you, your message was sent.', 'ok')
-                        form.reset()
-                        return
-                    }
-                    const body = await response.json().catch(() => ({}))
-                    show(describeFailure(response.status, body), 'error')
+                    show('Thank you, your message was sent.', 'ok')
+                    formElement.reset()
                 } catch (error) {
-                    show(describeFailure(error.status ?? 0, {}), 'error')
+                    const failure = error instanceof MailerClient.MailerError ? error : { status: 0, messages: [] }
+                    show(describeFailure(failure.status, failure.messages), 'error')
                 } finally {
                     button.disabled = false
                 }
@@ -290,7 +293,7 @@ A whole page, for example `contact.html` on a static site. It adds to example 2 
 </html>
 ```
 
-If the form has no timed token, remove the `client.js` tag, `requestToken`, the `focusin` listener and `formToken` from the example.
+If the form has no timed token, leave `timedToken` and the `focusin` listener out of the example.
 
 ## Responses
 
@@ -314,14 +317,13 @@ Errors other than `413` are JSON with `statusCode` and `message`; all of them ex
 
 Every `403` message is listed on [Security checks](/admin-guide/inbound-forms/security): `Origin not allowed`, the `Form token …` messages and the `Captcha …` messages. Write the website's code against the status, not against the message text.
 
-The token endpoint `https://app.example.com/api/v1/forms/<form-key>/token` answers `403` `Origin not allowed`, `404` `Unknown form` or `429` in the same shapes. `InboundForm.getToken` then rejects with an error whose `status` property holds the status code, which example 3 uses.
+The token endpoint `https://app.example.com/api/v1/forms/<form-key>/token` answers `403` `Origin not allowed`, `404` `Unknown form` or `429` in the same shapes. `getToken` and `submit` of the [JavaScript client](/api/client) reject with a `MailerError` whose `status` property holds the status code (`0` for a network failure or a timeout) and whose `messages` property holds the `message` as a list, which example 3 uses.
 
 ## CORS and browser security
 
 - The form endpoints are open to every origin: mailer answers the browser's CORS preflight and sends `Access-Control-Allow-Origin: *`, so `fetch` from any website works. Which websites mailer actually accepts is decided by the allowed domains, not by CORS. Requests carry no cookies.
-- `client.js` is served with `Cross-Origin-Resource-Policy: cross-origin`, so other websites may load it.
 - The browser does not let the website's script read mailer's rate-limit headers (`Retry-After-formSubmit` and the `X-RateLimit-…` headers); only the status `429` is visible. Tell the visitor to try again later.
-- If the website sends a Content Security Policy, allow mailer in it: `script-src https://app.example.com` for `client.js` and `connect-src https://app.example.com` for the requests, plus `form-action https://app.example.com` for the plain HTML form.
+- If the website sends a Content Security Policy, allow mailer in it: `connect-src https://app.example.com` for the requests and `form-action https://app.example.com` for the plain HTML form, plus `script-src https://cdn.jsdelivr.net` when it loads the client from jsDelivr.
 
 ## How you know it worked
 

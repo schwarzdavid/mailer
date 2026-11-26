@@ -51,6 +51,22 @@ pre,
     --v-field-border-opacity: 1;
 }
 
+/* Only the value text shrinks: $field-font-size would also scale the label, whose float animation assumes the field's size. */
+.v-field__input,
+.v-text-field__prefix,
+.v-text-field__suffix {
+    font-size: 0.875rem;
+}
+
+/* iOS Safari zooms into any field whose text is smaller than 16px. */
+@media (max-width: 599.98px) {
+    .v-field__input,
+    .v-text-field__prefix,
+    .v-text-field__suffix {
+        font-size: 1rem;
+    }
+}
+
 .v-btn--variant-outlined {
     border-color: rgb(var(--v-theme-border-strong));
 }
@@ -321,7 +337,6 @@ pre,
 .mono-field .v-text-field__suffix,
 .mono-field .v-select__selection-text {
     font-family: var(--font-mono);
-    font-size: 0.8125rem;
     font-variant-ligatures: none;
 }
 

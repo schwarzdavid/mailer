@@ -10,6 +10,7 @@ import {
     receiverAddress,
     requireEnv,
     senderDomain,
+    senderRootDomain,
 } from './support/fixtures.ts'
 
 interface MailhogMessage {
@@ -103,7 +104,7 @@ test('a public submission delivers the rendered template to the receiver', async
     const mail = await latestMailTo(receiverAddress)
 
     expect(header(mail, 'Subject')).toBe('New contact from Jane Doe')
-    expect(header(mail, 'From')).toContain(`noreply@${senderDomain}`)
+    expect(header(mail, 'From')).toContain(`noreply@${senderRootDomain}`)
     expect(header(mail, 'To')).toContain(receiverAddress)
     expect(header(mail, 'Reply-To')).toContain('jane.doe@example.org')
     expect(header(mail, 'DKIM-Signature')).toContain(`d=${senderDomain}`)

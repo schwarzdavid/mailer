@@ -10,13 +10,13 @@ _The card **Security** with one allowed domain, a honeypot and a timed token._
 
 ## Choose the checks
 
-| Protection                            | Stops                                                                                             | Does not stop                                                                          | Needs on the website                      |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [Allowed domains](#allowed-domains)   | Other websites embedding your form in their visitors' browsers                                    | Scripts outside a browser, which can send any `Origin` header                          | Nothing                                   |
-| [Honeypot](#honeypot)                 | Simple bots that fill in every input of a page                                                    | Bots written for your form, and people                                                 | One hidden input                          |
-| [Timed token](#timed-token)           | Bots that post without loading the page, posting faster than a person, replaying the same request | Bots that run a real browser and wait; a single visitor sending a few messages by hand | `client.js` and a few lines of JavaScript |
-| [Google reCAPTCHA](#google-recaptcha) | Most automated traffic, scored by Google                                                          | Determined attackers using solving services; it also sends visitor data to Google      | Google's script and a Google account      |
-| [Rate limits](#rate-limits)           | One address sending many submissions                                                              | Many addresses sending a few each                                                      | Nothing                                   |
+| Protection                            | Stops                                                                                             | Does not stop                                                                          | Needs on the website                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------ |
+| [Allowed domains](#allowed-domains)   | Other websites embedding your form in their visitors' browsers                                    | Scripts outside a browser, which can send any `Origin` header                          | Nothing                              |
+| [Honeypot](#honeypot)                 | Simple bots that fill in every input of a page                                                    | Bots written for your form, and people                                                 | One hidden input                     |
+| [Timed token](#timed-token)           | Bots that post without loading the page, posting faster than a person, replaying the same request | Bots that run a real browser and wait; a single visitor sending a few messages by hand | The JavaScript client                |
+| [Google reCAPTCHA](#google-recaptcha) | Most automated traffic, scored by Google                                                          | Determined attackers using solving services; it also sends visitor data to Google      | Google's script and a Google account |
+| [Rate limits](#rate-limits)           | One address sending many submissions                                                              | Many addresses sending a few each                                                      | Nothing                              |
 
 A good default for a contact form is **allowed domains, a honeypot and the timed token**: together they stop most bot traffic without anything the visitor notices and without a third party. Add reCAPTCHA if spam still gets through.
 
@@ -123,7 +123,7 @@ It answers:
 - `notBefore` and `expiresAt` are the times from which and until which it is accepted.
 - `waitMs` is how many milliseconds the website still has to wait until `notBefore`.
 
-You do not have to handle this yourself. mailer serves a small script, `https://app.example.com/api/v1/forms/client.js`, that provides `InboundForm.getToken('<form-key>')`: it requests the token, waits `waitMs`, and then returns the token. Load the script with a normal `<script src="…">` tag (not `type="module"`), because it finds the endpoint through its own URL. [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
+You do not have to handle this yourself. The [JavaScript client](/api/client), the npm package `@schwarzdavid/mailer-client`, requests the token, waits `waitMs`, places the token under the check's key and location and sends it with the submission: pass the check's key and location as `timedToken` to `MailerForm`. It also drops a used token and asks for a new one when the old one has expired. A website without a bundler loads the package's [script build](/api/client#script-tag) instead, for example from jsDelivr, which provides the same classes on the global `MailerClient` (`new MailerClient.MailerForm({ baseUrl, formKey, timedToken })`). [Embed the form](/admin-guide/inbound-forms/embed) shows the complete code.
 
 The token endpoint also checks the allowed domains. It answers `403` `Origin not allowed` when the request comes from another website, and `404` `Unknown form` when the form does not exist, does not accept submissions or has no timed token.
 
@@ -131,7 +131,7 @@ The token endpoint also checks the allowed domains. It answers `403` `Origin not
 
 Nothing, as long as the website asks for the token while the visitor fills in the form, as the examples on [Embed the form](/admin-guide/inbound-forms/embed) do: the minimum delay has passed long before they click send. If the website asks only when the visitor clicks send, sending takes about as long as the minimum delay, 3 seconds by default.
 
-Fetch a fresh token for every submission. A token that was used, expired, or fetched from a different IP address is rejected.
+Fetch a fresh token for every submission; the JavaScript client does this for you. A token that was used, expired, or fetched from a different IP address is rejected.
 
 ### Errors
 
@@ -204,8 +204,8 @@ Google says a reCAPTCHA token expires after two minutes, so request it when the 
 
 ## Rate limits
 
-Every form endpoint is rate limited, whatever checks the form has: by default 5 submissions per 10 minutes per form and visitor IP address, a separate 5 token requests per 10 minutes, and a general limit of 10 requests per minute per IP address. Requests over the limit get `429`. The numbers, how to change them with `FORM_SUBMIT_RATE_LIMIT`, `FORM_SUBMIT_RATE_TTL`, `FORM_TOKEN_RATE_LIMIT` and `FORM_TOKEN_RATE_TTL`, and what happens while Redis is down are on [Rate limits](/configuration/rate-limits).
+Every form endpoint is rate limited, whatever checks the form has: by default 5 submissions per 10 minutes per form and visitor IP address, a separate 5 token requests per 10 minutes, and a general limit of 10 requests per minute per IP address. Requests over the limit get `429`. The numbers, how to change them with `FORM_SUBMIT_RATE_LIMIT`, `FORM_SUBMIT_RATE_TTL`, `FORM_TOKEN_RATE_LIMIT` and `FORM_TOKEN_RATE_TTL`, and what happens while Redis is down are on [Advanced configuration](/installation/advanced-configuration#rate-limit-pairs).
 
 The limits apply to all forms of the installation alike; a single form cannot have its own limit yet. If one website needs more, for example because its visitors share an office network, raise the values for the whole installation.
 
-Rate limits are not counted correctly when the backend sees the proxy's address instead of the visitor's. Check `TRUST_PROXY` as described on [Reverse proxy](/configuration/reverse-proxy) when many visitors get `429` at once.
+Rate limits are not counted correctly when the backend sees the proxy's address instead of the visitor's. Check `TRUST_PROXY` as described on [Advanced configuration](/installation/advanced-configuration#trust-proxy) when many visitors get `429` at once.

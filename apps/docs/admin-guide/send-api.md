@@ -103,13 +103,13 @@ mailer checks three things about the `from` domain, in this order:
 
 1. The domain is a sender domain on **Domains**, or a name under its registrable domain, and that sender domain is assigned to the key's project. If not: `403 FROM_DOMAIN_NOT_ALLOWED`. The following checks apply to that sender domain.
 2. The domain has an active DKIM key, the key mailer signs its mail with. If not: `422 FROM_DOMAIN_NOT_READY` with the message `The from domain has no active DKIM key`. mailer generates the key when you add the domain and removes the domain again if that fails, so in normal operation this message does not occur.
-3. The domain has at least one DNS record and every record is **Valid**. If not: `422 FROM_DOMAIN_NOT_READY` with the message `The from domain has DNS records that are not valid yet`. This check applies while [`SEND_REQUIRE_VALID_DNS`](/configuration/environment#send-require-valid-dns) is `true`, its default.
+3. The domain has at least one DNS record and every record is **Valid**. If not: `422 FROM_DOMAIN_NOT_READY` with the message `The from domain has DNS records that are not valid yet`. This check applies while [`SEND_REQUIRE_VALID_DNS`](/installation/advanced-configuration#send-require-valid-dns) is `true`, its default.
 
 The DNS statuses are those on the domain's page, refreshed every 15 minutes, once after each start of the backend and by **Check again**. After you have fixed a record, click **Check again** and retry; see [Sending needs valid records](/admin-guide/domains#sending-needs-valid-records). Publishing records does not fix the DKIM cause: delete the domain and add it again, which creates a new key, as the `FROM_DOMAIN_NOT_READY` entry on [Errors](/api/errors) says. Either way, do not parse the `message` text. Nothing is recorded on **Sent mail** for a refused request.
 
 ## Rate limits
 
-Two limits apply to every request, whether its key is valid or not. A request without anything shaped like a key is counted per client IP in place of the per-key counter; [Rate limits](/configuration/rate-limits#every-limit) has the details.
+Two limits apply to every request, whether its key is valid or not. A request without anything shaped like a key is counted per client IP in place of the per-key counter; [Advanced configuration](/installation/advanced-configuration#rate-limit-pairs) has the details.
 
 - **Per API key:** `PUBLIC_API_RATE_LIMIT` requests per `PUBLIC_API_RATE_TTL` milliseconds, by default 60 per 60,000 ms (one minute).
 - **Per client IP:** ten times the per-key limit in the same window, counted across all keys, by default 600 per minute.
@@ -120,7 +120,7 @@ A refused request gets `429` with this body and a `Retry-After-publicApi` or `Re
 { "statusCode": 429, "message": "ThrottlerException: Too Many Requests" }
 ```
 
-Successful requests carry `X-RateLimit-Remaining-publicApi`, so a program that sends in bulk can slow down before it is refused. [Rate limits](/configuration/rate-limits) explains the headers and how to raise the limits in `.env`. When Redis is down, the send API is not rate limited at all.
+Successful requests carry `X-RateLimit-Remaining-publicApi`, so a program that sends in bulk can slow down before it is refused. [Advanced configuration](/installation/advanced-configuration#rate-limit-pairs) lists the limits and how to raise them in `.env`. When Redis is down, the send API is not rate limited at all.
 
 ## The call is synchronous
 

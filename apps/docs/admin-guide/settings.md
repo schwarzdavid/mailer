@@ -33,7 +33,7 @@ While a record is not valid, the navigation shows a dot next to **Settings** and
 
 Do this when the server gets a new IP address, for example after moving to another machine with the same `MAIL_HOSTNAME`, or when you add or drop its IPv6 address. You need shell access to the server. The example changes the IPv4 address from `203.0.113.10` to `203.0.113.20`.
 
-1. **Update the address records.** In your DNS zone, change the A record of `mx.example.com` to the new address (and the AAAA record if the IPv6 address changes). At your hosting provider, set the PTR record of the new address to `mx.example.com`, as on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
+1. **Update the address records.** In your DNS zone, change the A record of `mx.example.com` to the new address (and the AAAA record if the IPv6 address changes). At your hosting provider, set the PTR record of the new address to `mx.example.com`, as on [First-run setup](/installation/first-run-setup#step-2-dns-records).
 2. **Set the new address in `.env`** and restart the backend:
 
     ```bash
@@ -140,7 +140,7 @@ Ask your customers to add the new include **alongside** the old one before the s
 
     The backend switches the sending domain while it starts. Caddy obtains the certificate for `mx2.example.com`; until it has it, `mail` restarts, which takes a few seconds to a few minutes, and the script waits for it. It then creates the mailbox `bounce@mx2.example.com` and its `postmaster` alias. The backend logs in to the mail server with that mailbox to send and to read bounces, so every send fails until the script has finished. The mailbox of the old name stays in place but is no longer read.
 
-5. **Set the PTR records.** At your hosting provider, set the reverse DNS of `203.0.113.10` (and `2001:db8::10`) to `mx2.example.com`, as on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
+5. **Set the PTR records.** At your hosting provider, set the reverse DNS of `203.0.113.10` (and `2001:db8::10`) to `mx2.example.com`, as on [First-run setup](/installation/first-run-setup#step-2-dns-records).
 6. **Publish the new records.** Open **Settings**: **Domain name** shows `mx2.example.com` and **DNS records** lists its records. Create the MX, SPF, DKIM and DMARC records in the DNS zone of the new name with the copy buttons; the DKIM value is new. Once DNS has caught up, click **Check again**. The records of `mx.example.com` are no longer used; delete them once the new ones are valid.
 7. **Notify your customers.** Every sender domain's SPF record must now read `v=spf1 include:mx2.example.com ~all`. Each domain's page under **Domains** shows the new value; send it to the owner of each zone, and click **Check again** on the domain once they have changed it.
 

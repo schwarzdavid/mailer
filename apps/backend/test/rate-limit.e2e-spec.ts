@@ -110,12 +110,6 @@ describe('Rate limiting (e2e)', () => {
             const other = await submitForm(appA, '198.51.100.1', 'rate-limit-submit-b')
             expect(other.status).not.toBe(429)
         })
-
-        it('does not throttle the client script with the form budgets', async () => {
-            for (let attempt = 0; attempt < FORM_BUDGET + 1; attempt++) {
-                await request(appA.getHttpServer()).get('/api/v1/forms/client.js').expect(200)
-            }
-        })
     })
 })
 

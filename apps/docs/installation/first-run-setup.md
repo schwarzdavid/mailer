@@ -1,27 +1,6 @@
 # First-run setup
 
-This page walks you through the setup wizard that opens on the first visit: you create the first administrator and publish the mail DNS records mailer generated for `MAIL_HOSTNAME` and the server addresses from `.env`. At the end you are signed in to the admin UI and your server has a complete mail identity.
-
-## Read the setup token
-
-While no user exists, anybody who reaches `https://app.example.com` could create the first account. To make sure that is you, the backend writes a one-time **setup token** to its log, and the wizard asks for it. Read it on the server:
-
-```bash
-cd /opt/mailer
-docker compose logs backend | grep "Setup token"
-```
-
-The token is the 32 hexadecimal characters after `Setup token:`:
-
-```text
-mailer-backend-1  | {"level":30,…,"context":"SetupTokenService","msg":"No user exists yet. Setup token: 3f9a0c6e1b7d4e28a5c0f1e9d2b7a6c4"}
-```
-
-How the token behaves:
-
-- **It lives only in memory.** It is not stored anywhere. Every start of the backend while no user exists creates a new token and logs it again; an older token stops working. If the command prints several lines, use the **last** one.
-- **It is logged only while no user exists.** Once the first account is created, the backend no longer prints it, and creating another first account is refused.
-- **Each backend instance has its own token.** With the bundled compose file there is exactly one instance. If you run several, keep it to one until the first account exists, or the token you read may belong to a different instance than the one answering your browser.
+This page walks you through the setup wizard that opens on the first visit: you create the first administrator and publish the mail DNS records mailer generated for `MAIL_HOSTNAME` and the server addresses from `.env`. Have the [setup token](/installation/#get-the-setup-token) ready.
 
 ## Open the wizard
 
@@ -37,7 +16,7 @@ Under **Create the admin account**, fill in:
 
 | Field             | What to enter                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
-| **Setup token**   | The token from the log, without spaces.                                                             |
+| **Setup token**   | The [token from the log](/installation/#get-the-setup-token), without spaces.                       |
 | **First name**    | Your first name.                                                                                    |
 | **Last name**     | Your last name.                                                                                     |
 | **Email address** | The address you will log in with. It must be a valid address; mailer does not send mail to it here. |
@@ -58,7 +37,7 @@ The backend created these records when it started: a DKIM key for `MAIL_HOSTNAME
 Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each (the **MX** record also has a **Priority** with its own copy button, because DNS providers ask for it in a separate field), and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
 
 ::: tip Wrong name or address?
-Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `docker compose up -d` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name as on [DNS records](/installation/dns), change `MAIL_HOSTNAME` in `.env`, run `sh setup.sh`, which also creates the bounce mailbox for the new name ([Docker Compose](/installation/docker-compose#start-the-stack-and-create-the-bounce-mailbox)), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
+Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `docker compose up -d` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name, change `MAIL_HOSTNAME` in `.env`, run `sh setup.sh`, which also creates the bounce mailbox for the new name ([Start mailer](/installation/#start-mailer)), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
 :::
 
 Create the records in your DNS zone. With the example values, the full set looks like this:
@@ -90,8 +69,8 @@ What each record does:
 - **MX** sends mail addressed to `mx.example.com`, such as bounce reports to `bounce@mx.example.com`, to your server. The wizard shows the priority `10` and the mail server `mx.example.com` as separate fields, as DNS provider forms ask for them; in a zone file they form one value, `10 mx.example.com.`.
 - **SPF** says that only your server's addresses may send mail with an envelope sender at `mx.example.com`, and that receivers should reject anything else (`-all`).
 - **DKIM** publishes the public half of the key the backend signs mail with. `s1` is the selector, the name of the key. The value is generated for your installation: copy it from the wizard with the copy button, never from this page. It is about 400 characters long; most DNS providers accept it in one piece, while zone files split it into several quoted strings of at most 255 characters, which is fine, because mailer joins them when it checks.
-- **DMARC** with `p=none` only observes: receivers take no action on mail that fails SPF and DKIM, and because the record names no report address, they send no reports either. [Going live](/installation/going-live) explains when to tighten it.
-- **PTR (IPv4)** and **PTR (IPv6)** are the reverse DNS records you set at your hosting provider on [Prepare the server](/installation/prepare-server#set-the-reverse-dns-ptr-record).
+- **DMARC** with `p=none` only observes: receivers take no action on mail that fails SPF and DKIM, and because the record names no report address, they send no reports either. [Deliverability](/operations/deliverability#tighten-dmarc-step-by-step) explains when to tighten it.
+- **PTR (IPv4)** and **PTR (IPv6)** are the reverse DNS records of your server's addresses. You set them in your hosting provider's console (on Hetzner Cloud: the server's **Networking** tab, **Edit Reverse DNS**), not in your DNS zone.
 
 ::: warning Copy the values exactly
 Use the copy buttons. DKIM is **Valid** only when DNS returns exactly the generated value; SPF and DMARC are checked by content. If a record shows **Found a different value**, open it to see what DNS returns and follow the advice. If `mx.example.com` already has an SPF record, merge the two into one: a name may have only one SPF record, and the admin UI suggests the merged value.
@@ -104,27 +83,3 @@ You do not have to wait for every record. Click **Finish setup** at any time: ma
 ## If you leave in the middle
 
 The wizard remembers how far you got. If you close the browser after creating the account, open `https://app.example.com` again, log in with the account you created and the wizard continues at the step you reached.
-
-## How you know it worked
-
-After **Finish setup** the admin UI opens the **Dashboard**, which greets a new installation with a **Get started** list of four steps for your first website. Visiting `https://app.example.com/setup` now leads to the dashboard instead of the wizard.
-
-Once DNS has caught up, the records you published resolve with exactly the values from the wizard. Check them on the server:
-
-```bash
-dig +short MX mx.example.com @1.1.1.1
-dig +short TXT mx.example.com @1.1.1.1
-dig +short TXT _dmarc.mx.example.com @1.1.1.1
-dig +short TXT s1._domainkey.mx.example.com @1.1.1.1
-```
-
-```text
-10 mx.example.com.
-"v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 -all"
-"v=DMARC1; p=none;"
-"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA…"
-```
-
-In the admin UI, open **Settings** and click **Check again** on the DNS records: when every record is **Valid**, the card shows **All 8 records are valid** (6 without IPv6).
-
-Continue with [Verify the installation](/installation/verify).
