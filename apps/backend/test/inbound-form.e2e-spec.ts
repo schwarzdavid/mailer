@@ -2,7 +2,6 @@
 import { getModelToken } from '@nestjs/sequelize'
 import request from 'supertest'
 import type { App } from 'supertest/types.js'
-import { runInNewContext } from 'node:vm'
 import { MailerError, MailerForm } from '@schwarzdavid/mailer-client'
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest'
 import { createTestApp } from './support/app.js'
@@ -438,39 +437,6 @@ describe('InboundForm (e2e)', () => {
 
             expect(invalid.status).toBe(400)
             expect(retry.status).toBe(202)
-        })
-
-        it('serves the client script', async () => {
-            const response = await http().get('/api/v1/forms/client.js').buffer(true).expect(200)
-
-            expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
-            expect(response.headers['cache-control']).toBe('no-cache')
-            expect(response.text).toContain('MailerClient')
-        })
-
-        it('the served client script submits through its global MailerForm', async () => {
-            const script = (await http().get('/api/v1/forms/client.js').buffer(true).expect(200)).text
-            const window: Record<string, unknown> = {}
-            Object.assign(window, {
-                window,
-                fetch: originFetch,
-                setTimeout,
-                clearTimeout,
-                AbortSignal,
-                URL,
-                URLSearchParams,
-                Headers,
-                Response,
-            })
-            runInNewContext(script, window)
-            const mailerClient = window.MailerClient as { MailerForm: typeof MailerForm }
-            const form = new mailerClient.MailerForm({
-                baseUrl,
-                formKey: timedFormKey,
-                timedToken: { key: 'formToken', location: 'body' },
-            })
-
-            await expect(form.submit({ data: validData })).resolves.toEqual({ status: 'accepted' })
         })
 
         it('MailerForm fetches the token and submits', async () => {

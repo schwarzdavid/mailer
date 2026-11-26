@@ -6,20 +6,20 @@ This page describes what mailer does to protect the installation and its users, 
 
 The backend sets these headers on every response, through the library [helmet](https://helmetjs.github.io/) (additional reading):
 
-| Header                              | Value              | Effect                                                                                     |
-| ----------------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
-| `Content-Security-Policy`           | See below          | Limits where the admin UI may load scripts, styles, images and fonts from.                 |
-| `Strict-Transport-Security`         | `max-age=31536000` | Browsers use only HTTPS for `app.example.com` for one year. Subdomains are not included.   |
-| `Cross-Origin-Opener-Policy`        | `same-origin`      | Other sites' windows cannot keep a handle on the admin UI's window.                        |
-| `Cross-Origin-Resource-Policy`      | `same-origin`      | Other sites cannot embed the backend's responses; `client.js` is the exception (see CORS). |
-| `Origin-Agent-Cluster`              | `?1`               | The browser isolates the admin UI from other pages of the same site.                       |
-| `Referrer-Policy`                   | `no-referrer`      | Links from the admin UI send no `Referer` header.                                          |
-| `X-Content-Type-Options`            | `nosniff`          | Browsers do not guess content types.                                                       |
-| `X-Frame-Options`                   | `SAMEORIGIN`       | Other sites cannot show the admin UI in a frame.                                           |
-| `X-DNS-Prefetch-Control`            | `off`              | No DNS prefetching of links.                                                               |
-| `X-Download-Options`                | `noopen`           | Old Internet Explorer versions do not open downloads in the site's context.                |
-| `X-Permitted-Cross-Domain-Policies` | `none`             | Old plug-ins get no cross-domain access.                                                   |
-| `X-XSS-Protection`                  | `0`                | Turns off a broken filter of old browsers.                                                 |
+| Header                              | Value              | Effect                                                                                   |
+| ----------------------------------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| `Content-Security-Policy`           | See below          | Limits where the admin UI may load scripts, styles, images and fonts from.               |
+| `Strict-Transport-Security`         | `max-age=31536000` | Browsers use only HTTPS for `app.example.com` for one year. Subdomains are not included. |
+| `Cross-Origin-Opener-Policy`        | `same-origin`      | Other sites' windows cannot keep a handle on the admin UI's window.                      |
+| `Cross-Origin-Resource-Policy`      | `same-origin`      | Other sites cannot embed the backend's responses.                                        |
+| `Origin-Agent-Cluster`              | `?1`               | The browser isolates the admin UI from other pages of the same site.                     |
+| `Referrer-Policy`                   | `no-referrer`      | Links from the admin UI send no `Referer` header.                                        |
+| `X-Content-Type-Options`            | `nosniff`          | Browsers do not guess content types.                                                     |
+| `X-Frame-Options`                   | `SAMEORIGIN`       | Other sites cannot show the admin UI in a frame.                                         |
+| `X-DNS-Prefetch-Control`            | `off`              | No DNS prefetching of links.                                                             |
+| `X-Download-Options`                | `noopen`           | Old Internet Explorer versions do not open downloads in the site's context.              |
+| `X-Permitted-Cross-Domain-Policies` | `none`             | Old plug-ins get no cross-domain access.                                                 |
+| `X-XSS-Protection`                  | `0`                | Turns off a broken filter of old browsers.                                               |
 
 The backend also leaves out the `X-Powered-By` header. Caddy adds `X-Robots-Tag: noindex, nofollow` to every response, so search engines do not index the admin UI.
 
@@ -59,7 +59,6 @@ CORS (Cross-Origin Resource Sharing) decides whether JavaScript on another websi
 | Surface                                  | CORS                                                               | Why                                                                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Public form endpoints, `/api/v1/forms/…` | `Access-Control-Allow-Origin: *`, without credentials (no cookies) | Forms are embedded on any website. Each form can restrict itself to **Allowed domains**.                                   |
-| `client.js` of a form                    | As above, plus `Cross-Origin-Resource-Policy: cross-origin`        | Websites load the script from mailer.                                                                                      |
 | Send API, `/api/v1/send`                 | No CORS headers                                                    | Browsers on other sites cannot read its answers. Call it from a server, never from a browser, so the API key stays secret. |
 | Admin API and admin UI, everything else  | No CORS headers                                                    | The admin UI is served from the same origin and needs none.                                                                |
 

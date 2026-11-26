@@ -1,9 +1,9 @@
 {
     "mcpServers": {
-        "npx": {
+        "eslint": {
             "type": "stdio",
-            "command": "@eslint/mcp@latest",
-            "args": [],
+            "command": "npx",
+            "args": ["-y", "@eslint/mcp"],
             "env": {}
         }
     }

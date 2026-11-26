@@ -1,5 +1,5 @@
 import { MailerError } from '../core/mailer-error.ts'
-import { resolveApiBase, type ClientOptions } from '../core/options.ts'
+import type { ClientOptions } from '../core/options.ts'
 import { createFormClientInternal, type InternalFormClient } from './form-client-internal.ts'
 import type { FormSubmission, FormSubmitResult, FormValues, IssuedToken, TimedTokenPlacement } from './types.ts'
 
@@ -29,7 +29,6 @@ export class MailerForm<TData extends FormValues = FormValues, TSecurity extends
     #cached: CachedToken | undefined
 
     constructor(options: MailerFormOptions) {
-        resolveApiBase(options.baseUrl)
         this.#timedToken = options.timedToken
         this.formKey = options.formKey
         this.#client = createFormClientInternal(options)

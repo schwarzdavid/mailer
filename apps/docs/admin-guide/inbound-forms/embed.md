@@ -123,10 +123,10 @@ formElement.addEventListener('submit', async (event) => {
 })
 ```
 
-Without a bundler, load `client.js` instead of the package. The script provides the package's exports on the global `MailerClient`, so the code stays the same apart from the prefix:
+Without a bundler, load the package's script build from the CDN jsDelivr instead, with your mailer's version in place of `1.4.0`. The script provides the package's exports on the global `MailerClient`, so the code stays the same apart from the prefix:
 
 ```html
-<script src="https://app.example.com/api/v1/forms/client.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client@1.4.0/dist/client.iife.js"></script>
 <script>
     const form = new MailerClient.MailerForm({
         baseUrl: 'https://app.example.com',
@@ -163,7 +163,7 @@ Without a bundler, load `client.js` instead of the package. The script provides 
 
 - `timedToken` carries the key and the location of the form's timed token check. Leave it out for a form without that check.
 - A token works once. `MailerForm` keeps it after `400`, `404`, `413` and `429`, which mailer sends before it uses the token, so the visitor can correct a field or wait and send again without a new one. After any other answer, and when no answer arrives, it drops the token. It also asks for a new token when the old one has expired.
-- Load `client.js` with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. The browser may cache it for a day.
+- Load the script with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. Keep the version in the URL: without it jsDelivr serves the newest release, which may not match your mailer. If you would rather not load anything from a CDN, host `dist/client.iife.js` from the npm package on your own website.
 - With reCAPTCHA instead of, or in addition to, the timed token, request Google's token in the submit handler with `await grecaptcha.execute('SITE_KEY', { action: 'submit' })` after loading `https://www.google.com/recaptcha/api.js?render=SITE_KEY`, and add it to `security` under the check's key. The info dialog of the reCAPTCHA check shows the exact lines.
 
 ## Example 3: a complete static page
@@ -231,7 +231,7 @@ A whole page, for example `contact.html` on a static site without a bundler. It 
             <p id="contact-status" role="status"></p>
         </form>
 
-        <script src="https://app.example.com/api/v1/forms/client.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client@1.4.0/dist/client.iife.js"></script>
         <script>
             const form = new MailerClient.MailerForm({
                 baseUrl: 'https://app.example.com',
@@ -322,9 +322,8 @@ The token endpoint `https://app.example.com/api/v1/forms/<form-key>/token` answe
 ## CORS and browser security
 
 - The form endpoints are open to every origin: mailer answers the browser's CORS preflight and sends `Access-Control-Allow-Origin: *`, so `fetch` from any website works. Which websites mailer actually accepts is decided by the allowed domains, not by CORS. Requests carry no cookies.
-- `client.js` is served with `Cross-Origin-Resource-Policy: cross-origin`, so other websites may load it.
 - The browser does not let the website's script read mailer's rate-limit headers (`Retry-After-formSubmit` and the `X-RateLimit-…` headers); only the status `429` is visible. Tell the visitor to try again later.
-- If the website sends a Content Security Policy, allow mailer in it: `script-src https://app.example.com` for `client.js` and `connect-src https://app.example.com` for the requests, plus `form-action https://app.example.com` for the plain HTML form.
+- If the website sends a Content Security Policy, allow mailer in it: `connect-src https://app.example.com` for the requests and `form-action https://app.example.com` for the plain HTML form, plus `script-src https://cdn.jsdelivr.net` when it loads the client from jsDelivr.
 
 ## How you know it worked
 

@@ -30,8 +30,7 @@ jobs:
         steps:
             - uses: actions/checkout@v7
             - uses: ./.github/actions/setup
-            - run: pnpm turbo run build --filter=@schwarzdavid/mailer-client
-            - run: pnpm --filter backend test:e2e
+            - run: pnpm turbo run test:e2e --filter=backend
 
     frontend-e2e:
         runs-on: ubuntu-latest

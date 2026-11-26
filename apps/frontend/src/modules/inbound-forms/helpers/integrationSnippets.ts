@@ -2,12 +2,26 @@ import type { InboundFormDetailDto, InboundFormFieldDto, InboundFormSecurityDto 
 import { buildSampleData } from '@/modules/inbound-forms/helpers/sampleData.ts'
 
 const CLIENT_PACKAGE = '@schwarzdavid/mailer-client'
+const CLIENT_SCRIPT_URL = `https://cdn.jsdelivr.net/npm/${CLIENT_PACKAGE}/dist/client.iife.js`
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+const STRING_ESCAPES: Record<string, string> = {
+    '\\': '\\\\',
+    "'": "\\'",
+    '\n': '\\n',
+    '\r': '\\r',
+    '\u2028': '\\u2028',
+    '\u2029': '\\u2029',
+    '<': '\\x3C',
+}
 
 type TimedTokenScheme = Pick<InboundFormSecurityDto, 'key' | 'location'>
 
+function stringLiteral(value: string): string {
+    return `'${value.replace(/[\\'\n\r\u2028\u2029<]/g, (character) => STRING_ESCAPES[character] ?? character)}'`
+}
+
 function propertyKey(key: string): string {
-    return IDENTIFIER.test(key) ? key : `'${key}'`
+    return IDENTIFIER.test(key) ? key : stringLiteral(key)
 }
 
 export function installCommand(): string {
@@ -21,13 +35,18 @@ export function clientImport(): string {
 function constructionOptions(options: string[], timedToken?: TimedTokenScheme): string {
     const lines = [...options]
     if (timedToken) {
-        lines.push(`timedToken: { key: '${timedToken.key}', location: '${timedToken.location}' }`)
+        lines.push(
+            `timedToken: { key: ${stringLiteral(timedToken.key)}, location: ${stringLiteral(timedToken.location)} }`,
+        )
     }
     return lines.map((line) => `    ${line},`).join('\n')
 }
 
 function construction(className: string, baseUrl: string, formKey: string, timedToken?: TimedTokenScheme): string {
-    const options = constructionOptions([`baseUrl: '${baseUrl}'`, `formKey: '${formKey}'`], timedToken)
+    const options = constructionOptions(
+        [`baseUrl: ${stringLiteral(baseUrl)}`, `formKey: ${stringLiteral(formKey)}`],
+        timedToken,
+    )
     return `const form = new ${className}({\n${options}\n})`
 }
 
@@ -61,6 +80,10 @@ export function scriptTag(src: string): string {
     return `<script src="${src}"></script>`
 }
 
+export function clientScriptTag(): string {
+    return scriptTag(CLIENT_SCRIPT_URL)
+}
+
 export function inlineScript(code: string): string {
     return `<script>\n${code}\n</script>`
 }
@@ -71,7 +94,7 @@ export function securityPlacement(
 ): string {
     switch (scheme.location) {
         case 'header':
-            return `await form.submit({ data, headers: { '${scheme.key}': ${valueExpression} } })`
+            return `await form.submit({ data, headers: { ${stringLiteral(scheme.key)}: ${valueExpression} } })`
         case 'query':
             return `await form.submit({ data, query: { ${propertyKey(scheme.key)}: ${valueExpression} } })`
         default:

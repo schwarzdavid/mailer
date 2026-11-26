@@ -129,10 +129,10 @@ The statuses and codes are explained on [Errors](./errors). Branch on `status` a
 
 ## Script tag
 
-A website without a bundler loads the script that mailer itself serves. It is the same package built as one file, and it defines the global `MailerClient` with exactly the package's exports: `MailerForm`, `createFormClient`, `MailerSender` and `MailerError`. Everything on this page applies unchanged, with the `MailerClient.` prefix instead of an `import`:
+A website without a bundler loads the package's script build, `dist/client.iife.js`, for example from the CDN jsDelivr, with your mailer's version in place of `1.4.0`. It is the same package built as one file, and it defines the global `MailerClient` with exactly the package's exports: `MailerForm`, `createFormClient`, `MailerSender` and `MailerError`. Everything on this page applies unchanged, with the `MailerClient.` prefix instead of an `import`:
 
 ```html
-<script src="https://app.example.com/api/v1/forms/client.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client@1.4.0/dist/client.iife.js"></script>
 <script>
     const form = new MailerClient.MailerForm({
         baseUrl: 'https://app.example.com',
@@ -142,11 +142,11 @@ A website without a bundler loads the script that mailer itself serves. It is th
 </script>
 ```
 
-Load it with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. `MailerSender` is in the script too, but its browser guard applies there as well: an API key belongs on a server.
+Load it with a normal `<script src="…">` tag, not `type="module"`, so that `MailerClient` becomes a global. Keep the version in the URL: without it jsDelivr serves the newest release. To load nothing from a CDN, host the file from the npm package on your own website. `MailerSender` is in the script too, but its browser guard applies there as well: an API key belongs on a server.
 
 ## Versions
 
-Use the client version that equals your mailer's version: the package is published with every release of mailer under the same version number, and nothing checks the match at runtime. The script served by `client.js` is always the one that belongs to your server.
+Use the client version that equals your mailer's version: the package is published with every release of mailer under the same version number, and nothing checks the match at runtime. This applies to the script build as well.
 
 ## Licence
 

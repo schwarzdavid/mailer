@@ -4,6 +4,7 @@ import type { InboundFormFieldDto } from 'api'
 import { buildSampleData } from '../sampleData.ts'
 import {
     clientImport,
+    clientScriptTag,
     inlineScript,
     exampleRequest,
     formConstruction,
@@ -101,6 +102,43 @@ describe('inlineScript', () => {
 describe('scriptTag', () => {
     it('builds a script element for the source', () => {
         expect(scriptTag('https://example.com/a.js')).toBe('<script src="https://example.com/a.js"></script>')
+    })
+})
+
+describe('clientScriptTag', () => {
+    it('loads the script build of the npm package from jsDelivr', () => {
+        expect(clientScriptTag()).toBe(
+            '<script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client/dist/client.iife.js"></script>',
+        )
+    })
+})
+
+describe('escaping of configured keys', () => {
+    const awkwardKeys = ["form'token", 'x\\captcha', 'line\nbreak', '</script>']
+
+    it.each(awkwardKeys)('keeps the timed token construction valid JavaScript for %j', (key) => {
+        const code = formConstruction(baseUrl, formKey, { key, location: 'body' })
+
+        expect(parses(code)).toBe(true)
+        expect(code).not.toContain('</script>')
+    })
+
+    it.each(awkwardKeys)('keeps every security placement valid JavaScript for %j', (key) => {
+        for (const location of ['body', 'header', 'query'] as const) {
+            const code = securityPlacement({ location, key }, 'token')
+
+            expect(parses(`const data = {}; const form = { submit() {} }; const token = ''\n${code}`)).toBe(true)
+            expect(code).not.toContain('</script>')
+        }
+    })
+
+    it('escapes quotes and backslashes inside the string literal', () => {
+        expect(formConstruction(baseUrl, formKey, { key: "a'b\\c", location: 'header' })).toContain(
+            "timedToken: { key: 'a\\'b\\\\c', location: 'header' }",
+        )
+        expect(securityPlacement({ location: 'header', key: "a'b" }, 'token')).toBe(
+            "await form.submit({ data, headers: { 'a\\'b': token } })",
+        )
     })
 })
 

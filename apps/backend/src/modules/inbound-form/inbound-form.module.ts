@@ -28,7 +28,6 @@ import {
     InboundFormTokenService,
     systemFormTokenClock,
 } from './services/inbound-form-token.service.js'
-import { InboundFormClientScript } from './client/inbound-form-client-script.js'
 import { ThrottlerStorageModule } from '../throttler-storage/throttler-storage.module.js'
 
 @Module({
@@ -60,7 +59,6 @@ import { ThrottlerStorageModule } from '../throttler-storage/throttler-storage.m
         InboundFormDeliveryRecoveryService,
         InboundFormDeliveryProcessor,
         InboundFormTokenService,
-        InboundFormClientScript,
         { provide: FORM_TOKEN_CLOCK, useValue: systemFormTokenClock },
     ],
 })

@@ -11,7 +11,3 @@ export function formBaseUrl(): string {
 export function formEndpointUrl(formKey: string): string {
     return `${location.origin}${formEndpointPath(formKey)}`
 }
-
-export function formClientScriptUrl(): string {
-    return `${location.origin}${FORM_API_PATH}/client.js`
-}

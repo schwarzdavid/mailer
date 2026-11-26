@@ -57,7 +57,9 @@ describe('SecurityInfoDialog', () => {
         expect(overlayText()).toContain("formKey: 'c4e7a1f09b3d6e2a8f5c1b7d0e9a4c3b'")
         expect(overlayText()).toContain("timedToken: { key: 'formToken', location: 'query' }")
         expect(overlayText()).toContain('form.prepare()')
-        expect(overlayText()).toContain('/api/v1/forms/client.js')
+        expect(overlayText()).toContain(
+            '<script src="https://cdn.jsdelivr.net/npm/@schwarzdavid/mailer-client/dist/client.iife.js"></script>',
+        )
         expect(overlayText()).toContain('new MailerClient.MailerForm(')
         expect(overlayText()).toMatch(/<script>\s*const form = new MailerClient\.MailerForm\([\s\S]*\}\)\s*<\/script>/)
     })

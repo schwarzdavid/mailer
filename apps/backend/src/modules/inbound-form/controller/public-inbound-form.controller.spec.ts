@@ -1,36 +1,23 @@
-import { INestApplication } from '@nestjs/common'
-import { Test, TestingModule } from '@nestjs/testing'
+import { Test } from '@nestjs/testing'
 import { AppThrottlerGuard } from '../../throttler-storage/guards/app-throttler.guard.js'
 import type { Request } from 'express'
-import request from 'supertest'
-import type { App } from 'supertest/types.js'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { PublicInboundFormController } from './public-inbound-form.controller.js'
 import { InboundFormSubmissionService } from '../services/inbound-form-submission.service.js'
-import { InboundFormClientScript } from '../client/inbound-form-client-script.js'
 import { IssuedFormToken } from '../interfaces/inbound-form-token.interface.js'
 
 describe('PublicInboundFormController', () => {
-    let module: TestingModule
     let controller: PublicInboundFormController
     let submitForm: Mock<InboundFormSubmissionService['submitForm']>
     let issueToken: Mock<InboundFormSubmissionService['issueToken']>
-    let clientScript: {
-        source: InboundFormClientScript['source']
-        cacheControl: InboundFormClientScript['cacheControl']
-    }
 
     beforeEach(async () => {
         submitForm = vi.fn<typeof submitForm>().mockResolvedValue(undefined)
         issueToken = vi.fn<typeof issueToken>()
-        clientScript = { source: 'script', cacheControl: 'public, max-age=60' }
 
-        module = await Test.createTestingModule({
+        const module = await Test.createTestingModule({
             controllers: [PublicInboundFormController],
-            providers: [
-                { provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } },
-                { provide: InboundFormClientScript, useValue: clientScript },
-            ],
+            providers: [{ provide: InboundFormSubmissionService, useValue: { submitForm, issueToken } }],
         })
             .overrideGuard(AppThrottlerGuard)
             .useValue({ canActivate: () => true })
@@ -80,39 +67,6 @@ describe('PublicInboundFormController', () => {
             notBefore: '2026-10-20T10:00:03.000Z',
             expiresAt: '2026-10-20T11:00:00.000Z',
             waitMs: 3000,
-        })
-    })
-
-    describe('over http', () => {
-        let app: INestApplication<App>
-
-        beforeEach(async () => {
-            app = module.createNestApplication<INestApplication<App>>()
-            await app.init()
-        })
-
-        afterEach(async () => {
-            await app.close()
-        })
-
-        it('serves the client script', async () => {
-            const response = await request(app.getHttpServer()).get('/v1/forms/client.js').buffer(true).expect(200)
-
-            expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8')
-            expect(response.headers['cache-control']).toBe('public, max-age=60')
-            expect(response.headers['cross-origin-resource-policy']).toBe('cross-origin')
-            expect(response.text).toBe('script')
-            expect(submitForm).not.toHaveBeenCalled()
-        })
-
-        it('answers 404 without caching headers while the client script is not built', async () => {
-            clientScript.source = undefined
-
-            const response = await request(app.getHttpServer()).get('/v1/forms/client.js').expect(404)
-
-            expect(response.headers['content-type']).toMatch(/^application\/json/)
-            expect(response.headers['cache-control']).toBeUndefined()
-            expect(response.headers['cross-origin-resource-policy']).toBeUndefined()
         })
     })
 })

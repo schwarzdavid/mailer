@@ -159,7 +159,6 @@ const expectedRoutes: Record<string, RouteAccess> = {
         scopedByPrincipal: true,
     },
 
-    'GET /v1/forms/client.js': { guards: throttled, abilities: [], scopedByPrincipal: false },
     'POST /v1/forms/:formKey/token': { guards: throttled, abilities: [], scopedByPrincipal: false },
     'POST /v1/forms/:formKey': { guards: throttled, abilities: [], scopedByPrincipal: false },
 

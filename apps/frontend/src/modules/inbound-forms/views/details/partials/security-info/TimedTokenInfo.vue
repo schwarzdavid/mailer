@@ -16,13 +16,13 @@
     import { computed } from 'vue'
     import { useI18n } from 'vue-i18n'
     import type { InboundFormDetailDto, InboundFormSecurityDto } from 'api'
-    import { formBaseUrl, formClientScriptUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
+    import { formBaseUrl } from '@/modules/inbound-forms/helpers/formEndpointUrl.ts'
     import {
         clientImport,
+        clientScriptTag,
         formConstruction,
         inlineScript,
         installCommand,
-        scriptTag,
         scriptTagConstruction,
     } from '@/modules/inbound-forms/helpers/integrationSnippets.ts'
     import SnippetStep from '@/modules/inbound-forms/views/details/partials/security-info/SnippetStep.vue'
@@ -39,7 +39,7 @@
     const send = 'await form.submit({ data })'
     const withoutBundler = computed(
         () =>
-            `${scriptTag(formClientScriptUrl())}\n${inlineScript(scriptTagConstruction(formBaseUrl(), props.form.formKey, props.scheme))}`,
+            `${clientScriptTag()}\n${inlineScript(scriptTagConstruction(formBaseUrl(), props.form.formKey, props.scheme))}`,
     )
 </script>
 
