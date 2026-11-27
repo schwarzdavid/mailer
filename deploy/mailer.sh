@@ -8,6 +8,7 @@ IMAGE=ghcr.io/schwarzdavid/mailer
 SECRET_KEYS="DB_PASSWORD BACKEND_JWT_SECRET BACKEND_ENCRYPTION_SECRET MAIL_PASSWORD"
 REQUIRED_SETTINGS="SITE_ADDRESS MAIL_HOSTNAME MAIL_SERVER_IPV4"
 UPDATE_LOCK=.update-lock
+MAILBOX_HASH_FAILED=65
 
 say() {
     printf '%s\n' "$1"
@@ -132,6 +133,13 @@ require_secrets() {
     done
 }
 
+pin_image_tag() {
+    pinned_image_tag=$(env_value IMAGE_TAG)
+    [ -n "$pinned_image_tag" ] || return 0
+    IMAGE_TAG=$pinned_image_tag
+    export IMAGE_TAG
+}
+
 image_tag_or_latest() {
     configured_tag=$(env_value IMAGE_TAG)
     printf '%s' "${configured_tag:-latest}"
@@ -199,36 +207,48 @@ in_mail() {
 mailbox_password_script() {
     cat <<'SCRIPT'
 set -eu
-account=$1
+account=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 accounts=$2
-IFS= read -r password
-[ -n "$password" ]
-hash=$(printf '%s\n%s\n' "$password" "$password" | doveadm pw -s SHA512-CRYPT)
+hash_failed=$3
+fail_hash() {
+    printf '%s\n' 'could not hash the mailbox password' >&2
+    exit "$hash_failed"
+}
+IFS= read -r password || fail_hash
+[ -n "$password" ] || fail_hash
+hash=$(printf '%s\n%s\n' "$password" "$password" | doveadm pw -s SHA512-CRYPT) || fail_hash
 case $hash in
     '{SHA512-CRYPT}'*) ;;
-    *) exit 1 ;;
+    *) fail_hash ;;
 esac
+outcome=created
+if [ -f "$accounts" ] &&
+    awk -F '|' -v account="$account" 'tolower($1) == account { found = 1 } END { exit !found }' "$accounts"; then
+    outcome=updated
+fi
 {
-    [ ! -f "$accounts" ] || awk -F '|' -v account="$account" 'tolower($1) != tolower(account)' "$accounts"
+    [ ! -f "$accounts" ] || awk -F '|' -v account="$account" 'tolower($1) != account' "$accounts"
     printf '%s|%s\n' "$account" "$hash"
 } >"$accounts.next"
 mv "$accounts.next" "$accounts"
+printf '%s\n' "$outcome"
 SCRIPT
 }
 
 set_mailbox_password() {
     printf '%s\n' "$mail_password" |
-        in_mail sh -c "$(mailbox_password_script)" set-mailbox-password "$bounce" "$accounts"
+        in_mail sh -c "$(mailbox_password_script)" set-mailbox-password "$bounce" "$accounts" "$MAILBOX_HASH_FAILED"
 }
 
 ensure_mailbox() {
     in_mail true >/dev/null 2>&1 || return 1
-    mailbox_done="Created the mailbox $bounce."
-    if in_mail grep -qi "^$bounce|" "$accounts" 2>/dev/null; then
-        mailbox_done="Updated the password of $bounce."
-    fi
-    set_mailbox_password || return 1
-    say "$mailbox_done"
+    mailbox_status=0
+    mailbox_outcome=$(set_mailbox_password) || mailbox_status=$?
+    [ "$mailbox_status" -eq 0 ] || return "$mailbox_status"
+    case $mailbox_outcome in
+        updated) say "Updated the password of $bounce." ;;
+        *) say "Created the mailbox $bounce." ;;
+    esac
     if ! in_mail grep -qi "^$postmaster[[:space:]]" "$aliases" 2>/dev/null; then
         in_mail setup alias add "$postmaster" "$bounce" || return 1
         say "Created the alias $postmaster -> $bounce."
@@ -244,7 +264,13 @@ wait_for_mailbox() {
     aliases=/tmp/docker-mailserver/postfix-virtual.cf
     say "Waiting for the mail service (it restarts until Caddy has the certificate for $mail_hostname)..."
     deadline=$(($(date +%s) + 600))
-    until ensure_mailbox; do
+    while :; do
+        mailbox_attempt=0
+        ensure_mailbox || mailbox_attempt=$?
+        case $mailbox_attempt in
+            0) return 0 ;;
+            "$MAILBOX_HASH_FAILED") return 1 ;;
+        esac
         if [ "$(date +%s)" -ge "$deadline" ]; then
             warn "the mail service did not accept the account within 10 minutes; check: docker compose logs proxy mail"
             return 1
@@ -390,6 +416,7 @@ guard_update_lock() {
 }
 
 main() {
+    pin_image_tag
     case ${1:-help} in
         start | stop | restart | status | logs | compose | token | doctor | recovery-kit | update | _post-setup)
             run_under_wrapper "$@"

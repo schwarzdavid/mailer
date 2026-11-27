@@ -22,6 +22,8 @@ const inheritedKeysToDrop = [
     'FAKE_CLI_STDERR',
     'FAKE_COMPOSE_VERSION',
     'FAKE_LOGS',
+    'FAKE_DOVEADM_SILENT',
+    'IMAGE_TAG',
 ]
 const mailPassword = 'mail-secret-value'
 
@@ -29,6 +31,10 @@ const fakeDocker = `#!/bin/sh
 line=$(printf '%s' "$*" | tr '\\n' ' ')
 case "$line" in
     "compose up"*) printf 'env DB_PASSWORD=%s\\n' "\${DB_PASSWORD:-}" >>"$FAKE_LOG" ;;
+esac
+case "$line" in
+    "compose version"*) ;;
+    "compose "*) printf '%s|%s\\n' "\${IMAGE_TAG:-}" "$line" >>"$FAKE_IMAGE_TAGS" ;;
 esac
 printf '%s\\n' "$line" >>"$FAKE_LOG"
 printf '[%s]' "$@" | tr '\\n' ' ' >>"$FAKE_ARGV"
@@ -39,10 +45,19 @@ fi
 case "$line" in
     "compose version --short") printf '%s\\n' "\${FAKE_COMPOSE_VERSION:-2.30.0}" ;;
     "compose logs"*) if [ -n "\${FAKE_LOGS:-}" ]; then cat "$FAKE_LOGS"; fi ;;
-    "compose exec -T mail sh -c "*) PATH="$FAKE_MAIL_BIN:$PATH" exec sh -c "$7" "$8" "$9" "$FAKE_ACCOUNTS" ;;
+    "compose exec -T mail sh -c "*) PATH="$FAKE_MAIL_BIN:$PATH" exec sh -c "$7" "$8" "$9" "$FAKE_ACCOUNTS" "\${11}" ;;
     "run "*" mailer "*)
         if [ -n "\${FAKE_CLI_STDERR:-}" ]; then printf '%s\\n' "$FAKE_CLI_STDERR" >&2; fi
-        exit "\${FAKE_CLI_EXIT:-0}"
+        cli_exit=\${FAKE_CLI_EXIT:-0}
+        case "$line" in
+            *" mailer migrate-project --image-tag "*)
+                if [ "$cli_exit" = 0 ]; then
+                    eval "cli_target=\\\${$#}"
+                    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$cli_target/" .env
+                fi
+                ;;
+        esac
+        exit "$cli_exit"
         ;;
 esac
 exit 0
@@ -51,6 +66,9 @@ exit 0
 const fakeDoveadm = `#!/bin/sh
 printf '%s\\n' "$*" >>"$FAKE_DOVEADM_ARGV"
 cat >>"$FAKE_STDIN"
+if [ -n "\${FAKE_DOVEADM_SILENT:-}" ]; then
+    exit 0
+fi
 printf '%s\\n' '{SHA512-CRYPT}$6$fake'
 `
 
@@ -93,6 +111,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     let mailBinDir: string
     let doveadmArgvFile: string
     let accountsFile: string
+    let imageTagsFile: string
     let mountSource: string
     let user: string
 
@@ -157,6 +176,13 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         return (await logLines()).filter((line) => line !== 'compose version --short' && !line.startsWith('env '))
     }
 
+    async function composeImageTags(): Promise<string[]> {
+        if (!existsSync(imageTagsFile)) {
+            return []
+        }
+        return (await readFile(imageTagsFile, 'utf8')).split('\n').filter((line) => line !== '')
+    }
+
     function lockExists(): boolean {
         return existsSync(join(installDir, '.update-lock'))
     }
@@ -184,6 +210,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
                 FAKE_MAIL_BIN: mailBinDir,
                 FAKE_DOVEADM_ARGV: doveadmArgvFile,
                 FAKE_ACCOUNTS: accountsFile,
+                FAKE_IMAGE_TAGS: imageTagsFile,
             },
             extraEnv,
         )
@@ -216,6 +243,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         mailBinDir = join(rootDir, 'mail-bin')
         doveadmArgvFile = join(rootDir, 'doveadm.argv')
         accountsFile = join(rootDir, 'postfix-accounts.cf')
+        imageTagsFile = join(rootDir, 'compose.image-tags')
         await mkdir(installDir)
         await mkdir(binDir)
         await mkdir(mailBinDir)
@@ -306,11 +334,56 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     })
 
     it('creates the mailbox when the account list does not hold it yet', async () => {
-        const result = await run(['setup', '--yes'], { FAKE_FAIL: '^compose exec -T mail grep -qi .bounce@' })
+        await writeFile(accountsFile, 'bounce@mxXexample.com|{SHA512-CRYPT}other\n')
+        const result = await run(['setup', '--yes'])
         expectCleanExit(result)
-        expect(await readFile(accountsFile, 'utf8')).toBe('bounce@mx.example.com|{SHA512-CRYPT}$6$fake\n')
+        expect(await readFile(accountsFile, 'utf8')).toBe(
+            'bounce@mxXexample.com|{SHA512-CRYPT}other\nbounce@mx.example.com|{SHA512-CRYPT}$6$fake\n',
+        )
         expect(result.stdout).toContain('Created the mailbox bounce@mx.example.com.')
         expect(result.stdout).not.toContain('Updated the password')
+    })
+
+    it('writes the account in lower case and replaces its existing line for a mixed-case MAIL_HOSTNAME', async () => {
+        await writeEnv({ ...defaultEnv, MAIL_HOSTNAME: 'Mx.Example.com' })
+        await writeFile(accountsFile, 'bounce@mx.example.com|{SHA512-CRYPT}old\n')
+        const result = await run(['setup', '--yes'])
+        expectCleanExit(result)
+        expect(await readFile(accountsFile, 'utf8')).toBe('bounce@mx.example.com|{SHA512-CRYPT}$6$fake\n')
+        expect(result.stdout).toContain('Updated the password of')
+        expect(result.stdout).not.toContain('Created the mailbox')
+    })
+
+    it('stops at once and leaves the account list untouched when the password cannot be hashed', async () => {
+        const accounts = 'bounce@mx.example.com|{SHA512-CRYPT}old\n'
+        await writeFile(accountsFile, accounts)
+        const result = await run(['setup', '--yes'], { FAKE_DOVEADM_SILENT: '1' })
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('could not hash the mailbox password')
+        expect(await readFile(accountsFile, 'utf8')).toBe(accounts)
+        const mailboxCalls = (await argvCalls()).filter((call) =>
+            call.startsWith(recorded(['compose', 'exec', '-T', 'mail', 'sh', '-c'])),
+        )
+        expect(mailboxCalls).toHaveLength(1)
+        expect(result.stdout + result.stderr).not.toContain(mailPassword)
+        expect((await logLines()).filter((line) => line.includes(mailPassword))).toEqual([])
+    })
+
+    it('hands compose the IMAGE_TAG of .env, not the one in the environment', async () => {
+        const result = await run(['start'], { IMAGE_TAG: 'stale' })
+        expectCleanExit(result)
+        expect(await composeImageTags()).toEqual(['1.0.0|compose up -d'])
+    })
+
+    it('_finish-update starts the target IMAGE_TAG that the CLI wrote to .env', async () => {
+        await createLock()
+        const result = await run(['update', '--to', '1.1.0'], { IMAGE_TAG: '1.0.0' })
+        expectCleanExit(result)
+        expect(await readFile(join(installDir, '.env'), 'utf8')).toMatch(/^IMAGE_TAG=1\.1\.0$/m)
+        expect((await composeImageTags()).filter((line) => line.includes('|compose up'))).toEqual([
+            '1.1.0|compose up -d --pull missing --remove-orphans',
+            '1.1.0|compose up -d --wait --wait-timeout 300 backend',
+        ])
     })
 
     it('refuses an old Compose', async () => {
