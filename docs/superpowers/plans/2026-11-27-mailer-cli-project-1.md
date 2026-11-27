@@ -82,6 +82,7 @@ apps/docs/**, README.md, CONTRIBUTING.md, CLAUDE.md
 ### Task 1: CLI workspace, `.env` file and secrets
 
 **Files:**
+
 - Create: `packages/cli/package.json`, `tsconfig.json`, `tsdown.config.ts`, `vitest.config.ts`, `eslint.config.ts`
 - Create: `packages/cli/src/errors.ts`, `src/context.ts`, `src/env-file.ts`, `src/secrets.ts`
 - Test: `packages/cli/src/env-file.spec.ts`, `src/secrets.spec.ts`
@@ -198,10 +199,12 @@ it('fingerprints a secret without revealing it', () => {
 ### Task 2: Project format, assets and image tag
 
 **Files:**
+
 - Create: `packages/cli/src/project.ts`, `src/legacy-templates.ts`
 - Test: `packages/cli/src/project.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `EnvFile`, `CliError`, `EXIT`, `CliContext` (Task 1).
 - Produces:
 
@@ -217,6 +220,7 @@ export const releasedComposeHashes: readonly string[]
 ```
 
 Rules the tests pin:
+
 - `detectFormat`: no `compose.yml` → `'fresh'` (a lone `.env` is a fresh directory with prepared answers); `compose.yml` without a numeric `MAILER_FORMAT_VERSION` in `.env` → `0`; otherwise that number.
 - `composeOrigin` compares sha256 over the content with CRLF normalised to LF: equal to the asset → `'current'`, in `releasedComposeHashes` → `'released'`, else `'edited'`.
 - `resolveImageTag`: a requested tag other than `latest` is returned as is; `undefined` or `latest` returns `bakedVersion`; if that is `0.0.0-dev`, throw `CliError` with `EXIT.usage` and the message `This image carries no release version; pass --image-tag <version>.`
@@ -252,17 +256,27 @@ it('resolveImageTag refuses to pin a development image', () => {
 ### Task 3: The `setup` command
 
 **Files:**
+
 - Create: `packages/cli/src/prompter.ts`, `src/commands/setup.ts`
 - Test: `packages/cli/src/commands/setup.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 1 and 2.
 - Produces:
 
 ```ts
 export interface Prompter {
-    text(options: { message: string; initial?: string; validate?: (value: string) => string | undefined }): Promise<string>
-    select<T extends string>(options: { message: string; options: { value: T; label: string }[]; initial?: T }): Promise<T>
+    text(options: {
+        message: string
+        initial?: string
+        validate?: (value: string) => string | undefined
+    }): Promise<string>
+    select<T extends string>(options: {
+        message: string
+        options: { value: T; label: string }[]
+        initial?: T
+    }): Promise<T>
     confirm(options: { message: string; initial: boolean }): Promise<boolean>
     note(message: string): void
 }
@@ -288,10 +302,16 @@ export interface SetupResult {
     generated: SecretKey[]
     legacyComposeKept: boolean
 }
-export function runSetup(ctx: CliContext, options: SetupOptions, prompter: Prompter, resolver: HostResolver): Promise<SetupResult>
+export function runSetup(
+    ctx: CliContext,
+    options: SetupOptions,
+    prompter: Prompter,
+    resolver: HostResolver,
+): Promise<SetupResult>
 ```
 
 Behaviour (the spec's "Setup" and "Secrets" sections):
+
 - A value comes from, in order: the option, the existing `.env`, a prompt. Prompts happen only when `ctx.interactive && !options.yes`; otherwise a missing `SITE_ADDRESS`, `MAIL_HOSTNAME` or `MAIL_SERVER_IPV4` throws `CliError` (`EXIT.usage`) naming every missing key in one message.
 - Checks on every path: `MAIL_HOSTNAME` differs from `SITE_ADDRESS`; `MAIL_SERVER_IPV4` passes `net.isIPv4`; a given `MAIL_SERVER_IPV6` passes `net.isIPv6`. Violations throw `CliError` (`EXIT.usage`).
 - Interactive only: the resolver's first A record of `MAIL_HOSTNAME` is the default for IPv4 and its first AAAA record for the optional IPv6; a name that does not resolve produces a `note` warning and no failure; the registrable-domain warning from `apps/docs/installation/index.md` is shown with the `MAIL_HOSTNAME` prompt. A resolver error counts as "does not resolve".
@@ -347,11 +367,13 @@ it('pins the baked version when started from latest', ...)           // imageTag
 ### Task 4: `migrate-project`, `recovery-kit` and the command line
 
 **Files:**
+
 - Create: `packages/cli/src/migrations/index.ts`, `src/commands/migrate-project.ts`, `src/commands/recovery-kit.ts`, `src/main.ts`, `src/bin.ts`
 - Create: `packages/cli/test/fixtures/format-1/.env`, `compose.yml`, `mailer.sh`
 - Test: `packages/cli/src/commands/migrate-project.spec.ts`, `src/commands/recovery-kit.spec.ts`, `src/main.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 1–3.
 - Produces:
 
@@ -362,17 +384,34 @@ export interface ProjectMigration {
 }
 export const projectMigrations: readonly ProjectMigration[]
 
-export interface MigrateOptions { imageTag: string; dryRun: boolean }
-export interface MigrateResult { from: number; to: number; snapshotDir: string | undefined }
-export function migrateProject(ctx: CliContext, options: MigrateOptions, migrations?: readonly ProjectMigration[]): Promise<MigrateResult>
+export interface MigrateOptions {
+    imageTag: string
+    dryRun: boolean
+}
+export interface MigrateResult {
+    from: number
+    to: number
+    snapshotDir: string | undefined
+}
+export function migrateProject(
+    ctx: CliContext,
+    options: MigrateOptions,
+    migrations?: readonly ProjectMigration[],
+): Promise<MigrateResult>
 
 export function recoveryKit(ctx: CliContext): Promise<string[]>
 
-export interface MainDeps { prompter: Prompter; resolver: HostResolver; out: (line: string) => void; err: (line: string) => void }
+export interface MainDeps {
+    prompter: Prompter
+    resolver: HostResolver
+    out: (line: string) => void
+    err: (line: string) => void
+}
 export function run(argv: string[], env: Record<string, string | undefined>, deps: MainDeps): Promise<number>
 ```
 
 `migrateProject`:
+
 1. `detectFormat`. `'fresh'` or `0` → `CliError` with `EXIT.manual`: `This directory was not set up by mailer.sh; run: sh mailer.sh setup`. A format above `CURRENT_FORMAT` → `EXIT.manual`: `This installation is newer than the image; a downgrade is not supported.` A missing migration for a step → `EXIT.manual`. All of these happen before any write.
 2. `dryRun` returns here with `snapshotDir: undefined`.
 3. Take the lock with `mkdir .update-lock` (not recursive). If it exists → `CliError`: `Another update is running. If none is, remove .update-lock and try again.`
@@ -383,6 +422,7 @@ export function run(argv: string[], env: Record<string, string | undefined>, dep
 `recoveryKit` returns the lines to print: site, mail hostname, version (`IMAGE_TAG`), the four secrets and `Encryption secret fingerprint: <secretFingerprint>`. Each secret comes from `ctx.env` first, then `.env`; a missing one is shown as `(not available)`.
 
 `run` — commands and options (`parseArgs`, strict):
+
 - `setup [--yes] [--image-tag <t>] [--site-address <v>] [--mail-hostname <v>] [--mail-ipv4 <v>] [--mail-ipv6 <v>] [--secrets generate|prompt|external] [--secrets-wrapper <cmd>]`; afterwards prints the recovery kit when `result.generated` is not empty, followed by `Store this recovery kit in a password manager. A database backup is worthless without BACKEND_ENCRYPTION_SECRET.`
 - `migrate-project --image-tag <t> [--dry-run]`
 - `recovery-kit`
@@ -435,6 +475,7 @@ For the last test export a second entry point from `migrate-project.ts` that tak
 ### Task 5: Compose secrets and the image
 
 **Files:**
+
 - Modify: `deploy/compose.yml` (the `backend.environment` block, lines 69–89)
 - Modify: `Dockerfile`, `.dockerignore`
 - Delete: `deploy/.env.example`
@@ -470,29 +511,32 @@ Expected: `9.9.9`. Then `docker run --rm --user 12345:12345 -e HOME=/tmp ghcr.io
 ### Task 6: The launcher `deploy/mailer.sh`
 
 **Files:**
+
 - Create: `deploy/mailer.sh` (replaces the placeholder)
 - Delete: `deploy/setup.sh`
 - Test: `packages/cli/test/launcher.spec.ts`
 - Modify: `packages/cli/vitest.config.ts` if `test/**/*.spec.ts` is not yet included
 
 **Interfaces:**
+
 - Consumes: the CLI commands of Task 4 and the frozen contract in Global Constraints.
 - Produces — commands of `sh mailer.sh <command>`:
 
-| Command | Does |
-| --- | --- |
-| `setup [options…]` | runs `mailer setup --image-tag <tag> [options…]` in the image, then `_post-setup` |
-| `start`, `stop`, `restart`, `status` | `docker compose up -d`, `stop`, `restart`, `ps` |
-| `logs [args…]`, `compose [args…]` | `docker compose logs …`, `docker compose …` |
-| `token` | prints the last setup token from `docker compose logs backend`, 32 hex characters, or fails with `No setup token in the backend log; a user already exists or the backend has not started.` |
-| `version` | prints `IMAGE_TAG` and `MAILER_FORMAT_VERSION` |
-| `doctor` | checks the Compose version, that `.env` exists and that the required settings and the four secrets are available; prints one line per check and exits non-zero on the first failure |
-| `recovery-kit` | runs `mailer recovery-kit` in the image |
-| `update [major] --to <version>` | see below |
-| `_post-setup`, `_finish-update <from> <to>` | internal |
-| `help`, no command | usage |
+| Command                                     | Does                                                                                                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup [options…]`                          | runs `mailer setup --image-tag <tag> [options…]` in the image, then `_post-setup`                                                                                                           |
+| `start`, `stop`, `restart`, `status`        | `docker compose up -d`, `stop`, `restart`, `ps`                                                                                                                                             |
+| `logs [args…]`, `compose [args…]`           | `docker compose logs …`, `docker compose …`                                                                                                                                                 |
+| `token`                                     | prints the last setup token from `docker compose logs backend`, 32 hex characters, or fails with `No setup token in the backend log; a user already exists or the backend has not started.` |
+| `version`                                   | prints `IMAGE_TAG` and `MAILER_FORMAT_VERSION`                                                                                                                                              |
+| `doctor`                                    | checks the Compose version, that `.env` exists and that the required settings and the four secrets are available; prints one line per check and exits non-zero on the first failure         |
+| `recovery-kit`                              | runs `mailer recovery-kit` in the image                                                                                                                                                     |
+| `update [major] --to <version>`             | see below                                                                                                                                                                                   |
+| `_post-setup`, `_finish-update <from> <to>` | internal                                                                                                                                                                                    |
+| `help`, no command                          | usage                                                                                                                                                                                       |
 
 Decisions the implementer cannot make alone:
+
 - The script `cd`s into its own directory first. The mount source is `$(pwd -W 2>/dev/null || pwd)`, so Git Bash passes `C:/…` and Linux its normal path; every use is double-quoted.
 - The image tag for `setup` and `recovery-kit` is `IMAGE_TAG` from `.env`, or `latest` when there is none. Only `latest` is pulled before the run.
 - `docker run` gets `-t` only when stdin and stdout are terminals. `setup` and `recovery-kit` add `-e <KEY>` (name only) for each of the four secrets.
@@ -535,9 +579,11 @@ it('token prints the last setup token', ...)                                    
 ### Task 7: Smoke suite on `mailer.sh`
 
 **Files:**
+
 - Modify: `e2e/smoke/support/stack.ts`, `e2e/smoke/support/compose.ts`, `e2e/smoke/stack.spec.ts`
 
 **Interfaces:**
+
 - Consumes: the image of Task 5 and the launcher of Task 6.
 - Produces: `runLauncher(stack: SmokeStack, args: string[], options?: { reject?: boolean }): Promise<{ stdout: string; stderr: string; exitCode: number | undefined }>` replacing `runSetup`; `SmokeStack.launcherFile` replacing `setupFile`; `SmokeStack.overrideFile` now `compose.override.yml`.
 
@@ -606,6 +652,7 @@ Expected: the whole suite passes, including the Task 5 check in `compose configu
 ### Task 8: Release pipeline
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml` (job `image`)
 
 - [ ] **Step 1:** Pass the version to the build: add `build-args: MAILER_VERSION=${{ steps.meta.outputs.version }}` to the `docker/build-push-action` step. On a release that is the semver version, otherwise `sha-<7>`.
@@ -617,12 +664,14 @@ Expected: the whole suite passes, including the Task 5 check in `compose configu
 ### Task 9: Documentation
 
 **Files:**
+
 - Modify: `apps/docs/installation/index.md`, `installation/first-run-setup.md`, `installation/advanced-configuration.md`, `operations/updating.md`, `operations/rollback.md`, `operations/backup-restore.md`, `operations/troubleshooting.md`, `operations/security.md`, `operations/scaling.md`, `admin-guide/settings.md`, `index.md`
 - Create: `apps/docs/operations/mailer-sh.md`; modify `apps/docs/.vitepress/sidebar.ts`
 - Modify: `apps/docs/scripts/env-reference.ts` (allow-list)
 - Modify: `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`
 
 Content decisions:
+
 - **Installation** becomes: prerequisites (unchanged), the three bootstrap lines from the spec, what the wizard asks, the recovery kit (replacing the "Back up .env now" box, same warning about `BACKEND_ENCRYPTION_SECRET`), `sh mailer.sh token`. A section "Unattended installation" shows a prepared `.env` with the keys of the deleted `deploy/.env.example` and `sh mailer.sh setup --yes`. The page no longer embeds `deploy/` files.
 - **`operations/mailer-sh.md`** ("The mailer.sh command"): one section per command of Task 6's table, with the exact messages a reader will see.
 - **Advanced configuration:** every instruction that says to edit `compose.yml` becomes a `compose.override.yml` snippet (`TRUST_PROXY`, `DB_HOST`/`DB_PORT`, `REDIS_HOST`/`REDIS_PORT`, the CA volume), with one paragraph saying that `compose.yml` and `mailer.sh` are replaced on every update. The compose-variables table gains `MAILER_FORMAT_VERSION`, `MAILER_PREVIOUS_IMAGE_TAG` and `MAILER_SECRETS_WRAPPER`. A new section "Secrets from a secret manager" explains the wrapper, the `{}` form written without quotes, examples for `op run`, `infisical run`, `doppler run` and `sops exec-env`, and that it is optional.
