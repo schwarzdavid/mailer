@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { CliContext } from '../context.ts'
 import { EnvFile } from '../env-file.ts'
@@ -22,6 +22,7 @@ export interface MigrateResult {
 const LOCK_NAME = '.update-lock'
 const SNAPSHOT_FILES = ['compose.yml', '.env', 'mailer.sh']
 const PRIVATE_DIRECTORY = 0o700
+const PRIVATE_FILE = 0o600
 const NOT_SET_UP = 'This directory was not set up by mailer.sh; run: sh mailer.sh setup'
 
 function snapshotName(now: Date): string {
@@ -59,6 +60,7 @@ async function takeSnapshot(projectDir: string): Promise<string> {
     await mkdir(snapshotDir, { recursive: true, mode: PRIVATE_DIRECTORY })
     for (const name of SNAPSHOT_FILES) {
         await copyFile(join(projectDir, name), join(snapshotDir, name))
+        await chmod(join(snapshotDir, name), PRIVATE_FILE)
     }
     return snapshotDir
 }

@@ -487,20 +487,30 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         ])
     })
 
-    it('update names the version .env holds afterwards, not the one requested', async () => {
-        const result = await run(['update', '--to', 'latest'], { FAKE_CLI_WRITES_TAG: '1.2.0' })
+    it('update major --to latest names the version .env holds afterwards, not the one requested', async () => {
+        const result = await run(['update', 'major', '--to', 'latest'], { FAKE_CLI_WRITES_TAG: '1.2.0' })
         expectCleanExit(result)
         expect(await argvCalls()).toContain(migrateRun('latest'))
         expect(result.stdout).toContain('Updated from 1.0.0 to 1.2.0.')
         expect(lockExists()).toBe(false)
     })
 
+    it('update --to latest without major is refused before any docker call', async () => {
+        const result = await run(['update', '--to', 'latest'])
+        expect(result.code).toBe(1)
+        expect(result.stderr).toBe(
+            'mailer.sh: latest can be a new major version. Name the version (sh mailer.sh update --to <version>), or run: sh mailer.sh update major --to latest\n',
+        )
+        expect(await logLines()).toEqual([])
+    })
+
     it('update leaves the Compose check to _finish-update, after the hand-over', async () => {
         const result = await run(['update', '--to', '1.1.0'], { FAKE_COMPOSE_VERSION: 'garbage' })
         expect(result.code).toBe(1)
         expect(await argvCalls()).toContain(migrateRun('1.1.0'))
-        expect(result.stderr).toContain('mailer.sh: Docker Compose 2.23.1 or newer is required (found garbage).')
-        expect(result.stderr).toContain('mailer.sh: the update to 1.1.0 did not come up.')
+        expect(result.stderr).toBe(
+            'mailer.sh: Docker Compose 2.23.1 or newer is required (found garbage).\nmailer.sh: the files of 1.1.0 are in place; fix this and run: sh mailer.sh start\n',
+        )
         expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([])
         expect(lockExists()).toBe(false)
     })
@@ -753,13 +763,14 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         )
     })
 
-    it('_finish-update reports a missing secret as a failed update and removes the lock', async () => {
+    it('_finish-update reports a missing secret with the start hint, not the rollback hint, and removes the lock', async () => {
         await createLock()
         await writeEnv({ ...defaultEnv, IMAGE_TAG: '1.1.0', MAIL_PASSWORD: '' })
         const result = await run(['_finish-update', '1.0.0', '1.1.0'])
         expect(result.code).toBe(1)
-        expect(result.stderr).toContain('mailer.sh: MAIL_PASSWORD is not set')
-        expect(result.stderr).toContain('mailer.sh: the update to 1.1.0 did not come up.')
+        expect(result.stderr).toBe(
+            'mailer.sh: MAIL_PASSWORD is not set\nmailer.sh: the files of 1.1.0 are in place; fix this and run: sh mailer.sh start\n',
+        )
         expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([])
         expect(lockExists()).toBe(false)
     })

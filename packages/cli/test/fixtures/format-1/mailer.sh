@@ -391,6 +391,9 @@ command_update() {
     done
     target=${target#v}
     [ -n "$target" ] || fail "this version needs a target: sh mailer.sh update --to <version>"
+    if [ "$target" = latest ] && [ "$allow_major" = no ]; then
+        fail "latest can be a new major version. Name the version (sh mailer.sh update --to <version>), or run: sh mailer.sh update major --to latest"
+    fi
     current=$(env_value IMAGE_TAG)
     current=${current:-latest}
     if [ "$target" = "${current#v}" ]; then
@@ -430,7 +433,8 @@ installed_tag_or() {
 
 command_finish_update() {
     finished_tag=$(installed_tag_or "$2")
-    (require_compose && require_secrets) || fail_update "$finished_tag"
+    (require_compose && require_secrets) ||
+        fail "the files of $finished_tag are in place; fix this and run: sh mailer.sh start"
     docker compose up -d --pull missing --wait --wait-timeout 300 backend || fail_update "$finished_tag"
     docker compose up -d --remove-orphans || fail_update "$finished_tag"
     wait_for_mailbox ||
