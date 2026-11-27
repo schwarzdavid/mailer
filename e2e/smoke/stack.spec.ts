@@ -491,7 +491,7 @@ describe('updates', () => {
     it('mailer.sh update to the running version changes nothing', async () => {
         const oldId = await compose.containerId('backend')
         const { stdout } = await runLauncher(current(), ['update', '--to', 'smoke-next'])
-        expect(stdout).toBe('Already on smoke-next. If the last update did not finish, run: sh mailer.sh start\n')
+        expect(stdout).toBe('Already on smoke-next. If the last update did not finish, run: sh mailer.sh start')
         expect(await compose.containerId('backend')).toBe(oldId)
     })
 
@@ -518,7 +518,7 @@ describe('updates', () => {
             await compose.psql(`INSERT INTO "SequelizeMeta" (name) VALUES ('${failingMigration}')`)
             const again = await runLauncher(current(), ['update', '--to', 'smoke-broken'])
             expect(again.stdout).toBe(
-                'Already on smoke-broken. If the last update did not finish, run: sh mailer.sh start\n',
+                'Already on smoke-broken. If the last update did not finish, run: sh mailer.sh start',
             )
             await runLauncher(current(), ['start'])
             expect(await compose.waitHealthy('backend', 180_000)).toBe(true)
