@@ -67,7 +67,7 @@ Snapshot: backups/snapshots/20261127T101500Z
 Updated from 1.0.0 to 1.1.0.
 ```
 
-`--to latest` updates to the newest release and pins its version number in `.env`; the last line then names that number.
+Name the version you update to. `latest` can be a new major version, which the launcher cannot know in advance, so `sh mailer.sh update --to latest` stops with `mailer.sh: latest can be a new major version. Name the version (sh mailer.sh update --to <version>), or run: sh mailer.sh update major --to latest`. `sh mailer.sh update major --to latest` updates to the newest release, whatever its major version, and pins its version number in `.env`; the last line then names that number.
 
 Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together; the update takes care of that. Your `.env` stays, with the keys listed in step 4 changed, and so does your `compose.override.yml`, which mailer never touches. If a release needs a new key in `.env`, its project migration adds it or the release notes name it; [Advanced configuration](/installation/advanced-configuration) describes every key.
 
@@ -112,6 +112,8 @@ mailer.sh: an update did not finish (.update-lock exists). If no update is runni
 ```
 
 Make sure no update runs in another session, remove the lock with `rmdir .update-lock` and run `sh mailer.sh start`.
+
+If the update stops right after the files were replaced because Docker Compose is too old or a secret is missing, it prints that problem followed by `mailer.sh: the files of 1.1.0 are in place; fix this and run: sh mailer.sh start`. Nothing needs to be rolled back: fix the problem, then run `sh mailer.sh start`.
 
 ### When the update needs manual action
 
