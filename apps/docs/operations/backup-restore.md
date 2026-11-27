@@ -60,11 +60,22 @@ CRON
 
 The `%` sign is escaped as `\%` because cron treats a bare `%` as the end of the command. Copy the dumps off the server as well, for example with `scp` or your provider's backup storage: a dump on the same disk does not survive the loss of that server.
 
-With an [external Postgres](/installation/advanced-configuration#database-tls) the bundled database server stays unused. Run `pg_dump` from a one-off container of the `postgres` service instead: `--no-deps` keeps the database server from starting, so the container only runs the client, and Compose hands it the credentials from `.env` or your secret manager, so the password is on no command line. Replace `db.example.com` with your database host, and use this form in the cron line too:
+With an [external Postgres](/installation/advanced-configuration#database-tls) the bundled database server stays unused. Run `pg_dump` from a one-off container of the `postgres` service instead: `--no-deps` keeps the database server from starting, so the container only runs the client, and Compose hands it the credentials from `.env` or your secret manager, so the password is on no command line. Replace `db.example.com` with your database host:
 
 ```bash
 sh mailer.sh compose run --rm -T --no-deps postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h db.example.com -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F).dump"
 ```
+
+The nightly cron job takes the same form:
+
+```bash
+mkdir -p /opt/mailer/backups
+cat > /etc/cron.d/mailer-backup <<'CRON'
+15 3 * * * root cd /opt/mailer && sh mailer.sh compose run --rm -T --no-deps postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h db.example.com -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "backups/mailer-$(date +\%F).dump" && find backups -name 'mailer-*.dump' -mtime +14 -delete
+CRON
+```
+
+With a [secrets wrapper](/installation/advanced-configuration#secrets-from-a-secret-manager), the cron job runs under that wrapper too, without a terminal and without you: it needs a wrapper that works unattended, for example one that authenticates with a service account token instead of an interactive sign-in.
 
 ## Back up `.env` and the mail accounts
 

@@ -296,7 +296,7 @@ Some tools take the command as one quoted argument. For them, write `{}` where t
 MAILER_SECRETS_WRAPPER=sops exec-env secrets.enc.env {}
 ```
 
-The wrapper runs in the install directory, so a relative file name such as `secrets.env` is found there. These wrappers cover the common tools:
+The wrapper runs in the install directory, so a relative file name such as `secrets.env` is found there. `sh` evaluates the setting as one command line, with the launcher command appended or put in place of `{}`. It may start with variable assignments, such as `OP_SERVICE_ACCOUNT_TOKEN=… op run --env-file=secrets.env --`. Anything more complex, such as several commands, a pipe or a condition, belongs in a script file in the install directory that the setting calls, for example `sh ./secrets-wrapper.sh`; the script ends with `exec "$@"` to run the command it is given. These wrappers cover the common tools:
 
 | Tool          | `MAILER_SECRETS_WRAPPER`           |
 | ------------- | ---------------------------------- |
@@ -307,7 +307,7 @@ The wrapper runs in the install directory, so a relative file name such as `secr
 
 Each of them has to provide the four variables by their names. The file `secrets.env` of 1Password, for example, holds `DB_PASSWORD=op://vault/mailer/db-password` and the three other lines of the same kind.
 
-To set it up, choose **keep them outside `.env`** in the wizard and enter the command, or pass it for an [unattended installation](/installation/#unattended-installation): `sh mailer.sh setup --yes --secrets external --secrets-wrapper 'doppler run --'`, with `SITE_ADDRESS`, `MAIL_HOSTNAME` and `MAIL_SERVER_IPV4` already in `.env` (or passed as `--site-address`, `--mail-hostname` and `--mail-ipv4`). The wizard can generate the four values and show them once, so you can store them in the manager. The setup then starts the stack under the wrapper, so the manager must hold the values by then: if it stops with `DB_PASSWORD is not set; the secrets wrapper did not provide it`, store the four secrets and run `sh mailer.sh setup --yes` again. `.env` already holds the wrapper at that point.
+To set it up, choose **keep them outside `.env`** in the wizard and enter the command, or pass it for an [unattended installation](/installation/#unattended-installation): `sh mailer.sh setup --yes --secrets-wrapper 'doppler run --'` (`--secrets-wrapper` implies `--secrets external`, and any other `--secrets` mode next to it is refused), with `SITE_ADDRESS`, `MAIL_HOSTNAME` and `MAIL_SERVER_IPV4` already in `.env` (or passed as `--site-address`, `--mail-hostname` and `--mail-ipv4`). The wizard can generate the four values and show them once, so you can store them in the manager; when you run it again with a wrapper already set, that offer defaults to no. The setup then starts the stack under the wrapper, so the manager must hold the values by then: if it stops with `DB_PASSWORD is not set; the secrets wrapper did not provide it`, store the four secrets and run `sh mailer.sh setup --yes` again. `.env` already holds the wrapper at that point.
 
 Check the result with `sh mailer.sh doctor`: it prints `ok: <name> is available` for every secret the wrapper provides, and stops with the message above for one it does not. Every `sh mailer.sh` command, `start` and `update` included, fails the same way when the wrapper cannot provide a secret.
 

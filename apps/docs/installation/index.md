@@ -5,7 +5,7 @@ This page takes a fresh server to a running mailer that waits for you in its set
 ## Before you start
 
 - **A Linux server** (`amd64`, about 2 GB RAM) with a fixed public IPv4 address and nothing else listening on ports 25, 80 and 443.
-- **Docker Engine with Compose 2.23.1 or newer**, and `curl`. See Docker's [installation guide](https://docs.docker.com/engine/install/). Run the commands below as a user that may use Docker, usually `root`.
+- **Docker Engine with Compose 2.23.1 or newer**, and `curl`. See Docker's [installation guide](https://docs.docker.com/engine/install/). Run the commands below as a user that may use Docker, usually `root`. Rootless Docker and Podman are not supported.
 - **Outbound port 25.** Many providers block it for new accounts (Hetzner Cloud, for example) and unblock it on request. Everything installs without it, but no mail leaves the server until it is open.
 - **Two DNS names pointing at the server.** Create an `A` record for both `app.example.com` and `mx.example.com` with the server's IPv4 address, and an `AAAA` record for each if the server has IPv6. Caddy requests the TLS certificates on the first start, so the records must resolve before you start the stack. With Cloudflare or a similar provider, set them to **DNS only**, not proxied.
 
@@ -130,14 +130,14 @@ sh mailer.sh setup --yes
 
 Empty secrets are generated, set ones are kept, `IMAGE_TAG=latest` is replaced by the version of the image, and `MAIL_SERVER_IPV6` is optional. `--yes` accepts every default and never prompts, so the run also works without a terminal. The recovery kit is printed at the end, so capture the output of the run.
 
-Every answer also has an option, which wins over `.env`: `--site-address`, `--mail-hostname`, `--mail-ipv4`, `--mail-ipv6`, `--secrets generate|prompt|external` and `--secrets-wrapper <command>`. A run without a terminal that lacks a required setting stops with `Missing settings: …`.
+Every answer also has an option, which wins over `.env`: `--site-address`, `--mail-hostname`, `--mail-ipv4`, `--mail-ipv6`, `--secrets generate|prompt|external` and `--secrets-wrapper <command>` (which implies `--secrets external`). Answers and values are used without surrounding spaces. There is no `--image-tag`: `IMAGE_TAG` in `.env` chooses the version. A run without a terminal that lacks a required setting stops with `Missing settings: …`.
 
 ## Coming from a manual installation
 
 Installations made with the older instructions have a hand-copied `compose.yml`, a `.env` and a `setup.sh`. `sh mailer.sh setup` adopts such a directory; your data stays in the Docker volumes.
 
 1. Take a [database backup](/operations/backup-restore#back-up-the-database) first.
-2. The wizard runs inside the image named by `IMAGE_TAG` in your `.env`, and only the releases from the one that introduced `mailer.sh` onward contain the wizard. If your `.env` pins an older version, set `IMAGE_TAG` to `latest` (or to a newer release) first. The wizard then replaces `latest` with the version of the image, so the adoption also brings mailer to that version, and the backend applies its database migrations when it starts:
+2. The wizard runs inside the image named by `IMAGE_TAG` in your `.env`, and only the releases from the one that introduced `mailer.sh` onward contain the wizard. If your `.env` pins an older version, set `IMAGE_TAG` to `latest` (or to a newer release) first. With an older image the setup stops with `mailer.sh: the image ghcr.io/schwarzdavid/mailer:<version> has no mailer CLI; set IMAGE_TAG=latest in .env and run setup again`. The wizard then replaces `latest` with the version of the image, so the adoption also brings mailer to that version, and the backend applies its database migrations when it starts:
 
     ```bash
     cd /opt/mailer
@@ -152,6 +152,6 @@ Installations made with the older instructions have a hand-copied `compose.yml`,
     ```
 
 4. The wizard shows the values of your `.env` as its defaults. It keeps your secrets, writes the new `compose.yml` and `mailer.sh`, pins `IMAGE_TAG` and removes `setup.sh`.
-5. If you had edited `compose.yml`, the wizard keeps your file as `compose.yml.legacy` and tells you to move the differences you still need into `compose.override.yml` ([how](/installation/advanced-configuration#changing-the-compose-file)). A `compose.yml` identical to a released one is simply replaced.
+5. A `compose.yml` identical to a released one is simply replaced, and the setup starts the stack. If you had edited `compose.yml`, the setup still writes all files, keeps your file as `compose.yml.legacy`, but does **not** start the stack, because the new `compose.yml` lacks your changes. It stops with exit code `4` and `mailer.sh: the stack was not started. Move your changes from compose.yml.legacy into compose.override.yml, then run: sh mailer.sh setup --yes`. Move the differences you still need into `compose.override.yml` ([how](/installation/advanced-configuration#changing-the-compose-file)), then run `sh mailer.sh setup --yes` to start the stack. If the wizard generated secrets, it printed the recovery kit before that message; keep it.
 
 From here on, [update](/operations/updating) with `sh mailer.sh update --to <version>`.

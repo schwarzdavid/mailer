@@ -54,18 +54,20 @@ sh mailer.sh update --to 1.1.0
 
 The command:
 
-1. Stops with `Already on 1.1.0.` when that version runs already.
+1. Stops with `Already on 1.1.0. If the last update did not finish, run: sh mailer.sh start` when `.env` already names that version (see [After an interrupted update](#after-an-interrupted-update)).
 2. Refuses a new major version unless you say `update major` (see [New major versions](#new-major-versions)).
 3. Pulls the image `ghcr.io/schwarzdavid/mailer:1.1.0`. When the registry cannot be reached, it uses the image on the server if there is one.
 4. Runs the project migration of the new image. It takes a [snapshot](#the-snapshot), brings `.env` and the install directory to the format of the new release if that changed, replaces `compose.yml` and `mailer.sh` with the new release's, and sets `IMAGE_TAG` to the new version (the old one moves to `MAILER_PREVIOUS_IMAGE_TAG`).
-5. Starts the stack with the new files, `up -d --pull missing --remove-orphans`, and waits up to five minutes for the backend to become healthy. The site is unavailable while the new backend starts and migrates, usually well under a minute; Caddy answers `502` meanwhile.
-6. Checks the bounce mailbox and sets its password from the secrets again.
+5. Starts the backend with the new files first, `up -d --pull missing --wait --wait-timeout 300 backend`, and waits up to five minutes for it to become healthy; then starts the other services with `up -d --remove-orphans`. The site is unavailable while the new backend starts and migrates, usually well under a minute; Caddy answers `502` meanwhile.
+6. Checks the bounce mailbox and sets its password from the secrets again. If only this step fails, the update stops with `mailer.sh: updated to 1.1.0, but the bounce mailbox could not be set; run: sh mailer.sh setup --yes`: the new version runs, so run that command instead of rolling back.
 
 ```text
 Snapshot: backups/snapshots/20261127T101500Z
 …
 Updated from 1.0.0 to 1.1.0.
 ```
+
+`--to latest` updates to the newest release and pins its version number in `.env`; the last line then names that number.
 
 Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together; the update takes care of that. Your `.env` stays, with the keys listed in step 4 changed, and so does your `compose.override.yml`, which mailer never touches. If a release needs a new key in `.env`, its project migration adds it or the release notes name it; [Advanced configuration](/installation/advanced-configuration) describes every key.
 
@@ -95,6 +97,22 @@ Before it changes a file, the update copies `compose.yml`, `.env` and `mailer.sh
 
 The update lock `.update-lock` keeps two updates from running at once. It exists only while an update runs. If a session was killed and left it behind, `Another update is running. If none is, remove .update-lock and try again.` tells you to remove it.
 
+### After an interrupted update
+
+The project migration sets `IMAGE_TAG` to the new version before the new stack starts. If the update fails or is interrupted after that point, for example because the SSH session dropped, `.env` already names the new version, and running the same `update --to 1.1.0` again does not start anything. It answers:
+
+```text
+Already on 1.1.0. If the last update did not finish, run: sh mailer.sh start
+```
+
+Run `sh mailer.sh start` to start the stack with the new files, then check it as in [How you know it worked](#how-you-know-it-worked). If the interrupted update left its lock behind, the same command stops instead with:
+
+```text
+mailer.sh: an update did not finish (.update-lock exists). If no update is running, remove .update-lock and run: sh mailer.sh start
+```
+
+Make sure no update runs in another session, remove the lock with `rmdir .update-lock` and run `sh mailer.sh start`.
+
 ### When the update needs manual action
 
 An update that ends with exit code `3` changed nothing: it needs a step that mailer cannot do for you. It says why, for example `This directory was not set up by mailer.sh; run: sh mailer.sh setup` (a directory from the manual installation, see [Coming from a manual installation](/installation/#coming-from-a-manual-installation)) or `This installation is newer than the image; a downgrade is not supported.` (you named an older version than the one that runs; use [Roll back](/operations/rollback)). The release notes name the manual steps when a release needs some. [The mailer.sh command](/operations/mailer-sh#update) lists the other messages.
@@ -118,7 +136,7 @@ No such lines means the new version brought no new migrations.
 
 ## If a migration fails
 
-When a migration fails, the backend does not start. Docker restarts it, it tries again and fails again, so the site is down until you act. After five minutes the update gives up with `the update to 1.1.0 did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation.` The log names the migration:
+When a migration fails, the backend does not start. Docker restarts it, it tries again and fails again, so the site is down until you act. The update does not wait for that: as soon as Docker Compose sees the new backend container exit, usually within seconds, it gives up with `the update to 1.1.0 did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation.` The log names the migration:
 
 ```bash
 sh mailer.sh compose logs backend | grep 'Migration '
@@ -136,7 +154,7 @@ The failed run is rolled back as a whole: every migration of that start is undon
 
 - **Fix forward.** If a newer release fixes the migration, update to that release instead with `sh mailer.sh update --to <version>`; the unfinished update has already replaced the files, so there is nothing to put back first.
 
-The update has already set `IMAGE_TAG` to the new version, so the same `update --to` answers `Already on 1.1.0.`. When you have fixed the cause outside mailer, for example a full disk, `sh mailer.sh start` starts the stack again.
+The update has already set `IMAGE_TAG` to the new version, so the same `update --to` answers `Already on 1.1.0. If the last update did not finish, run: sh mailer.sh start`. When you have fixed the cause outside mailer, for example a full disk, `sh mailer.sh start` starts the stack again.
 
 ## Databases migrated by very old versions
 
@@ -163,7 +181,7 @@ SQL
 
 The images of the reverse proxy (`caddy:2.11.7-alpine`) and of the mail server (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1`) are pinned in `compose.yml`, and `IMAGE_TAG` does not change them. A release that moves to a newer Caddy or docker-mailserver ships a `compose.yml` with the new tag, and the update brings it. Do not change these tags yourself: the next update would replace your edit.
 
-The normal update already rolls them: `up -d --pull missing` downloads the new image and recreates the container. To roll only one of them again, for example after a failed pull:
+The normal update already rolls them: its `up -d` downloads an image that is not on the server yet and recreates the container. To roll only one of them again, for example after a failed pull:
 
 ```bash
 sh mailer.sh compose pull mail && sh mailer.sh compose up -d mail

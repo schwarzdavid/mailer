@@ -108,7 +108,9 @@ pnpm --filter mailer-cli lint
 pnpm --filter mailer-cli typecheck
 ```
 
-A change that could break an existing installation (the compose file, an environment variable, a volume, a host-side step in `mailer.sh`, the database) ships with a project migration in `packages/cli/src/migrations`, or a database migration, a fixture of the old format under `packages/cli/test/fixtures` and a test that migrates it. The call `docker run … mailer migrate-project --image-tag <tag>`, its exit codes and `mailer.sh _finish-update <from> <to>` never change, because an installed launcher calls them on an image of any later version.
+`LAUNCHER_SHELL=<path to dash> pnpm --filter mailer-cli exec vitest run test/launcher.spec.ts` starts the launcher under another POSIX shell, such as `dash`.
+
+A change that could break an existing installation (the compose file, an environment variable, a volume, a host-side step in `mailer.sh`, the database) ships with a project migration in `packages/cli/src/migrations`, or a database migration, a fixture of the old format under `packages/cli/test/fixtures` and a test that migrates it. The call `docker run … mailer migrate-project --image-tag <tag>`, its exit codes and `mailer.sh _finish-update <from> <to>` never change, because an installed launcher calls them on an image of any later version. Neither does what such a launcher relies on around them: the image name and tags without a leading `v`, `IMAGE_TAG=` and `MAILER_SECRETS_WRAPPER=` as single lines in `.env`, the new launcher at `./mailer.sh` runnable by `sh`, and a `_finish-update` that re-reads `.env` because it inherits the old launcher's environment. `test/fixtures/format-1` holds the launcher and `compose.yml` of the first release (equal to `deploy/` until that release is cut, then frozen), and `test/launcher.spec.ts` runs that launcher through the hand-over.
 
 ## Claude Code
 
