@@ -111,7 +111,7 @@ To find them, run in the install directory:
 
 ```bash
 cd /opt/mailer
-docker compose logs backend | grep 'Delivery '
+sh mailer.sh compose logs backend | grep 'Delivery '
 ```
 
 [Advanced configuration](/installation/advanced-configuration#log-level) explains the log format.
@@ -122,7 +122,7 @@ The admin UI has no list of deliveries. To see the failed ones, newest first, qu
 
 ```bash
 cd /opt/mailer
-(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", \"emailTo\", attempts, error, \"updatedAt\" FROM inbound_form_delivery WHERE status = 'failed' ORDER BY \"updatedAt\" DESC LIMIT 20")
+(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", \"emailTo\", attempts, error, \"updatedAt\" FROM inbound_form_delivery WHERE status = 'failed' ORDER BY \"updatedAt\" DESC LIMIT 20")
 ```
 
 `emailTo` is the recipient as configured on the receiver, for example <code v-pre>{{email}}</code> for a placeholder that could not be resolved, or the resolved address once a delivery was sent. Replace `'failed'` with `'pending'` to see deliveries that are still waiting.
@@ -133,7 +133,7 @@ The admin UI has no button to resend a `failed` delivery. To resend one, set its
 
 ```bash
 cd /opt/mailer
-(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "UPDATE inbound_form_delivery SET status = 'pending', attempts = 0 WHERE \"inboundFormDeliveryId\" = <id> AND status = 'failed'")
+(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "UPDATE inbound_form_delivery SET status = 'pending', attempts = 0 WHERE \"inboundFormDeliveryId\" = <id> AND status = 'failed'")
 ```
 
 `psql` answers `UPDATE 1`. The recovery sweep queues the delivery within about two minutes, and it gets a fresh set of 8 attempts. Reset `attempts` as well: the sweep waits for the retry pause that belongs to the attempts count, so a delivery that keeps 8 attempts would wait more than two hours.
@@ -148,6 +148,6 @@ Work through these in order:
 2. **Does the form have a receiver that is Active and has a published template?** Without one, `accepted` is answered but no delivery is created, and publishing later does not catch up. See [Receivers and templates](/admin-guide/inbound-forms/receivers-and-templates#while-no-template-is-published).
 3. **Did the honeypot catch it?** A filled-in honeypot also answers `accepted`. The backend log shows `Honeypot "website" triggered for form <id>`.
 4. **What does Sent mail say?** **Failed** shows the error, **Blocked** a blocked recipient, **Sent** that your mail server accepted it: then look in the recipient's spam folder and on **Bounces**.
-5. **Nothing on Sent mail?** Check the backend log for `Delivery` lines and the database for `pending` or `failed` deliveries, as shown above. Many `pending` deliveries that do not move point to Redis or the mail server: `docker compose ps` in `/opt/mailer` shows whether `redis` and `mail` are running. Or the sender domain is not ready to send: the delivery's error then reads `… has DNS records that are not valid yet`; see [Sending needs valid records](/admin-guide/domains#sending-needs-valid-records).
+5. **Nothing on Sent mail?** Check the backend log for `Delivery` lines and the database for `pending` or `failed` deliveries, as shown above. Many `pending` deliveries that do not move point to Redis or the mail server: `sh mailer.sh compose ps` in `/opt/mailer` shows whether `redis` and `mail` are running. Or the sender domain is not ready to send: the delivery's error then reads `… has DNS records that are not valid yet`; see [Sending needs valid records](/admin-guide/domains#sending-needs-valid-records).
 
 The [operations](/operations/monitoring) and [troubleshooting](/operations/troubleshooting) pages of this documentation cover the mail server and Redis in more depth.

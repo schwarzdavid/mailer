@@ -74,7 +74,7 @@ The backend's request log keeps the method, the path without the query string, t
 - e-mail addresses in log messages: records are named by their id, and errors that can carry an address are logged with their type and code only;
 - the health checks, which are not logged at all.
 
-[What is never logged](/installation/advanced-configuration#log-level) has the details. The exceptions you should know: the setup token is logged on purpose while no user exists, and the mail server's own log names the sender and recipient of every delivery, as every mail server does. Treat `docker compose logs mail` and the `mail-logs` volume as personal data.
+[What is never logged](/installation/advanced-configuration#log-level) has the details. The exceptions you should know: the setup token is logged on purpose while no user exists, and the mail server's own log names the sender and recipient of every delivery, as every mail server does. Treat `sh mailer.sh compose logs mail` and the `mail-logs` volume as personal data.
 
 ## API keys
 
@@ -100,15 +100,15 @@ The answer to `RCPT TO` is a line with `Relay access denied`.
 
 ## Container hardening
 
-The backend image runs as the unprivileged user `node` (set in the image itself). `compose.yml` adds a read-only file system (only `/tmp` is writable, in memory) and a minimal init process that forwards signals and reaps child processes. The backend, Postgres and Redis publish no ports; only Caddy (80 and 443) and the mail server (25) are reachable from outside. Keep `.env` readable only by `root` (`chmod 600 /opt/mailer/.env`), because it holds every secret.
+The backend image runs as the unprivileged user `node` (set in the image itself). `compose.yml` adds a read-only file system (only `/tmp` is writable, in memory) and a minimal init process that forwards signals and reaps child processes. The backend, Postgres and Redis publish no ports; only Caddy (80 and 443) and the mail server (25) are reachable from outside. The setup writes `.env` readable only by its owner (mode `600`); keep it that way, because it holds every secret, or keep the four secrets in a [secret manager](/installation/advanced-configuration#secrets-from-a-secret-manager) instead. The snapshots under `backups/snapshots/` and the output of `sh mailer.sh recovery-kit` contain the secrets too: store the kit in a password manager, and delete snapshots you no longer need.
 
 ## Verify the image you run
 
-Run a pinned version, never `latest`: with `IMAGE_TAG=1.0.0` in `.env`, every `docker compose pull` gets the same image, and it always matches the `compose.yml` of that release. Every release image carries the commit it was built from as the label `org.opencontainers.image.revision`:
+Run a pinned version, never `latest`: the setup pins the version in `IMAGE_TAG` (for example `IMAGE_TAG=1.0.0`) and only `sh mailer.sh update --to <version>` changes it, so every `sh mailer.sh compose pull` gets the same image, and it always matches the `compose.yml` of that release. Every release image carries the commit it was built from as the label `org.opencontainers.image.revision`:
 
 ```bash
 cd /opt/mailer
-docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend | head -n 1)"
+docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(sh mailer.sh compose images -q backend | head -n 1)"
 ```
 
 Compare the commit with the release on the repository's releases page, which names the commit of each tag, or ask GitHub directly (needs `git` on the machine):

@@ -97,7 +97,7 @@ sh mailer.sh token
 3f9a2c1d7b4e8a6f0c5d2e1b9a8f7c6d
 ```
 
-The token is the 32 hexadecimal characters the command prints. Every restart of the backend before the first account exists creates a new one; the command prints the newest. If it answers `No setup token in the backend log; a user already exists or the backend has not started.`, see [Troubleshooting](/operations/troubleshooting#setup-token-missing-or-rejected).
+The token is the 32 hexadecimal characters the command prints. Every restart of the backend before the first account exists creates a new one; the command prints the newest. If it answers `No setup token in the backend log; a user already exists or the backend has not started.`, see [Troubleshooting](/operations/troubleshooting#no-setup-token-in-the-log).
 
 Open `https://app.example.com` and continue with the [first-run setup](/installation/first-run-setup).
 

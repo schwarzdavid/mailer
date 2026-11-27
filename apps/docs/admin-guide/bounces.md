@@ -103,11 +103,11 @@ Mail to the address is sent again from then on. Mail that was not sent during th
 
 The backend marks the reports it has processed as read and never deletes them, and mailer has no cleanup job for the mailbox. Every bounce report therefore stays on disk for good.
 
-The mailbox lives in the Docker volume `mail-data`, which `deploy/compose.yml` mounts at `/var/mail` in the `mail` container. To see how much space it takes:
+The mailbox lives in the Docker volume `mail-data`, which `compose.yml` mounts at `/var/mail` in the `mail` container. To see how much space it takes:
 
 ```bash
 cd /opt/mailer
-docker compose exec mail du -sh /var/mail
+sh mailer.sh compose exec mail du -sh /var/mail
 ```
 
 The workaround is to purge the mailbox by hand from time to time. mailer itself provides no command for it, but the mail server is docker-mailserver, which ships Dovecot and its admin tool `doveadm`. Delete only mails that are marked as read (the IMAP flag `SEEN`): the backend has processed them and no longer needs them, while unread mails are still waiting for the next poll. Back up the volume first (see the [Backup and restore](/operations/backup-restore) page in the Operations section).
@@ -116,7 +116,7 @@ The workaround is to purge the mailbox by hand from time to time. mailer itself 
 
     ```bash
     cd /opt/mailer
-    (set -a; . ./.env; docker compose exec mail doveadm search -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
+    (set -a; . ./.env; sh mailer.sh compose exec mail doveadm search -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
     ```
 
     Each line of the output is one mail. No output means there is nothing to remove.
@@ -125,7 +125,7 @@ The workaround is to purge the mailbox by hand from time to time. mailer itself 
 
     ```bash
     cd /opt/mailer
-    (set -a; . ./.env; docker compose exec mail doveadm expunge -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
+    (set -a; . ./.env; sh mailer.sh compose exec mail doveadm expunge -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
     ```
 
 3. Run the `doveadm search` command from step 1 again: it prints nothing. The `du` command above reports less space.

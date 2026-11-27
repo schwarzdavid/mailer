@@ -45,7 +45,7 @@ features:
 <div class="mailer-steps">
 
 1. **Point two names at your server:** `app.example.com` for the admin UI and API, `mx.example.com` for the mail server.
-2. **Copy three files and run `sh setup.sh`:** it generates the secrets, starts the stack and creates the bounce mailbox.
+2. **Download `mailer.sh` and run `sh mailer.sh setup`:** it asks for the names, generates the secrets, starts the stack and creates the bounce mailbox.
 3. **Finish the wizard:** create the first admin and publish the DNS records it shows you.
 
 </div>

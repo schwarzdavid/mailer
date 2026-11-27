@@ -29,7 +29,7 @@ curl -s https://app.example.com/api/health/ready
 ## Container states
 
 ```bash
-docker compose ps --format "table {{.Service}}\t{{.Status}}"
+sh mailer.sh compose ps --format "table {{.Service}}\t{{.Status}}"
 ```
 
 ```text
@@ -45,12 +45,12 @@ redis      Up 3 days (healthy)
 
 ## Logs
 
-Every service logs to Docker, and `docker compose logs` reads it. The format, the rotation (at most 50 MB per container) and what is never logged are on [Advanced configuration](/installation/advanced-configuration#log-level).
+Every service logs to Docker, and `sh mailer.sh compose logs` reads it. The format, the rotation (at most 50 MB per container) and what is never logged are on [Advanced configuration](/installation/advanced-configuration#log-level).
 
 **The backend** writes one JSON object per line. Show only warnings and errors of the last day, with `jq` installed (`apt-get install -y jq`):
 
 ```bash
-docker compose logs --since 24h --no-log-prefix backend | jq -cR 'fromjson? | select(.level >= 40)'
+sh mailer.sh compose logs --since 24h --no-log-prefix backend | jq -cR 'fromjson? | select(.level >= 40)'
 ```
 
 `level` 40 is a warning, 50 an error, 60 fatal. Entries name records by id, for example `Sent mail message 42` or `Delivery 12 attempt 2 failed: …`; look the id up in the admin UI.
@@ -58,25 +58,25 @@ docker compose logs --since 24h --no-log-prefix backend | jq -cR 'fromjson? | se
 **Follow one request.** Every answer of the backend carries a request id in the header `X-Request-Id`, and every log entry written for that request carries it as `reqId`. When a user reports an error, ask for that header from the browser's developer tools (Network tab) and search for it:
 
 ```bash
-docker compose logs --no-log-prefix backend | grep '1b000e55-3363-46c9-b18b-79ec557ea0ff'
+sh mailer.sh compose logs --no-log-prefix backend | grep '1b000e55-3363-46c9-b18b-79ec557ea0ff'
 ```
 
 **The mail server** logs every delivery attempt to another mail server. Mail that could not be delivered yet (`deferred`) or was refused for good (`bounced`) shows up with:
 
 ```bash
-docker compose logs --since 24h mail | grep -E 'status=(deferred|bounced)'
+sh mailer.sh compose logs --since 24h mail | grep -E 'status=(deferred|bounced)'
 ```
 
 If that prints nothing although mail is stuck, read the mail server's own log file in the `mail-logs` volume instead:
 
 ```bash
-docker compose exec mail grep -E 'status=(deferred|bounced)' /var/log/mail/mail.log
+sh mailer.sh compose exec mail grep -E 'status=(deferred|bounced)' /var/log/mail/mail.log
 ```
 
 Mail the server still holds for a later attempt is in its queue:
 
 ```bash
-docker compose exec mail postqueue -p
+sh mailer.sh compose exec mail postqueue -p
 ```
 
 `Mail queue is empty` is the normal answer. A queue that keeps growing means receivers refuse or cannot be reached: the reason is at the end of each entry.
@@ -84,7 +84,7 @@ docker compose exec mail postqueue -p
 **The proxy** logs certificate events and requests it could not forward to the backend:
 
 ```bash
-docker compose logs --since 24h proxy | grep -i error
+sh mailer.sh compose logs --since 24h proxy | grep -i error
 ```
 
 ## The DNS alert in the admin UI
@@ -137,9 +137,9 @@ When the disk fills up, Postgres and Redis stop accepting writes, and the backen
 
 ## A weekly routine
 
-1. `docker compose ps`: every service `healthy` or `Up`, no unexpected restarts.
+1. `sh mailer.sh compose ps`: every service `healthy` or `Up`, no unexpected restarts.
 2. The backend's warnings and errors of the past week (`--since 168h` in the `jq` command above).
 3. **Dashboard**: nothing under **Needs attention**.
 4. **Bounces**: no unusual rise.
-5. `docker compose exec mail postqueue -p`: the queue is empty or short.
+5. `sh mailer.sh compose exec mail postqueue -p`: the queue is empty or short.
 6. `df -h /var/lib/docker`: enough free space; the latest database dump exists off the server.

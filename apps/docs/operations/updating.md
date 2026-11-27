@@ -1,6 +1,6 @@
 # Update mailer
 
-This page updates a running Docker Compose installation to a new release: it takes the new release's files, records what runs now so you can go back, pulls the new images and restarts the stack. At the end the new version runs, its database migrations are applied, and you know what to do if a migration fails.
+This page updates a running Docker Compose installation to a new release with one command: `sh mailer.sh update --to <version>` takes a snapshot of your files, replaces `compose.yml` and `mailer.sh` with the new release's, pulls the new images and restarts the stack. At the end the new version runs, its database migrations are applied, and you know what to do if something fails.
 
 All commands run on the server in the install directory:
 
@@ -8,114 +8,96 @@ All commands run on the server in the install directory:
 cd /opt/mailer
 ```
 
-The examples update from `v1.0.0` to `v1.1.0`. Replace both with your versions. A release tag such as `v1.1.0` belongs to the image tag `1.1.0`: the release pipeline publishes every release image under the version without the `v`, under `sha-<first 7 characters of the commit>` and, unless the release is a pre-release, under `latest`.
+The examples update from `v1.0.0` to `v1.1.0`. Replace both with your versions. A release tag such as `v1.1.0` belongs to the image tag `1.1.0`: the release pipeline publishes every release image under the version without the `v`, under `sha-<first 7 characters of the commit>` and, unless the release is a pre-release, under `latest`. `--to` accepts both spellings.
 
 ## Before you start
 
 - **Read the release notes** of every release between your version and the new one on the repository's releases page. They name changes that need your attention.
-- **Take a database backup**, so you can go back even if something goes wrong that a rollback cannot undo:
+- **Take a database backup.** An update takes no database dump by itself, so make one first, to go back even if something goes wrong that a rollback cannot undo:
 
     ```bash
-    (set -a; . ./.env; docker compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F)-before-update.dump"
+    (set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F)-before-update.dump"
     ```
 
     [Backup and restore](/operations/backup-restore) explains the dump and how to restore it.
 
 ## Record what runs now
 
-A rollback needs three things from the current installation: the commit of the running image, the list of applied migrations and the current `compose.yml`. Record them before you change anything.
+A [rollback](/operations/rollback) needs two things from the current installation besides the snapshot that the update takes: the commit of the running image and the list of applied migrations. Record them before you change anything.
 
 The image carries its commit as the label `org.opencontainers.image.revision`. Print it and save it to a file:
 
 ```bash
-docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend | head -n 1)" | tee revision-before-update.txt
+docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(sh mailer.sh compose images -q backend | head -n 1)" | tee revision-before-update.txt
 ```
 
 ```text
 3f9a2c1d7b4e8a6f0c5d2e1b9a8f7c6d5e4b3a21
 ```
 
-The output is the full commit id (40 characters); its first 7 characters form the image tag `sha-3f9a2c1`, which names the same image as the version tag. Write down the current `IMAGE_TAG` too:
+The output is the full commit id (40 characters); its first 7 characters form the image tag `sha-3f9a2c1`, which names the same image as the version tag.
+
+Save the list of applied migrations, which a rollback compares with the list after the update:
 
 ```bash
-grep '^IMAGE_TAG=' .env
-```
-
-```text
-IMAGE_TAG=1.0.0
-```
-
-Save the list of applied migrations, which a [rollback](/operations/rollback) compares with the list after the update:
-
-```bash
-docker compose run --rm -T backend node dist/migrate.js executed > migrations-before-update.txt
+sh mailer.sh compose run --rm -T backend node dist/migrate.js executed > migrations-before-update.txt
 tail -n 1 migrations-before-update.txt
 ```
 
-The last line is the newest migration the current version applied, for example `020-create-locks`.
+The last line is the newest migration the current version applied, for example `020-create-locks`. `sh mailer.sh version` prints the version that runs now.
 
-Keep a copy of the current `compose.yml`. You need it for a rollback, and it shows any edits you made to it, such as for an [external database](/installation/advanced-configuration#database-tls):
-
-```bash
-cp compose.yml compose.yml.before-update
-```
-
-## Take the new release's files
-
-Every release ships its own `compose.yml`, `setup.sh` and `.env.example`. Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together.
-
-Download the new `compose.yml` and `setup.sh` over the old ones, and the new template next to your `.env`:
+## Run the update
 
 ```bash
-TAG=v1.1.0
-curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/compose.yml"
-curl -fsSLO "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/setup.sh"
-curl -fsSL -o .env.example "https://raw.githubusercontent.com/schwarzdavid/mailer/$TAG/deploy/.env.example"
+sh mailer.sh update --to 1.1.0
 ```
 
-If you had edited `compose.yml`, see what differs and apply your edits to the new file again:
+The command:
 
-```bash
-diff compose.yml.before-update compose.yml
-```
-
-Compare the keys of the new template with your `.env`. The command compares only the names, so your secrets are not printed:
-
-```bash
-diff <(grep -o '^[A-Z_0-9]*=' .env | sort) <(grep -o '^[A-Z_0-9]*=' .env.example | sort)
-```
-
-- No output: the template has no new keys.
-- A line starting with `>` is a key that is new in the release, for example `> NEW_SETTING=`. Add it to `.env` with a value; [Advanced configuration](/installation/advanced-configuration) describes every key.
-- A line starting with `<` is a key that your `.env` has and the template does not. That is normal for optional keys you added yourself, such as `DB_SSL` or `NODE_EXTRA_CA_CERTS`, and for optional keys that older templates listed, such as `LOG_LEVEL` or the rate limits; they keep working. If the release notes say a key was renamed, rename it in `.env`.
-
-## Pin the new version
-
-Set `IMAGE_TAG` to the new version, without the `v`:
-
-```bash
-sed -i 's|^IMAGE_TAG=.*|IMAGE_TAG=1.1.0|' .env
-grep '^IMAGE_TAG=' .env
-```
+1. Stops with `Already on 1.1.0.` when that version runs already.
+2. Refuses a new major version unless you say `update major` (see [New major versions](#new-major-versions)).
+3. Pulls the image `ghcr.io/schwarzdavid/mailer:1.1.0`. When the registry cannot be reached, it uses the image on the server if there is one.
+4. Runs the project migration of the new image. It takes a [snapshot](#the-snapshot), brings `.env` and the install directory to the format of the new release if that changed, replaces `compose.yml` and `mailer.sh` with the new release's, and sets `IMAGE_TAG` to the new version (the old one moves to `MAILER_PREVIOUS_IMAGE_TAG`).
+5. Starts the stack with the new files, `up -d --pull missing --remove-orphans`, and waits up to five minutes for the backend to become healthy. The site is unavailable while the new backend starts and migrates, usually well under a minute; Caddy answers `502` meanwhile.
+6. Checks the bounce mailbox and sets its password from the secrets again.
 
 ```text
-IMAGE_TAG=1.1.0
+Snapshot: backups/snapshots/20261127T101500Z
+…
+Updated from 1.0.0 to 1.1.0.
 ```
 
-Do not run `latest` in production: `latest` moves with every release, so a later `docker compose pull` could start an image that does not match your `compose.yml`.
+Always run an image with the `compose.yml` of the same release, because the compose file and the backend change together; the update takes care of that. Your `.env` stays, with the keys listed in step 4 changed, and so does your `compose.override.yml`, which mailer never touches. If a release needs a new key in `.env`, its project migration adds it or the release notes name it; [Advanced configuration](/installation/advanced-configuration) describes every key.
 
-## Pull and restart
+After the update, remove the images nothing uses any more to free disk space. A rollback downloads its image again:
 
 ```bash
-docker compose pull
-docker compose up -d --remove-orphans
 docker image prune -f
 ```
 
-- `pull` downloads the images named in the new `compose.yml`: the backend in the new version and the pinned versions of Caddy, Postgres, Redis and the mail server.
-- `up -d` recreates every container whose image or settings changed and leaves the others running. The site is unavailable while the new backend starts and migrates, usually well under a minute; Caddy answers `502` meanwhile.
-- `--remove-orphans` removes containers of services that the new `compose.yml` no longer has.
-- `docker image prune -f` deletes old images that no container uses any more, to free disk space. A rollback downloads its image again.
+### New major versions
+
+A change of the major version, for example `1.4.0` to `2.0.0`, may remove or change things. `update` stops until you have decided:
+
+```text
+mailer.sh: 2.0.0 is a new major version. Read its release notes, then run: sh mailer.sh update major --to 2.0.0
+```
+
+Read the release notes of the new major version, then repeat the command with `major`:
+
+```bash
+sh mailer.sh update major --to 2.0.0
+```
+
+### The snapshot
+
+Before it changes a file, the update copies `compose.yml`, `.env` and `mailer.sh` into `backups/snapshots/<UTC timestamp>/` in the install directory, for example `backups/snapshots/20261127T101500Z/`. Every update adds a directory. The snapshot is what you put back to [roll back](/operations/rollback); if the project migration itself fails, it puts the files back from it by itself. The directory is readable only by its owner, because the copy of `.env` holds your secrets (unless you keep them in a [secret manager](/installation/advanced-configuration#secrets-from-a-secret-manager)). Delete old snapshots you no longer need, and treat the rest like `.env`.
+
+The update lock `.update-lock` keeps two updates from running at once. It exists only while an update runs. If a session was killed and left it behind, `Another update is running. If none is, remove .update-lock and try again.` tells you to remove it.
+
+### When the update needs manual action
+
+An update that ends with exit code `3` changed nothing: it needs a step that mailer cannot do for you. It says why, for example `This directory was not set up by mailer.sh; run: sh mailer.sh setup` (a directory from the manual installation, see [Coming from a manual installation](/installation/#coming-from-a-manual-installation)) or `This installation is newer than the image; a downgrade is not supported.` (you named an older version than the one that runs; use [Roll back](/operations/rollback)). The release notes name the manual steps when a release needs some. [The mailer.sh command](/operations/mailer-sh#update) lists the other messages.
 
 ## Migrations run on start
 
@@ -124,7 +106,7 @@ The backend brings the database schema up to date by itself every time it starts
 Each applied migration writes two log lines:
 
 ```bash
-docker compose logs backend | grep '"context":"Migrations"'
+sh mailer.sh compose logs backend | grep '"context":"Migrations"'
 ```
 
 ```text
@@ -136,10 +118,10 @@ No such lines means the new version brought no new migrations.
 
 ## If a migration fails
 
-When a migration fails, the backend does not start. Docker restarts it, it tries again and fails again, so the site is down until you act. `docker compose up -d` can end with an error saying that `backend` is unhealthy. The log names the migration:
+When a migration fails, the backend does not start. Docker restarts it, it tries again and fails again, so the site is down until you act. After five minutes the update gives up with `the update to 1.1.0 did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation.` The log names the migration:
 
 ```bash
-docker compose logs backend | grep 'Migration '
+sh mailer.sh compose logs backend | grep 'Migration '
 ```
 
 ```text
@@ -150,52 +132,45 @@ The text after `Original error:` is the database's error message.
 
 The failed run is rolled back as a whole: every migration of that start is undone together with its entry in the migration table, so the database is exactly as it was before the update. You have two options:
 
-- **Go back to the previous version.** Put the old `compose.yml` back, set `IMAGE_TAG` to the value you wrote down and start the stack. The old version finds the database as it left it:
+- **Go back to the previous version.** Put the files of the snapshot back and start the stack, as on [Put the snapshot back](/operations/rollback#put-the-snapshot-back). The old version finds the database as it left it. Nothing needs to be reverted, because the failed migrations were never applied. Report the log line from above as an issue on the repository.
 
-    ```bash
-    cp compose.yml.before-update compose.yml
-    sed -i 's|^IMAGE_TAG=.*|IMAGE_TAG=1.0.0|' .env
-    docker compose pull
-    docker compose up -d --remove-orphans
-    ```
+- **Fix forward.** If a newer release fixes the migration, update to that release instead with `sh mailer.sh update --to <version>`; the unfinished update has already replaced the files, so there is nothing to put back first.
 
-    Nothing needs to be reverted, because the failed migrations were never applied. Report the log line from above as an issue on the repository.
-
-- **Fix forward.** If a newer release fixes the migration, update to that release instead, with the steps on this page.
+The update has already set `IMAGE_TAG` to the new version, so the same `update --to` answers `Already on 1.1.0.`. When you have fixed the cause outside mailer, for example a full disk, `sh mailer.sh start` starts the stack again.
 
 ## Databases migrated by very old versions
 
 Skip this section unless your installation dates from a very old version. Very old versions stored the names of applied migrations with a `.ts` extension, so the current backend would take every migration for new and fail on the first one. Check the names while the old version still runs:
 
 ```bash
-(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT name FROM "SequelizeMeta" ORDER BY name;')
+(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT name FROM "SequelizeMeta" ORDER BY name;')
 ```
 
-If the names end in `.ts`, for example `001-create-users.ts`, remove the extension once, right before you pull and restart. Stop the backend first, so the old version does not start against the renamed list:
+If the names end in `.ts`, for example `001-create-users.ts`, remove the extension once, right before you run the update. Stop the backend first, so the old version does not start against the renamed list:
 
 ```bash
-docker compose stop backend
-(set -a; . ./.env; docker compose exec -T postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE") <<'SQL'
+sh mailer.sh compose stop backend
+(set -a; . ./.env; sh mailer.sh compose exec -T postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE") <<'SQL'
 UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
 SQL
 ```
 
-`psql` answers `UPDATE` followed by the number of renamed rows. Then continue with [Pull and restart](#pull-and-restart). A database created by a current version never needs this.
+`psql` answers `UPDATE` followed by the number of renamed rows. Then continue with [Run the update](#run-the-update); the update starts the backend again. A database created by a current version never needs this.
 
 ## Caddy and the mail server are updated with releases
 
-The images of the reverse proxy (`caddy:2.11.7-alpine`) and of the mail server (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1`) are pinned in `compose.yml`, and `IMAGE_TAG` does not change them. A release that moves to a newer Caddy or docker-mailserver ships a `compose.yml` with the new tag. You pick it up by taking the release's `compose.yml` as above; do not change these tags yourself.
+The images of the reverse proxy (`caddy:2.11.7-alpine`) and of the mail server (`ghcr.io/docker-mailserver/docker-mailserver:16.0.1`) are pinned in `compose.yml`, and `IMAGE_TAG` does not change them. A release that moves to a newer Caddy or docker-mailserver ships a `compose.yml` with the new tag, and the update brings it. Do not change these tags yourself: the next update would replace your edit.
 
-The normal update already rolls them: `docker compose pull` downloads the new image and `docker compose up -d` recreates the container. To roll only one of them, for example after taking a release's `compose.yml` whose only change is the mail server's tag:
+The normal update already rolls them: `up -d --pull missing` downloads the new image and recreates the container. To roll only one of them again, for example after a failed pull:
 
 ```bash
-docker compose pull mail && docker compose up -d mail
+sh mailer.sh compose pull mail && sh mailer.sh compose up -d mail
 ```
 
 For the proxy:
 
 ```bash
-docker compose pull proxy && docker compose up -d proxy
+sh mailer.sh compose pull proxy && sh mailer.sh compose up -d proxy
 ```
 
 While `mail` restarts (compose gives it up to a minute to shut down), it accepts no mail on port 25; other mail servers retry later, so no bounce report is lost. The send API answers `502` with `DELIVERY_FAILED` during that time, and form deliveries wait for their next retry. While `proxy` restarts, the site does not answer for a few seconds. The certificates stay in the `caddy-data` volume, so neither service needs new ones.
@@ -205,19 +180,19 @@ While `mail` restarts (compose gives it up to a minute to shut down), it accepts
 - The running image is the new one. The same command as before the update prints a different commit id:
 
     ```bash
-    docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker compose images -q backend | head -n 1)"
+    docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(sh mailer.sh compose images -q backend | head -n 1)"
     ```
 
-- `docker compose ps` shows `postgres`, `redis`, `backend` and `mail` as `healthy` and `proxy` as `Up`:
+- `sh mailer.sh compose ps` shows `postgres`, `redis`, `backend` and `mail` as `healthy` and `proxy` as `Up`:
 
     ```bash
-    docker compose ps --format "table {{.Service}}\t{{.Status}}"
+    sh mailer.sh compose ps --format "table {{.Service}}\t{{.Status}}"
     ```
 
 - The list of applied migrations ends with the newest migration of the new release:
 
     ```bash
-    docker compose run --rm -T backend node dist/migrate.js executed | tail -n 1
+    sh mailer.sh compose run --rm -T backend node dist/migrate.js executed | tail -n 1
     ```
 
 - `https://app.example.com/api/health/ready` answers `"status":"ok"`, and a test mail through the [send API](/admin-guide/send-api#send-a-mail) arrives.

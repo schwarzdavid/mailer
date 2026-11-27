@@ -39,7 +39,7 @@ Do this when the server gets a new IP address, for example after moving to anoth
     ```bash
     cd /opt/mailer
     sed -i 's/^MAIL_SERVER_IPV4=.*/MAIL_SERVER_IPV4=203.0.113.20/' .env
-    docker compose up -d
+    sh mailer.sh start
     ```
 
     For IPv6, set `MAIL_SERVER_IPV6` the same way; to drop IPv6, delete the `MAIL_SERVER_IPV6` line.
@@ -80,7 +80,7 @@ MAIL_HOSTNAME mx.example.net shares the registrable domain example.net with the 
 
 `backend` then keeps restarting and the admin UI and the APIs are down. Nothing is deleted: the old sending domain, its DKIM key and records and the customers' SPF values stay as they were.
 
-To recover, set `MAIL_HOSTNAME` in `.env` back to the old name and run `docker compose up -d`; mailer starts with the old sending domain as before. Then either choose a new name outside every sender domain's registrable domain, or, if you really want the name, delete the conflicting domain under **Domains** first ([Delete a domain](/admin-guide/domains#delete-a-domain)), which stops all sending from it. Then follow [Change MAIL_HOSTNAME](#change-mail-hostname) again.
+To recover, set `MAIL_HOSTNAME` in `.env` back to the old name and run `sh mailer.sh start`; mailer starts with the old sending domain as before. Then either choose a new name outside every sender domain's registrable domain, or, if you really want the name, delete the conflicting domain under **Domains** first ([Delete a domain](/admin-guide/domains#delete-a-domain)), which stops all sending from it. Then follow [Change MAIL_HOSTNAME](#change-mail-hostname) again.
 :::
 
 ## Change MAIL_HOSTNAME
@@ -91,7 +91,7 @@ The example renames the sending domain from `mx.example.com` to `mx2.example.com
 cd /opt/mailer
 ```
 
-The platform stops sending at step 4 and sends again once `setup.sh` has finished; until the records of step 6 are published, receivers may reject mail or file it as spam. With `SEND_REQUIRE_VALID_DNS=true` (the default), each customer domain sends again only once its SPF record carries the new include and a check has run, as the warning below explains. Plan a quiet moment.
+The platform stops sending at step 4 and sends again once `sh mailer.sh setup` has finished; until the records of step 6 are published, receivers may reject mail or file it as spam. With `SEND_REQUIRE_VALID_DNS=true` (the default), each customer domain sends again only once its SPF record carries the new include and a check has run, as the warning below explains. Plan a quiet moment.
 
 ::: warning Every customer domain stops sending after the switch
 The switch marks the SPF record of every customer domain **Invalid**, and mailer sends only from domains whose records are all valid. From step 4 on, with `SEND_REQUIRE_VALID_DNS=true` (the default), every customer domain stops sending (the send API answers `422 FROM_DOMAIN_NOT_READY`, form deliveries wait and fail after about two hours) until its owner has published the new SPF include and a check has run. Announce the switch to your customers before you start, with the new value `v=spf1 include:mx2.example.com ~all` and the time of the switch, so they can update their zone right after it.
@@ -132,13 +132,13 @@ Ask your customers to add the new include **alongside** the old one before the s
     MAIL_HOSTNAME=mx2.example.com
     ```
 
-4. **Restart the stack and create the bounce mailbox for the new name** with the setup script:
+4. **Restart the stack and create the bounce mailbox for the new name** with the setup. It keeps your secrets and answers its questions from `.env`:
 
     ```bash
-    sh setup.sh
+    sh mailer.sh setup --yes
     ```
 
-    The backend switches the sending domain while it starts. Caddy obtains the certificate for `mx2.example.com`; until it has it, `mail` restarts, which takes a few seconds to a few minutes, and the script waits for it. It then creates the mailbox `bounce@mx2.example.com` and its `postmaster` alias. The backend logs in to the mail server with that mailbox to send and to read bounces, so every send fails until the script has finished. The mailbox of the old name stays in place but is no longer read.
+    The backend switches the sending domain while it starts. Caddy obtains the certificate for `mx2.example.com`; until it has it, `mail` restarts, which takes a few seconds to a few minutes, and the setup waits for it. It then creates the mailbox `bounce@mx2.example.com` and its `postmaster` alias. The backend logs in to the mail server with that mailbox to send and to read bounces, so every send fails until the setup has finished. The mailbox of the old name stays in place but is no longer read.
 
 5. **Set the PTR records.** At your hosting provider, set the reverse DNS of `203.0.113.10` (and `2001:db8::10`) to `mx2.example.com`, as on [First-run setup](/installation/first-run-setup#step-2-dns-records).
 6. **Publish the new records.** Open **Settings**: **Domain name** shows `mx2.example.com` and **DNS records** lists its records. Create the MX, SPF, DKIM and DMARC records in the DNS zone of the new name with the copy buttons; the DKIM value is new. Once DNS has caught up, click **Check again**. The records of `mx.example.com` are no longer used; delete them once the new ones are valid.
@@ -152,7 +152,7 @@ After changing the IP address, the backend log names the regeneration:
 
 ```bash
 cd /opt/mailer
-docker compose logs backend | grep "Server addresses"
+sh mailer.sh compose logs backend | grep "Server addresses"
 ```
 
 ```text
@@ -177,7 +177,7 @@ After changing `MAIL_HOSTNAME`, **Domain name** on **Settings** shows the new na
 
 ```bash
 cd /opt/mailer
-docker compose logs backend | grep -i "sending domain"
+sh mailer.sh compose logs backend | grep -i "sending domain"
 ```
 
 ```text

@@ -19,20 +19,20 @@ Every instance takes form deliveries from the shared queue (up to 5 at a time ea
 
 ```bash
 cd /opt/mailer
-docker compose up -d --scale backend=2
+sh mailer.sh compose up -d --scale backend=2
 ```
 
 What `compose.yml` provides and what it does not:
 
 - **Requests go to the name `backend`.** Caddy forwards to `backend:8000`, a single upstream. Docker's internal DNS answers that name with the addresses of all backend containers, but nothing in the Caddyfile balances between them: there is no load-balancing policy and no health check per instance, and Caddy reuses open connections, so how evenly requests spread is not configured and can be very uneven.
-- **Health checks** run per container: each instance has its own `healthy` state in `docker compose ps`.
-- **`--scale` does not stick.** `compose.yml` sets no number of instances, so every `docker compose up -d` without `--scale backend=2`, for example during an [update](/operations/updating), goes back to one instance. Add the flag to every `up -d` while you run two.
+- **Health checks** run per container: each instance has its own `healthy` state in `sh mailer.sh compose ps`.
+- **`--scale` does not stick.** `compose.yml` sets no number of instances, so every `sh mailer.sh compose up -d` without `--scale backend=2` goes back to one instance. So do `sh mailer.sh start` and the restart that an [update](/operations/updating) does: run `sh mailer.sh compose up -d --scale backend=2` again after each of them while you run two.
 - **No rolling updates.** `compose.yml` defines no update order for the instances, so expect the same short interruption during an update as with one instance.
 
 Check the result:
 
 ```bash
-docker compose ps backend --format "table {{.Name}}\t{{.Status}}"
+sh mailer.sh compose ps backend --format "table {{.Name}}\t{{.Status}}"
 ```
 
 ```text
@@ -56,7 +56,7 @@ Four jobs run in the background. With several instances, each job still runs on 
 
 **Leases.** A lease is a row in the database table `locks` that names the instance that runs a job and when its claim expires; its key is the job's name followed by `:owner`. The first instance that reaches a job's interval takes the lease and keeps renewing it every 10 seconds while it runs; the lease lasts 30 seconds from each renewal. The other instances find the lease taken and skip the job on every tick.
 
-- **When the owner stops normally** (an update, `docker compose stop`), it gives the lease back, and another instance takes the job over at its next interval.
+- **When the owner stops normally** (an update, `sh mailer.sh compose stop`), it gives the lease back, and another instance takes the job over at its next interval.
 - **When the owner crashes**, its lease expires 30 seconds after the last renewal. The next instance whose interval comes after that takes the job over.
 
 **No overlapping runs.** While a run lasts, it also holds a run lock, a second row whose key is the bare job name, for example `domain:dns-check`. A run that is still going when the job's next interval comes is not started a second time, neither on the same instance nor on another; that tick is skipped. The run lock is released when the run ends.
@@ -66,7 +66,7 @@ Four jobs run in the background. With several instances, each job still runs on 
 You can see the leases in the database:
 
 ```bash
-(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT key, owner, expires_at FROM locks ORDER BY key;')
+(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT key, owner, expires_at FROM locks ORDER BY key;')
 ```
 
 The query returns up to two rows per job; the run-lock row appears after the first run. A `…:owner` row with an `expires_at` in the future is the lease of a running instance; an empty `owner` there means the lease was given back. The row with the bare job name is the run lock: it has an owner only while a run lasts and is empty between runs, which is normal.
@@ -86,7 +86,7 @@ DB_POOL_MAX × number of backend instances
 plus the connections of your own tools. The bundled Postgres allows 100 connections unless configured otherwise; ask it with:
 
 ```bash
-(set -a; . ./.env; docker compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SHOW max_connections;')
+(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SHOW max_connections;')
 ```
 
-Managed databases often allow fewer; see [Size the connection pool](/installation/advanced-configuration#database-tls). To change `DB_POOL_MAX`, set it in `.env` and recreate the backend with `docker compose up -d --scale backend=2`.
+Managed databases often allow fewer; see [Size the connection pool](/installation/advanced-configuration#database-tls). To change `DB_POOL_MAX`, set it in `.env` and recreate the backend with `sh mailer.sh compose up -d --scale backend=2`.

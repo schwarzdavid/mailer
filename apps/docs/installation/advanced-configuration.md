@@ -10,7 +10,7 @@ Every table has the same columns.
 
 - **Required** is `yes` when the backend refuses to start without a value. When the production compose file sets the value itself, you do not have to.
 - **Default** is what the backend uses when the variable is absent. `–` means there is no default.
-- **Set by compose** is the exact value `deploy/compose.yml` fixes for the `backend` service. A value in `.env` for such a variable has **no effect**, because compose sets it directly on the container and that wins over the `.env` file. `–` means compose leaves the variable to you.
+- **Set by compose** is the exact value `compose.yml` fixes for the `backend` service. A value in `.env` for such a variable has **no effect**, because compose sets it directly on the container and that wins over the `.env` file. `–` means compose leaves the variable to you.
 
 An empty value (`KEY=`) counts as unset for the optional text settings, such as `REDIS_USERNAME`, `REDIS_PASSWORD` and `SMTP_TLS_SERVERNAME`. Boolean settings take `true` or `false`.
 

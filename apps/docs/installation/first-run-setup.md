@@ -16,7 +16,7 @@ Under **Create the admin account**, fill in:
 
 | Field             | What to enter                                                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
-| **Setup token**   | The [token from the log](/installation/#get-the-setup-token), without spaces.                       |
+| **Setup token**   | The [token from `sh mailer.sh token`](/installation/#get-the-setup-token), without spaces.          |
 | **First name**    | Your first name.                                                                                    |
 | **Last name**     | Your last name.                                                                                     |
 | **Email address** | The address you will log in with. It must be a valid address; mailer does not send mail to it here. |
@@ -24,7 +24,7 @@ Under **Create the admin account**, fill in:
 
 Click **Create account**. The account becomes the first **Super admin**, the role that may do everything, and you are signed in right away. You can add more users after setup.
 
-If the wizard shows **Couldn't create the account** with `Invalid setup token`, the token is wrong or from an earlier start: read the log again and use the last token. The form allows 10 attempts per minute from one IP address; if Redis is down it answers with an error instead of trying, so check `docker compose ps` first.
+If the wizard shows **Couldn't create the account** with `Invalid setup token`, the token is wrong or from an earlier start: run `sh mailer.sh token` again and use the new token. The form allows 10 attempts per minute from one IP address; if Redis is down it answers with an error instead of trying, so check `sh mailer.sh compose ps` first.
 
 ### Step 2: DNS records
 
@@ -37,7 +37,7 @@ The backend created these records when it started: a DKIM key for `MAIL_HOSTNAME
 Each record shows its name (**A**, **MX**, **SPF** and so on), its type, what it is for, a **Host** and a **Value** with a copy button each (the **MX** record also has a **Priority** with its own copy button, because DNS providers ask for it in a separate field), and a status: **Valid** once mailer finds exactly that value in DNS, **Invalid** until then. Above the list you see how many records are valid and when they were last checked.
 
 ::: tip Wrong name or address?
-Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `docker compose up -d` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name, change `MAIL_HOSTNAME` in `.env`, run `sh setup.sh`, which also creates the bounce mailbox for the new name ([Start mailer](/installation/#start-mailer)), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
+Fix it now, before you publish any records. A wrong address: correct `MAIL_SERVER_IPV4` or `MAIL_SERVER_IPV6` in `.env`, run `sh mailer.sh start` and reload the wizard; the backend generates the records again and keeps the DKIM key. A wrong name: create the A record for the new name, change `MAIL_HOSTNAME` in `.env`, run `sh mailer.sh setup --yes`, which also creates the bounce mailbox for the new name ([What setup does next](/installation/#what-setup-does-next)), set the PTR record of your IP addresses to the new name at your hosting provider, and reload the wizard. Until Caddy has obtained the certificate for the new name, `mail` restarts again, exactly as on the first start.
 :::
 
 Create the records in your DNS zone. With the example values, the full set looks like this:
