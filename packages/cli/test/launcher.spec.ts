@@ -26,15 +26,12 @@ const inheritedKeysToDrop = [
 const mailPassword = 'mail-secret-value'
 
 const fakeDocker = `#!/bin/sh
-line="$*"
-case "$line" in
-    *"setup email"*) cat >>"$FAKE_STDIN" ;;
-esac
+line=$(printf '%s' "$*" | tr '\\n' ' ')
 case "$line" in
     "compose up"*) printf 'env DB_PASSWORD=%s\\n' "\${DB_PASSWORD:-}" >>"$FAKE_LOG" ;;
 esac
 printf '%s\\n' "$line" >>"$FAKE_LOG"
-printf '[%s]' "$@" >>"$FAKE_ARGV"
+printf '[%s]' "$@" | tr '\\n' ' ' >>"$FAKE_ARGV"
 printf '\\n' >>"$FAKE_ARGV"
 if [ -n "\${FAKE_FAIL:-}" ] && printf '%s\\n' "$line" | grep -Eq -e "$FAKE_FAIL"; then
     exit 1
@@ -42,12 +39,19 @@ fi
 case "$line" in
     "compose version --short") printf '%s\\n' "\${FAKE_COMPOSE_VERSION:-2.30.0}" ;;
     "compose logs"*) if [ -n "\${FAKE_LOGS:-}" ]; then cat "$FAKE_LOGS"; fi ;;
+    "compose exec -T mail sh -c "*) PATH="$FAKE_MAIL_BIN:$PATH" exec sh -c "$7" "$8" "$9" "$FAKE_ACCOUNTS" ;;
     "run "*" mailer "*)
         if [ -n "\${FAKE_CLI_STDERR:-}" ]; then printf '%s\\n' "$FAKE_CLI_STDERR" >&2; fi
         exit "\${FAKE_CLI_EXIT:-0}"
         ;;
 esac
 exit 0
+`
+
+const fakeDoveadm = `#!/bin/sh
+printf '%s\\n' "$*" >>"$FAKE_DOVEADM_ARGV"
+cat >>"$FAKE_STDIN"
+printf '%s\\n' '{SHA512-CRYPT}$6$fake'
 `
 
 function recorded(args: string[]): string {
@@ -86,6 +90,9 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     let logFile: string
     let argvFile: string
     let stdinFile: string
+    let mailBinDir: string
+    let doveadmArgvFile: string
+    let accountsFile: string
     let mountSource: string
     let user: string
 
@@ -168,7 +175,18 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
             delete env[key]
         }
         env[pathKey()] = `${binDir}${delimiter}${process.env[pathKey()] ?? ''}`
-        Object.assign(env, { FAKE_LOG: logFile, FAKE_ARGV: argvFile, FAKE_STDIN: stdinFile }, extraEnv)
+        Object.assign(
+            env,
+            {
+                FAKE_LOG: logFile,
+                FAKE_ARGV: argvFile,
+                FAKE_STDIN: stdinFile,
+                FAKE_MAIL_BIN: mailBinDir,
+                FAKE_DOVEADM_ARGV: doveadmArgvFile,
+                FAKE_ACCOUNTS: accountsFile,
+            },
+            extraEnv,
+        )
         return new Promise((resolve, reject) => {
             const child = spawn(shell!, ['mailer.sh', ...args], {
                 cwd: installDir,
@@ -194,11 +212,17 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         binDir = join(rootDir, 'bin')
         logFile = join(rootDir, 'docker.log')
         argvFile = join(rootDir, 'docker.argv')
-        stdinFile = join(rootDir, 'docker.stdin')
+        stdinFile = join(rootDir, 'doveadm.stdin')
+        mailBinDir = join(rootDir, 'mail-bin')
+        doveadmArgvFile = join(rootDir, 'doveadm.argv')
+        accountsFile = join(rootDir, 'postfix-accounts.cf')
         await mkdir(installDir)
         await mkdir(binDir)
+        await mkdir(mailBinDir)
         await writeFile(join(binDir, 'docker'), fakeDocker)
         await chmod(join(binDir, 'docker'), 0o755)
+        await writeFile(join(mailBinDir, 'doveadm'), fakeDoveadm)
+        await chmod(join(mailBinDir, 'doveadm'), 0o755)
         await copyFile(launcherSource, join(installDir, 'mailer.sh'))
         await writeEnv(defaultEnv)
         mountSource = await shellOutput('pwd -W 2>/dev/null || pwd')
@@ -261,13 +285,32 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         ])
     })
 
-    it('passes the mailbox password on stdin and never as an argument', async () => {
+    it('hashes the mailbox password with doveadm from stdin and never passes it as an argument', async () => {
+        await writeFile(
+            accountsFile,
+            'other@mx.example.com|{SHA512-CRYPT}other\nBounce@mx.example.com|{SHA512-CRYPT}old\n',
+        )
         const result = await run(['setup', '--yes'])
         expectCleanExit(result)
         expect(await readFile(stdinFile, 'utf8')).toBe(`${mailPassword}\n${mailPassword}\n`)
+        expect(await readFile(doveadmArgvFile, 'utf8')).toBe('pw -s SHA512-CRYPT\n')
+        expect(await readFile(accountsFile, 'utf8')).toBe(
+            'other@mx.example.com|{SHA512-CRYPT}other\nbounce@mx.example.com|{SHA512-CRYPT}$6$fake\n',
+        )
+        const calls = await argvCalls()
+        expect(calls.filter((call) => call.includes(mailPassword))).toEqual([])
+        expect(calls.filter((call) => call.includes('[setup][email]'))).toEqual([])
         expect((await logLines()).filter((line) => line.includes(mailPassword))).toEqual([])
         expect(result.stdout).not.toContain(mailPassword)
         expect(result.stdout).toContain('Updated the password of bounce@mx.example.com.')
+    })
+
+    it('creates the mailbox when the account list does not hold it yet', async () => {
+        const result = await run(['setup', '--yes'], { FAKE_FAIL: '^compose exec -T mail grep -qi .bounce@' })
+        expectCleanExit(result)
+        expect(await readFile(accountsFile, 'utf8')).toBe('bounce@mx.example.com|{SHA512-CRYPT}$6$fake\n')
+        expect(result.stdout).toContain('Created the mailbox bounce@mx.example.com.')
+        expect(result.stdout).not.toContain('Updated the password')
     })
 
     it('refuses an old Compose', async () => {

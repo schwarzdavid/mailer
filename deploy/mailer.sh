@@ -196,15 +196,39 @@ in_mail() {
     docker compose exec -T mail "$@"
 }
 
+mailbox_password_script() {
+    cat <<'SCRIPT'
+set -eu
+account=$1
+accounts=$2
+IFS= read -r password
+[ -n "$password" ]
+hash=$(printf '%s\n%s\n' "$password" "$password" | doveadm pw -s SHA512-CRYPT)
+case $hash in
+    '{SHA512-CRYPT}'*) ;;
+    *) exit 1 ;;
+esac
+{
+    [ ! -f "$accounts" ] || awk -F '|' -v account="$account" 'tolower($1) != tolower(account)' "$accounts"
+    printf '%s|%s\n' "$account" "$hash"
+} >"$accounts.next"
+mv "$accounts.next" "$accounts"
+SCRIPT
+}
+
+set_mailbox_password() {
+    printf '%s\n' "$mail_password" |
+        in_mail sh -c "$(mailbox_password_script)" set-mailbox-password "$bounce" "$accounts"
+}
+
 ensure_mailbox() {
     in_mail true >/dev/null 2>&1 || return 1
+    mailbox_done="Created the mailbox $bounce."
     if in_mail grep -qi "^$bounce|" "$accounts" 2>/dev/null; then
-        printf '%s\n%s\n' "$mail_password" "$mail_password" | in_mail setup email update "$bounce" || return 1
-        say "Updated the password of $bounce."
-    else
-        printf '%s\n%s\n' "$mail_password" "$mail_password" | in_mail setup email add "$bounce" || return 1
-        say "Created the mailbox $bounce."
+        mailbox_done="Updated the password of $bounce."
     fi
+    set_mailbox_password || return 1
+    say "$mailbox_done"
     if ! in_mail grep -qi "^$postmaster[[:space:]]" "$aliases" 2>/dev/null; then
         in_mail setup alias add "$postmaster" "$bounce" || return 1
         say "Created the alias $postmaster -> $bounce."
