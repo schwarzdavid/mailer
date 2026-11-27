@@ -14,6 +14,7 @@ interface LauncherResult {
 const launcherSource = process.env.LAUNCHER_SCRIPT ?? join(import.meta.dirname, '../../../deploy/mailer.sh')
 const secretKeys = ['DB_PASSWORD', 'BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'MAIL_PASSWORD']
 const secretNameFlags = secretKeys.flatMap((key) => ['-e', key])
+const noLogFlags = ['--log-driver', 'none', ...secretNameFlags]
 const inheritedKeysToDrop = [
     ...secretKeys,
     'MAILER_WRAPPED',
@@ -23,7 +24,12 @@ const inheritedKeysToDrop = [
     'FAKE_COMPOSE_VERSION',
     'FAKE_LOGS',
     'FAKE_DOVEADM_SILENT',
+    'FAKE_CLI_WRITES_TAG',
+    'FAKE_NEW_LAUNCHER',
+    'FAKE_STUB_RECORD',
+    'MAILER_SECRETS_WRAPPER',
     'IMAGE_TAG',
+    'CDPATH',
 ]
 const mailPassword = 'mail-secret-value'
 
@@ -53,7 +59,13 @@ case "$line" in
             *" mailer migrate-project --image-tag "*)
                 if [ "$cli_exit" = 0 ]; then
                     eval "cli_target=\\\${$#}"
+                    cli_target=\${FAKE_CLI_WRITES_TAG:-$cli_target}
                     sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$cli_target/" .env
+                    mkdir -p .update-lock
+                    if [ -n "\${FAKE_NEW_LAUNCHER:-}" ]; then
+                        cp "$FAKE_NEW_LAUNCHER" mailer.sh.next
+                        mv mailer.sh.next mailer.sh
+                    fi
                 fi
                 ;;
         esac
@@ -71,6 +83,22 @@ if [ -n "\${FAKE_DOVEADM_SILENT:-}" ]; then
 fi
 printf '%s\\n' '{SHA512-CRYPT}$6$fake'
 `
+
+const recordingStub = [
+    '#!/bin/sh',
+    '{',
+    '    printf \'args=%s\\n\' "$*"',
+    '    printf \'pwd=%s\\n\' "$(pwd)"',
+    '    printf \'IMAGE_TAG=%s\\n\' "${IMAGE_TAG:-}"',
+    '    printf \'MAILER_WRAPPED=%s\\n\' "${MAILER_WRAPPED:-}"',
+    '} >"$FAKE_STUB_RECORD"',
+    '',
+].join('\n')
+
+const recordingWrapper =
+    '#!/bin/sh\nprintf \'%s\\n\' "${X:-}" >>wrapper.ran\nDB_PASSWORD=from-wrapper\nexport DB_PASSWORD\nexec "$@"\n'
+
+const releasedLauncher = launcherSource
 
 function recorded(args: string[]): string {
     return args.map((arg) => `[${arg}]`).join('')
@@ -156,6 +184,10 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         return (await readFile(argvFile, 'utf8')).split('\n').filter((line) => line !== '')
     }
 
+    async function argvCallsWithoutVersion(): Promise<string[]> {
+        return (await argvCalls()).filter((call) => call !== recorded(['compose', 'version', '--short']))
+    }
+
     async function writeEnv(values: Record<string, string>): Promise<void> {
         const lines = Object.entries(values).map(([key, value]) => `${key}=${value}`)
         await writeFile(join(installDir, '.env'), `${lines.join('\n')}\n`)
@@ -195,7 +227,11 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect({ code: result.code, stderr: result.stderr }).toEqual({ code: 0, stderr: '' })
     }
 
-    function run(args: string[], extraEnv: Record<string, string> = {}): Promise<LauncherResult> {
+    function run(
+        args: string[],
+        extraEnv: Record<string, string> = {},
+        location: { cwd: string; script: string } = { cwd: installDir, script: 'mailer.sh' },
+    ): Promise<LauncherResult> {
         const env: NodeJS.ProcessEnv = { ...process.env }
         for (const key of inheritedKeysToDrop) {
             delete env[key]
@@ -215,8 +251,8 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
             extraEnv,
         )
         return new Promise((resolve, reject) => {
-            const child = spawn(shell!, ['mailer.sh', ...args], {
-                cwd: installDir,
+            const child = spawn(shell!, [location.script, ...args], {
+                cwd: location.cwd,
                 env,
                 stdio: ['ignore', 'pipe', 'pipe'],
             })
@@ -291,8 +327,8 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
 
     it('setup runs the CLI with the frozen mount and user, then starts the stack', async () => {
         const result = await run(['setup', '--yes'])
-        const calls = await argvCalls()
-        const runIndex = calls.indexOf(cliRun('1.0.0', secretNameFlags, ['setup', '--image-tag', '1.0.0', '--yes']))
+        const calls = await argvCallsWithoutVersion()
+        const runIndex = calls.indexOf(cliRun('1.0.0', noLogFlags, ['setup', '--image-tag', '1.0.0', '--yes']))
         expectCleanExit(result)
         expect(runIndex).toBe(0)
         expect(calls.indexOf(recorded(['compose', 'up', '-d', '--pull', 'missing']))).toBeGreaterThan(runIndex)
@@ -307,10 +343,75 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         const result = await run(['setup'])
         expect(result.code).toBe(1)
         expect(result.stderr).toBe('mailer.sh: DB_PASSWORD is not set\n')
-        expect((await argvCalls()).slice(0, 2)).toEqual([
+        expect((await argvCallsWithoutVersion()).slice(0, 2)).toEqual([
             recorded(['pull', 'ghcr.io/schwarzdavid/mailer:latest']),
-            cliRun('latest', secretNameFlags, ['setup', '--image-tag', 'latest']),
+            cliRun('latest', noLogFlags, ['setup', '--image-tag', 'latest']),
         ])
+    })
+
+    it('setup checks Compose before it runs the wizard', async () => {
+        const result = await run(['setup', '--yes'], { FAKE_COMPOSE_VERSION: '2.20.0' })
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('mailer.sh: Docker Compose 2.23.1 or newer is required (found 2.20.0).')
+        expect(await argvCallsWithoutVersion()).toEqual([])
+    })
+
+    it('setup refuses an operator-supplied --image-tag', async () => {
+        for (const args of [
+            ['setup', '--image-tag', '1.2.0'],
+            ['setup', '--yes', '--image-tag=1.2.0'],
+        ]) {
+            const result = await run(args)
+            expect(result.code).toBe(2)
+            expect(result.stderr).toContain(
+                'mailer.sh: set IMAGE_TAG in .env to choose the version; setup does not take --image-tag',
+            )
+        }
+        expect(await argvCallsWithoutVersion()).toEqual([])
+    })
+
+    it('setup does not start the stack when the CLI asks for a review first', async () => {
+        const result = await run(['setup', '--yes'], { FAKE_CLI_EXIT: '4' })
+        expect(result.code).toBe(4)
+        expect(result.stderr).toBe(
+            'mailer.sh: the stack was not started. Move your changes from compose.yml.legacy into compose.override.yml, then run: sh mailer.sh setup --yes\n',
+        )
+        expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([])
+    })
+
+    it('setup explains an image without the mailer CLI', async () => {
+        const result = await run(['setup', '--yes'], { FAKE_CLI_EXIT: '127' })
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain(
+            'mailer.sh: the image ghcr.io/schwarzdavid/mailer:1.0.0 has no mailer CLI; set IMAGE_TAG=latest in .env and run setup again',
+        )
+        expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([])
+    })
+
+    it('operates on its own directory even when CDPATH names another one', async () => {
+        const decoyDir = join(rootDir, 'decoy', 'install dir')
+        await mkdir(decoyDir, { recursive: true })
+        await writeFile(join(decoyDir, '.env'), 'IMAGE_TAG=9.9.9\nMAILER_FORMAT_VERSION=9\n')
+        const result = await run(
+            ['version'],
+            { CDPATH: join(rootDir, 'decoy') },
+            {
+                cwd: rootDir,
+                script: 'install dir/mailer.sh',
+            },
+        )
+        expectCleanExit(result)
+        expect(result.stdout).toBe('mailer 1.0.0\nformat 1\n')
+    })
+
+    it('reads an unquoted .env value up to an inline comment, as Compose does', async () => {
+        await writeFile(
+            join(installDir, '.env'),
+            (await readFile(join(installDir, '.env'), 'utf8')).replace('IMAGE_TAG=1.0.0', 'IMAGE_TAG=1.0.0 # pinned'),
+        )
+        const result = await run(['start'])
+        expectCleanExit(result)
+        expect(await composeImageTags()).toEqual(['1.0.0|compose up -d'])
     })
 
     it('hashes the mailbox password with doveadm from stdin and never passes it as an argument', async () => {
@@ -375,15 +476,70 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect(await composeImageTags()).toEqual(['1.0.0|compose up -d'])
     })
 
-    it('_finish-update starts the target IMAGE_TAG that the CLI wrote to .env', async () => {
+    it('_finish-update starts the target IMAGE_TAG that the CLI wrote to .env, the backend first', async () => {
         await createLock()
         const result = await run(['update', '--to', '1.1.0'], { IMAGE_TAG: '1.0.0' })
         expectCleanExit(result)
         expect(await readFile(join(installDir, '.env'), 'utf8')).toMatch(/^IMAGE_TAG=1\.1\.0$/m)
         expect((await composeImageTags()).filter((line) => line.includes('|compose up'))).toEqual([
-            '1.1.0|compose up -d --pull missing --remove-orphans',
-            '1.1.0|compose up -d --wait --wait-timeout 300 backend',
+            '1.1.0|compose up -d --pull missing --wait --wait-timeout 300 backend',
+            '1.1.0|compose up -d --remove-orphans',
         ])
+    })
+
+    it('update names the version .env holds afterwards, not the one requested', async () => {
+        const result = await run(['update', '--to', 'latest'], { FAKE_CLI_WRITES_TAG: '1.2.0' })
+        expectCleanExit(result)
+        expect(await argvCalls()).toContain(migrateRun('latest'))
+        expect(result.stdout).toContain('Updated from 1.0.0 to 1.2.0.')
+        expect(lockExists()).toBe(false)
+    })
+
+    it('update leaves the Compose check to _finish-update, after the hand-over', async () => {
+        const result = await run(['update', '--to', '1.1.0'], { FAKE_COMPOSE_VERSION: 'garbage' })
+        expect(result.code).toBe(1)
+        expect(await argvCalls()).toContain(migrateRun('1.1.0'))
+        expect(result.stderr).toContain('mailer.sh: Docker Compose 2.23.1 or newer is required (found garbage).')
+        expect(result.stderr).toContain('mailer.sh: the update to 1.1.0 did not come up.')
+        expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([])
+        expect(lockExists()).toBe(false)
+    })
+
+    it('the released launcher hands over to the new mailer.sh with exactly _finish-update <from> <to>', async () => {
+        const stubFile = join(rootDir, 'stub.sh')
+        const recordFile = join(rootDir, 'stub.record')
+        await writeFile(stubFile, recordingStub)
+        await copyFile(releasedLauncher, join(installDir, 'mailer.sh'))
+        const installPath = await shellOutput('pwd')
+        const result = await run(['update', '--to', '1.1.0'], {
+            FAKE_NEW_LAUNCHER: stubFile,
+            FAKE_STUB_RECORD: recordFile,
+        })
+        expectCleanExit(result)
+        expect(await readFile(join(installDir, 'mailer.sh'), 'utf8')).toBe(recordingStub)
+        expect(await readFile(recordFile, 'utf8')).toBe(
+            `args=_finish-update 1.0.0 1.1.0\npwd=${installPath}\nIMAGE_TAG=1.0.0\nMAILER_WRAPPED=\n`,
+        )
+    })
+
+    it('a wrapped update runs the wrapper once and hands its secret to the compose up of _finish-update', async () => {
+        const withoutDbPassword = Object.fromEntries(
+            Object.entries(defaultEnv).filter(([key]) => key !== 'DB_PASSWORD'),
+        )
+        await writeEnv({ ...withoutDbPassword, MAILER_SECRETS_WRAPPER: 'X=1 sh ./wrap.sh' })
+        await writeInstallFile('wrap.sh', recordingWrapper)
+        const result = await run(['update', '--to', '1.1.0'])
+        expectCleanExit(result)
+        expect(await readFile(join(installDir, 'wrapper.ran'), 'utf8')).toBe('1\n')
+        const upCalls = (await logLines()).filter((line) => line.startsWith('compose up') || line.startsWith('env '))
+        expect(upCalls).toEqual([
+            'env DB_PASSWORD=from-wrapper',
+            'compose up -d --pull missing --wait --wait-timeout 300 backend',
+            'env DB_PASSWORD=from-wrapper',
+            'compose up -d --remove-orphans',
+        ])
+        expect(result.stdout).toContain('Updated from 1.0.0 to 1.1.0.')
+        expect(lockExists()).toBe(false)
     })
 
     it('refuses an old Compose', async () => {
@@ -420,6 +576,23 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect(await logLines()).toEqual(['compose version --short', 'env DB_PASSWORD=from-wrapper', 'compose up -d'])
     })
 
+    it('runs a wrapper that starts with a variable assignment and returns the exit status of the wrapped command', async () => {
+        const withoutDbPassword = Object.fromEntries(
+            Object.entries(defaultEnv).filter(([key]) => key !== 'DB_PASSWORD'),
+        )
+        await writeEnv({ ...withoutDbPassword, MAILER_SECRETS_WRAPPER: 'X=1 sh ./wrap.sh' })
+        await writeInstallFile('wrap.sh', recordingWrapper)
+        const started = await run(['start'])
+        expectCleanExit(started)
+        expect(await logLines()).toEqual(['compose version --short', 'env DB_PASSWORD=from-wrapper', 'compose up -d'])
+        const manual = await run(['update', '--to', '1.1.0'], { FAKE_CLI_EXIT: '3' })
+        expect(manual.code).toBe(3)
+        expect(
+            (await argvCalls()).filter((call) => call.endsWith('[mailer][migrate-project][--image-tag][1.1.0]')),
+        ).toHaveLength(1)
+        expect(await readFile(join(installDir, 'wrapper.ran'), 'utf8')).toBe('1\n1\n')
+    })
+
     it('replaces {} in the wrapper with one quoted command', async () => {
         await writeEnv({ ...defaultEnv, MAILER_SECRETS_WRAPPER: 'sh ./one.sh {}' })
         await writeInstallFile('one.sh', '#!/bin/sh\nprintf \'%s\\n\' "$#" >one.count\nexec sh -c "$1"\n')
@@ -436,11 +609,29 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect(await logLines()).toEqual([])
     })
 
+    it('update --to v is missing its target', async () => {
+        const result = await run(['update', '--to', 'v'])
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('mailer.sh: this version needs a target: sh mailer.sh update --to <version>')
+        expect(await logLines()).toEqual([])
+    })
+
     it('update to the running version changes nothing', async () => {
         const result = await run(['update', '--to', '1.0.0'])
         expectCleanExit(result)
-        expect(result.stdout).toBe('Already on 1.0.0.\n')
+        expect(result.stdout).toBe('Already on 1.0.0. If the last update did not finish, run: sh mailer.sh start\n')
         expect(await logLines()).toEqual([])
+    })
+
+    it('update to the running version fails while an unfinished update left its lock', async () => {
+        await createLock()
+        const result = await run(['update', '--to', '1.0.0'])
+        expect(result.code).toBe(1)
+        expect(result.stderr).toBe(
+            'mailer.sh: an update did not finish (.update-lock exists). If no update is running, remove .update-lock and run: sh mailer.sh start\n',
+        )
+        expect(await logLines()).toEqual([])
+        expect(lockExists()).toBe(true)
     })
 
     it('update refuses another major without the major command', async () => {
@@ -462,17 +653,14 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     it('update strips a leading v and hands over to _finish-update', async () => {
         await createLock()
         const result = await run(['update', '--to', 'v1.1.0'])
-        const calls = (await argvCalls()).filter((call) => call !== recorded(['compose', 'version', '--short']))
+        const calls = await argvCallsWithoutVersion()
         expectCleanExit(result)
-        expect(calls.slice(0, 2)).toEqual([
+        expect(calls.slice(0, 4)).toEqual([
             recorded(['pull', 'ghcr.io/schwarzdavid/mailer:1.1.0']),
             migrateRun('1.1.0'),
+            recorded(['compose', 'up', '-d', '--pull', 'missing', '--wait', '--wait-timeout', '300', 'backend']),
+            recorded(['compose', 'up', '-d', '--remove-orphans']),
         ])
-        const removeOrphans = calls.indexOf(recorded(['compose', 'up', '-d', '--pull', 'missing', '--remove-orphans']))
-        expect(removeOrphans).toBe(2)
-        expect(
-            calls.indexOf(recorded(['compose', 'up', '-d', '--wait', '--wait-timeout', '300', 'backend'])),
-        ).toBeGreaterThan(removeOrphans)
         expect(result.stdout).toContain('Updated from 1.0.0 to 1.1.0.')
         expect(lockExists()).toBe(false)
     })
@@ -483,7 +671,6 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect(result.code).toBe(3)
         expect(result.stderr).toBe(`${cliMessage}\n`)
         expect(await argvCalls()).toEqual([
-            recorded(['compose', 'version', '--short']),
             recorded(['pull', 'ghcr.io/schwarzdavid/mailer:1.1.0']),
             migrateRun('1.1.0'),
         ])
@@ -518,17 +705,57 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
 
     it('_finish-update removes the lock when the stack does not come up', async () => {
         await createLock()
+        await writeEnv({ ...defaultEnv, IMAGE_TAG: '1.1.0' })
         const result = await run(['_finish-update', '1.0.0', '1.1.0'], { FAKE_FAIL: '--wait' })
         expect(result.code).toBe(1)
         expect(result.stderr).toContain(
             'mailer.sh: the update to 1.1.0 did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation.',
         )
+        expect((await logLines()).filter((line) => line.startsWith('compose up'))).toEqual([
+            'compose up -d --pull missing --wait --wait-timeout 300 backend',
+        ])
         expect(lockExists()).toBe(false)
+    })
+
+    it('_finish-update with the wrong argument count exits 2 and leaves a lock it does not own', async () => {
+        await createLock()
+        const result = await run(['_finish-update', '1.0.0'])
+        expect(result.code).toBe(2)
+        expect(result.stderr).toContain('mailer.sh: _finish-update needs <from> <to>')
+        expect(await logLines()).toEqual([])
+        expect(lockExists()).toBe(true)
+    })
+
+    it('_finish-update reports a failed mailbox step on its own, without the rollback hint', async () => {
+        await createLock()
+        await writeEnv({ ...defaultEnv, IMAGE_TAG: '1.1.0' })
+        const result = await run(['_finish-update', '1.0.0', '1.1.0'], { FAKE_DOVEADM_SILENT: '1' })
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain(
+            'mailer.sh: updated to 1.1.0, but the bounce mailbox could not be set; run: sh mailer.sh setup --yes',
+        )
+        expect(result.stderr).not.toContain('rollback')
+        expect(result.stdout).not.toContain('Updated from')
+        expect(lockExists()).toBe(false)
+    })
+
+    it('names the launcher command for the logs when the mail service never accepts the account', async () => {
+        await writeInstallFile('.clock', '0')
+        await writeFile(
+            join(binDir, 'date'),
+            '#!/bin/sh\nnow=$(cat .clock)\nprintf \'%s\\n\' "$((now + 1000))" >.clock\nprintf \'%s\\n\' "$now"\n',
+        )
+        await chmod(join(binDir, 'date'), 0o755)
+        const result = await run(['setup', '--yes'], { FAKE_FAIL: '^compose exec -T mail true' })
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain(
+            'mailer.sh: the mail service did not accept the account within 10 minutes; check: sh mailer.sh compose logs proxy mail',
+        )
     })
 
     it('_finish-update reports a missing secret as a failed update and removes the lock', async () => {
         await createLock()
-        await writeEnv({ ...defaultEnv, MAIL_PASSWORD: '' })
+        await writeEnv({ ...defaultEnv, IMAGE_TAG: '1.1.0', MAIL_PASSWORD: '' })
         const result = await run(['_finish-update', '1.0.0', '1.1.0'])
         expect(result.code).toBe(1)
         expect(result.stderr).toContain('mailer.sh: MAIL_PASSWORD is not set')
@@ -605,6 +832,6 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     it('recovery-kit runs the CLI with the secret names only', async () => {
         const result = await run(['recovery-kit'], { DB_PASSWORD: 'from-environment' })
         expectCleanExit(result)
-        expect(await argvCalls()).toEqual([cliRun('1.0.0', secretNameFlags, ['recovery-kit'])])
+        expect(await argvCalls()).toEqual([cliRun('1.0.0', noLogFlags, ['recovery-kit'])])
     })
 })

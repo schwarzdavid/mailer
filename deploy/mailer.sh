@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-cd "$(dirname "$0")"
+CDPATH= cd -- "$(dirname -- "$0")"
 
 IMAGE=ghcr.io/schwarzdavid/mailer
 SECRET_KEYS="DB_PASSWORD BACKEND_JWT_SECRET BACKEND_ENCRYPTION_SECRET MAIL_PASSWORD"
@@ -52,7 +52,8 @@ fail_usage() {
 
 env_value() {
     [ -f .env ] || return 0
-    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d '\r' | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d '\r' | sed -e "/^[\"']/!s/[[:space:]]\{1,\}#.*//" \
+        -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 
 secret_value() {
@@ -151,17 +152,18 @@ mount_source() {
 
 run_cli() {
     cli_tag=$1
-    cli_secret_flags=$2
+    cli_extra_flags=$2
     shift 2
     cli_tty=
     if [ -t 0 ] && [ -t 1 ]; then
         cli_tty=-t
     fi
-    docker run --rm -i $cli_tty --user "$(id -u):$(id -g)" -e HOME=/tmp $cli_secret_flags \
+    docker run --rm -i $cli_tty --user "$(id -u):$(id -g)" -e HOME=/tmp $cli_extra_flags \
         -v "$(mount_source):/project" "$IMAGE:$cli_tag" mailer "$@"
 }
 
-secret_name_flags() {
+unlogged_secret_flags() {
+    printf '%s' '--log-driver none'
     for secret_key in $SECRET_KEYS; do
         printf ' -e %s' "$secret_key"
     done
@@ -192,12 +194,9 @@ run_under_wrapper() {
     [ -n "$full_command" ] || return 0
     MAILER_WRAPPED=1
     export MAILER_WRAPPED
-    if [ "$1" = _finish-update ]; then
-        wrapped_status=0
-        eval "$full_command" || wrapped_status=$?
-        exit "$wrapped_status"
-    fi
-    eval "exec $full_command"
+    wrapped_status=0
+    eval "$full_command" || wrapped_status=$?
+    exit "$wrapped_status"
 }
 
 in_mail() {
@@ -272,17 +271,39 @@ wait_for_mailbox() {
             "$MAILBOX_HASH_FAILED") return 1 ;;
         esac
         if [ "$(date +%s)" -ge "$deadline" ]; then
-            warn "the mail service did not accept the account within 10 minutes; check: docker compose logs proxy mail"
+            warn "the mail service did not accept the account within 10 minutes; check: sh mailer.sh compose logs proxy mail"
             return 1
         fi
         sleep 5
     done
 }
 
+refuse_image_tag_option() {
+    for setup_argument in "$@"; do
+        case $setup_argument in
+            --image-tag | --image-tag=*)
+                fail_usage "set IMAGE_TAG in .env to choose the version; setup does not take --image-tag"
+                ;;
+        esac
+    done
+}
+
 command_setup() {
+    refuse_image_tag_option "$@"
+    require_compose
     setup_tag=$(image_tag_or_latest)
     pull_if_latest "$setup_tag"
-    run_cli "$setup_tag" "$(secret_name_flags)" setup --image-tag "$setup_tag" "$@"
+    setup_status=0
+    run_cli "$setup_tag" "$(unlogged_secret_flags)" setup --image-tag "$setup_tag" "$@" || setup_status=$?
+    case $setup_status in
+        0) ;;
+        4)
+            warn "the stack was not started. Move your changes from compose.yml.legacy into compose.override.yml, then run: sh mailer.sh setup --yes"
+            exit 4
+            ;;
+        126 | 127) fail "the image $IMAGE:$setup_tag has no mailer CLI; set IMAGE_TAG=latest in .env and run setup again" ;;
+        *) exit "$setup_status" ;;
+    esac
     exec sh ./mailer.sh _post-setup
 }
 
@@ -336,7 +357,7 @@ command_doctor() {
 command_recovery_kit() {
     kit_tag=$(image_tag_or_latest)
     pull_if_latest "$kit_tag"
-    run_cli "$kit_tag" "$(secret_name_flags)" recovery-kit
+    run_cli "$kit_tag" "$(unlogged_secret_flags)" recovery-kit
 }
 
 major_of() {
@@ -368,12 +389,14 @@ command_update() {
         esac
         shift
     done
-    [ -n "$target" ] || fail "this version needs a target: sh mailer.sh update --to <version>"
     target=${target#v}
+    [ -n "$target" ] || fail "this version needs a target: sh mailer.sh update --to <version>"
     current=$(env_value IMAGE_TAG)
     current=${current:-latest}
     if [ "$target" = "${current#v}" ]; then
-        say "Already on $target."
+        [ ! -e "$UPDATE_LOCK" ] ||
+            fail "an update did not finish ($UPDATE_LOCK exists). If no update is running, remove $UPDATE_LOCK and run: sh mailer.sh start"
+        say "Already on $target. If the last update did not finish, run: sh mailer.sh start"
         exit 0
     fi
     current_major=$(major_of "$current")
@@ -382,7 +405,6 @@ command_update() {
         [ "$allow_major" = no ]; then
         fail "$target is a new major version. Read its release notes, then run: sh mailer.sh update major --to $target"
     fi
-    require_compose
     pull_update_image "$IMAGE:$target"
     migrate_status=0
     run_cli "$target" "" migrate-project --image-tag "$target" || migrate_status=$?
@@ -401,13 +423,19 @@ fail_update() {
     fail "the update to $1 did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation."
 }
 
+installed_tag_or() {
+    installed_tag=$(env_value IMAGE_TAG)
+    printf '%s' "${installed_tag:-$1}"
+}
+
 command_finish_update() {
-    [ $# -eq 2 ] || fail_usage "_finish-update needs <from> <to>"
-    (require_compose && require_secrets) || fail_update "$2"
-    docker compose up -d --pull missing --remove-orphans || fail_update "$2"
-    docker compose up -d --wait --wait-timeout 300 backend || fail_update "$2"
-    wait_for_mailbox || fail_update "$2"
-    say "Updated from $1 to $2."
+    finished_tag=$(installed_tag_or "$2")
+    (require_compose && require_secrets) || fail_update "$finished_tag"
+    docker compose up -d --pull missing --wait --wait-timeout 300 backend || fail_update "$finished_tag"
+    docker compose up -d --remove-orphans || fail_update "$finished_tag"
+    wait_for_mailbox ||
+        fail "updated to $finished_tag, but the bounce mailbox could not be set; run: sh mailer.sh setup --yes"
+    say "Updated from $1 to $finished_tag."
 }
 
 guard_update_lock() {
@@ -422,6 +450,7 @@ main() {
             run_under_wrapper "$@"
             ;;
         _finish-update)
+            [ $# -eq 3 ] || fail_usage "_finish-update needs <from> <to>"
             guard_update_lock
             run_under_wrapper "$@"
             ;;
