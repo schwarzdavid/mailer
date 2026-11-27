@@ -491,7 +491,38 @@ describe('updates', () => {
     it('mailer.sh update to the running version changes nothing', async () => {
         const oldId = await compose.containerId('backend')
         const { stdout } = await runLauncher(current(), ['update', '--to', 'smoke-next'])
-        expect(stdout).toContain('Already on smoke-next.')
+        expect(stdout).toBe('Already on smoke-next. If the last update did not finish, run: sh mailer.sh start\n')
         expect(await compose.containerId('backend')).toBe(oldId)
     })
+
+    it(
+        'mailer.sh update gives up within the wait timeout when the new backend fails its migrations, and start recovers',
+        { timeout: 600_000 },
+        async () => {
+            const failingMigration = '017-harden-inbound-forms'
+            await execa('docker', ['tag', `${IMAGE}:${imageTag}`, `${IMAGE}:smoke-broken`])
+            await compose.psql(`DELETE FROM "SequelizeMeta" WHERE name = '${failingMigration}'`)
+            const started = Date.now()
+            const failed = await runLauncher(current(), ['update', '--to', 'smoke-broken'], { reject: false })
+            const elapsedSeconds = Math.round((Date.now() - started) / 1_000)
+            console.log(`update to a crash-looping backend returned ${failed.exitCode} after ${elapsedSeconds} s`)
+            expect(failed.exitCode).toBe(1)
+            expect(elapsedSeconds).toBeLessThan(360)
+            expect(failed.stderr).toContain(
+                'mailer.sh: the update to smoke-broken did not come up. The previous files are in backups/snapshots/; see the rollback page of the documentation.',
+            )
+            expect(failed.stdout).not.toContain('Updated from')
+            expect(existsSync(join(current().dir, '.update-lock'))).toBe(false)
+            expect(await compose.logs('backend')).toContain(`Migration ${failingMigration} (up) failed`)
+
+            await compose.psql(`INSERT INTO "SequelizeMeta" (name) VALUES ('${failingMigration}')`)
+            const again = await runLauncher(current(), ['update', '--to', 'smoke-broken'])
+            expect(again.stdout).toBe(
+                'Already on smoke-broken. If the last update did not finish, run: sh mailer.sh start\n',
+            )
+            await runLauncher(current(), ['start'])
+            expect(await compose.waitHealthy('backend', 180_000)).toBe(true)
+            expect((await request(`${BASE_URL}/api/setup/status`)).status).toBe(200)
+        },
+    )
 })

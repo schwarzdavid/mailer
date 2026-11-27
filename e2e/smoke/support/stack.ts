@@ -151,6 +151,6 @@ export async function runLauncher(
 
 export async function destroyStack(stack: SmokeStack): Promise<void> {
     await new Compose(stack).run(['down', '-v', '--remove-orphans'], { reject: false })
-    await execa('docker', ['image', 'rm', `${IMAGE}:smoke-next`], { reject: false })
+    await execa('docker', ['image', 'rm', `${IMAGE}:smoke-next`, `${IMAGE}:smoke-broken`], { reject: false })
     await rm(stack.dir, { recursive: true, force: true })
 }
