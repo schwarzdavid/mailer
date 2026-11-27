@@ -72,6 +72,9 @@ services:
             TRUST_PROXY: '1'
             DB_HOST: postgres
             DB_PORT: '5432'
+            DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+            BACKEND_JWT_SECRET: ${BACKEND_JWT_SECRET:?BACKEND_JWT_SECRET is required}
+            BACKEND_ENCRYPTION_SECRET: ${BACKEND_ENCRYPTION_SECRET:?BACKEND_ENCRYPTION_SECRET is required}
             REDIS_HOST: redis
             REDIS_PORT: '6379'
             SMTP_HOST: mail

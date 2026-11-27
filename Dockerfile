@@ -10,7 +10,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store/v11 \
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store/v11 \
     pnpm install --frozen-lockfile --prefer-offline
-RUN pnpm turbo run build --filter=frontend
+RUN pnpm turbo run build --filter=frontend --filter=mailer-cli
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store/v11 \
     pnpm --filter backend deploy --legacy --prod /out
 
@@ -19,6 +19,12 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out /app
 COPY --from=build /repo/apps/frontend/dist /app/public
+ARG MAILER_VERSION=0.0.0-dev
+ENV MAILER_VERSION=${MAILER_VERSION}
+COPY --from=build /repo/packages/cli/dist/mailer.js /app/cli/mailer.js
+COPY --from=build /repo/deploy/compose.yml /repo/deploy/mailer.sh /app/cli/assets/
+RUN printf '#!/bin/sh\nexec node /app/cli/mailer.js "$@"\n' > /usr/local/bin/mailer \
+    && chmod 755 /usr/local/bin/mailer
 USER node
 EXPOSE 8000
 CMD ["node", "dist/main.js"]

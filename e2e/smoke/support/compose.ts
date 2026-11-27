@@ -30,6 +30,10 @@ async function docker(args: string[], options: RunOptions = {}): Promise<RunResu
     }
 }
 
+export interface ComposeConfig {
+    services: Record<string, { environment?: Record<string, string> }>
+}
+
 export class Compose {
     readonly stack: SmokeStack
     readonly extraFiles: string[]
@@ -151,5 +155,28 @@ export class Compose {
             service,
         ])
         return lastWord(stdout)
+    }
+
+    async config(envFile: string, env: Record<string, string>): Promise<ComposeConfig> {
+        const { stdout } = await docker(
+            [
+                'compose',
+                '-p',
+                PROJECT_NAME,
+                '--project-directory',
+                this.stack.dir,
+                '-f',
+                this.stack.composeFile,
+                '-f',
+                this.stack.overrideFile,
+                '--env-file',
+                envFile,
+                'config',
+                '--format',
+                'json',
+            ],
+            { env },
+        )
+        return JSON.parse(stdout) as ComposeConfig
     }
 }

@@ -66,6 +66,23 @@ describe('compose configuration', () => {
         expect(await compose.configHash('proxy', envFile, editedFile)).not.toBe(proxyHash)
         expect(await compose.configHash('mail', envFile, editedFile)).not.toBe(mailHash)
     })
+
+    it('the backend takes DB_PASSWORD, BACKEND_JWT_SECRET and BACKEND_ENCRYPTION_SECRET from the process environment', async () => {
+        const { dir, envFile } = current()
+        const secrets = {
+            DB_PASSWORD: 'process-db-password',
+            BACKEND_JWT_SECRET: 'process-jwt-secret-process-jwt-secret',
+            BACKEND_ENCRYPTION_SECRET: 'process-encryption-secret-process-secret',
+        }
+        const withoutSecrets = (await readFile(envFile, 'utf8'))
+            .split('\n')
+            .filter((line) => !Object.keys(secrets).some((key) => line.startsWith(`${key}=`)))
+            .join('\n')
+        const strippedEnv = join(dir, 'process-secrets.env')
+        await writeFile(strippedEnv, withoutSecrets)
+        const config = await compose.config(strippedEnv, secrets)
+        expect(config.services.backend?.environment).toMatchObject(secrets)
+    })
 })
 
 describe('boot without the mail server', () => {

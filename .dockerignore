@@ -19,7 +19,7 @@ apps/backend/public
 apps/frontend/test-results
 apps/frontend/playwright-report
 docs
-deploy
+deploy/.env
 e2e
 apps/docs
 compose.yml
