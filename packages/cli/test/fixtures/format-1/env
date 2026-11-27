@@ -1,0 +1,10 @@
+MAILER_FORMAT_VERSION=1
+IMAGE_TAG=1.0.0
+SITE_ADDRESS=admin.example.org
+MAIL_HOSTNAME=mx.example.net
+MAIL_SERVER_IPV4=203.0.113.10
+DB_PASSWORD=fixture-db-password-0123
+BACKEND_JWT_SECRET=fixture-jwt-secret-0123456789abcdef0123
+BACKEND_ENCRYPTION_SECRET=fixture-encryption-secret-0123456789ab
+MAIL_PASSWORD=fixture-mail-password-0123
+CUSTOM_KEY=keep
