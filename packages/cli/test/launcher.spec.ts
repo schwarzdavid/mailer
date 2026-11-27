@@ -11,19 +11,19 @@ interface LauncherResult {
     stderr: string
 }
 
-const launcherSource = join(import.meta.dirname, '../../../deploy/mailer.sh')
+const launcherSource = process.env.LAUNCHER_SCRIPT ?? join(import.meta.dirname, '../../../deploy/mailer.sh')
 const secretKeys = ['DB_PASSWORD', 'BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET', 'MAIL_PASSWORD']
+const secretNameFlags = secretKeys.flatMap((key) => ['-e', key])
 const inheritedKeysToDrop = [
     ...secretKeys,
     'MAILER_WRAPPED',
     'FAKE_FAIL',
     'FAKE_CLI_EXIT',
+    'FAKE_CLI_STDERR',
     'FAKE_COMPOSE_VERSION',
     'FAKE_LOGS',
 ]
 const mailPassword = 'mail-secret-value'
-const frozenMigrateRun =
-    /^run --rm -i --user \d+:\d+ -e HOME=\/tmp -v .+:\/project ghcr\.io\/schwarzdavid\/mailer:1\.1\.0 mailer migrate-project --image-tag 1\.1\.0$/
 
 const fakeDocker = `#!/bin/sh
 line="$*"
@@ -34,16 +34,25 @@ case "$line" in
     "compose up"*) printf 'env DB_PASSWORD=%s\\n' "\${DB_PASSWORD:-}" >>"$FAKE_LOG" ;;
 esac
 printf '%s\\n' "$line" >>"$FAKE_LOG"
+printf '[%s]' "$@" >>"$FAKE_ARGV"
+printf '\\n' >>"$FAKE_ARGV"
 if [ -n "\${FAKE_FAIL:-}" ] && printf '%s\\n' "$line" | grep -Eq -e "$FAKE_FAIL"; then
     exit 1
 fi
 case "$line" in
     "compose version --short") printf '%s\\n' "\${FAKE_COMPOSE_VERSION:-2.30.0}" ;;
     "compose logs"*) if [ -n "\${FAKE_LOGS:-}" ]; then cat "$FAKE_LOGS"; fi ;;
-    "run "*" mailer "*) exit "\${FAKE_CLI_EXIT:-0}" ;;
+    "run "*" mailer "*)
+        if [ -n "\${FAKE_CLI_STDERR:-}" ]; then printf '%s\\n' "$FAKE_CLI_STDERR" >&2; fi
+        exit "\${FAKE_CLI_EXIT:-0}"
+        ;;
 esac
 exit 0
 `
+
+function recorded(args: string[]): string {
+    return args.map((arg) => `[${arg}]`).join('')
+}
 
 const defaultEnv: Record<string, string> = {
     IMAGE_TAG: '1.0.0',
@@ -75,7 +84,51 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
     let installDir: string
     let binDir: string
     let logFile: string
+    let argvFile: string
     let stdinFile: string
+    let mountSource: string
+    let user: string
+
+    function shellOutput(script: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const child = spawn(shell!, ['-c', script], { cwd: installDir, stdio: ['ignore', 'pipe', 'inherit'] })
+            let stdout = ''
+            child.stdout.on('data', (chunk: Buffer) => {
+                stdout += chunk.toString()
+            })
+            child.on('error', reject)
+            child.on('close', () => resolve(stdout.replace(/\r?\n$/, '')))
+        })
+    }
+
+    function cliRun(tag: string, secretFlags: string[], cliArgs: string[]): string {
+        return recorded([
+            'run',
+            '--rm',
+            '-i',
+            '--user',
+            user,
+            '-e',
+            'HOME=/tmp',
+            ...secretFlags,
+            '-v',
+            `${mountSource}:/project`,
+            `ghcr.io/schwarzdavid/mailer:${tag}`,
+            'mailer',
+            ...cliArgs,
+        ])
+    }
+
+    function migrateRun(tag: string): string {
+        return cliRun(tag, [], ['migrate-project', '--image-tag', tag])
+    }
+
+    async function argvCalls(): Promise<string[]> {
+        if (!existsSync(argvFile)) {
+            return []
+        }
+        return (await readFile(argvFile, 'utf8')).split('\n').filter((line) => line !== '')
+    }
 
     async function writeEnv(values: Record<string, string>): Promise<void> {
         const lines = Object.entries(values).map(([key, value]) => `${key}=${value}`)
@@ -115,7 +168,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
             delete env[key]
         }
         env[pathKey()] = `${binDir}${delimiter}${process.env[pathKey()] ?? ''}`
-        Object.assign(env, { FAKE_LOG: logFile, FAKE_STDIN: stdinFile }, extraEnv)
+        Object.assign(env, { FAKE_LOG: logFile, FAKE_ARGV: argvFile, FAKE_STDIN: stdinFile }, extraEnv)
         return new Promise((resolve, reject) => {
             const child = spawn(shell!, ['mailer.sh', ...args], {
                 cwd: installDir,
@@ -140,6 +193,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         installDir = join(rootDir, 'install dir')
         binDir = join(rootDir, 'bin')
         logFile = join(rootDir, 'docker.log')
+        argvFile = join(rootDir, 'docker.argv')
         stdinFile = join(rootDir, 'docker.stdin')
         await mkdir(installDir)
         await mkdir(binDir)
@@ -147,6 +201,13 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         await chmod(join(binDir, 'docker'), 0o755)
         await copyFile(launcherSource, join(installDir, 'mailer.sh'))
         await writeEnv(defaultEnv)
+        mountSource = await shellOutput('pwd -W 2>/dev/null || pwd')
+        user = await shellOutput('printf "%s:%s" "$(id -u)" "$(id -g)"')
+    })
+
+    it('records the mount source as the install directory, space included', () => {
+        expect(mountSource.endsWith('/install dir')).toBe(true)
+        expect(user).toMatch(/^\d+:\d+$/)
     })
 
     afterEach(async () => {
@@ -178,16 +239,12 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
 
     it('setup runs the CLI with the frozen mount and user, then starts the stack', async () => {
         const result = await run(['setup', '--yes'])
-        const lines = await logLines()
-        const runIndex = lines.findIndex((line) =>
-            /^run --rm -i --user \d+:\d+ -e HOME=\/tmp .* -v .+:\/project ghcr\.io\/schwarzdavid\/mailer:1\.0\.0 mailer setup --image-tag 1\.0\.0 --yes$/.test(
-                line,
-            ),
-        )
+        const calls = await argvCalls()
+        const runIndex = calls.indexOf(cliRun('1.0.0', secretNameFlags, ['setup', '--image-tag', '1.0.0', '--yes']))
         expectCleanExit(result)
-        expect(runIndex).toBeGreaterThanOrEqual(0)
-        expect(lines.indexOf('compose up -d --pull missing')).toBeGreaterThan(runIndex)
-        expect(lines).not.toContain('pull ghcr.io/schwarzdavid/mailer:1.0.0')
+        expect(runIndex).toBe(0)
+        expect(calls.indexOf(recorded(['compose', 'up', '-d', '--pull', 'missing']))).toBeGreaterThan(runIndex)
+        expect(calls.filter((call) => call.startsWith('[pull]'))).toEqual([])
         expect(result.stdout).toContain(
             'mailer runs at https://mail.example.com. Setup token for the first login: sh mailer.sh token',
         )
@@ -195,14 +252,13 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
 
     it('setup uses and pulls latest in an empty directory', async () => {
         await rm(join(installDir, '.env'))
-        await run(['setup'])
-        const lines = await logLines()
-        const pullIndex = lines.indexOf('pull ghcr.io/schwarzdavid/mailer:latest')
-        const runIndex = lines.findIndex((line) =>
-            line.endsWith('ghcr.io/schwarzdavid/mailer:latest mailer setup --image-tag latest'),
-        )
-        expect(pullIndex).toBeGreaterThanOrEqual(0)
-        expect(runIndex).toBeGreaterThan(pullIndex)
+        const result = await run(['setup'])
+        expect(result.code).toBe(1)
+        expect(result.stderr).toBe('mailer.sh: DB_PASSWORD is not set\n')
+        expect((await argvCalls()).slice(0, 2)).toEqual([
+            recorded(['pull', 'ghcr.io/schwarzdavid/mailer:latest']),
+            cliRun('latest', secretNameFlags, ['setup', '--image-tag', 'latest']),
+        ])
     })
 
     it('passes the mailbox password on stdin and never as an argument', async () => {
@@ -283,30 +339,38 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         const accepted = await run(['update', 'major', '--to', '2.0.0'])
         expectCleanExit(accepted)
         expect(await logLines()).toContain('pull ghcr.io/schwarzdavid/mailer:2.0.0')
+        expect(await argvCalls()).toContain(migrateRun('2.0.0'))
         expect(accepted.stdout).toContain('Updated from 1.0.0 to 2.0.0.')
     })
 
     it('update strips a leading v and hands over to _finish-update', async () => {
         await createLock()
         const result = await run(['update', '--to', 'v1.1.0'])
-        const lines = await dockerCalls()
-        const runIndex = lines.findIndex((line) => frozenMigrateRun.test(line))
+        const calls = (await argvCalls()).filter((call) => call !== recorded(['compose', 'version', '--short']))
         expectCleanExit(result)
-        expect(lines.indexOf('pull ghcr.io/schwarzdavid/mailer:1.1.0')).toBeGreaterThanOrEqual(0)
-        expect(runIndex).toBeGreaterThan(lines.indexOf('pull ghcr.io/schwarzdavid/mailer:1.1.0'))
-        const removeOrphans = lines.indexOf('compose up -d --pull missing --remove-orphans')
-        expect(removeOrphans).toBeGreaterThan(runIndex)
-        expect(lines.indexOf('compose up -d --wait --wait-timeout 300 backend')).toBeGreaterThan(removeOrphans)
+        expect(calls.slice(0, 2)).toEqual([
+            recorded(['pull', 'ghcr.io/schwarzdavid/mailer:1.1.0']),
+            migrateRun('1.1.0'),
+        ])
+        const removeOrphans = calls.indexOf(recorded(['compose', 'up', '-d', '--pull', 'missing', '--remove-orphans']))
+        expect(removeOrphans).toBe(2)
+        expect(
+            calls.indexOf(recorded(['compose', 'up', '-d', '--wait', '--wait-timeout', '300', 'backend'])),
+        ).toBeGreaterThan(removeOrphans)
         expect(result.stdout).toContain('Updated from 1.0.0 to 1.1.0.')
         expect(lockExists()).toBe(false)
     })
 
     it('update stops with exit 3 and changes nothing when the CLI needs manual action', async () => {
-        const result = await run(['update', '--to', '1.1.0'], { FAKE_CLI_EXIT: '3' })
-        const lines = await logLines()
+        const cliMessage = 'This installation is newer than the image; a downgrade is not supported.'
+        const result = await run(['update', '--to', '1.1.0'], { FAKE_CLI_EXIT: '3', FAKE_CLI_STDERR: cliMessage })
         expect(result.code).toBe(3)
-        expect(lines.some((line) => frozenMigrateRun.test(line))).toBe(true)
-        expect(lines.filter((line) => line.startsWith('compose up'))).toEqual([])
+        expect(result.stderr).toBe(`${cliMessage}\n`)
+        expect(await argvCalls()).toEqual([
+            recorded(['compose', 'version', '--short']),
+            recorded(['pull', 'ghcr.io/schwarzdavid/mailer:1.1.0']),
+            migrateRun('1.1.0'),
+        ])
         expect(lockExists()).toBe(false)
     })
 
@@ -332,7 +396,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
         expect(result.stderr).toBe(
             'mailer.sh: could not pull ghcr.io/schwarzdavid/mailer:1.1.0; using the local image\n',
         )
-        expect((await logLines()).some((line) => frozenMigrateRun.test(line))).toBe(true)
+        expect(await argvCalls()).toContain(migrateRun('1.1.0'))
         expect(lockExists()).toBe(false)
     })
 
@@ -424,12 +488,7 @@ describe.skipIf(shell === undefined)('mailer.sh', { timeout: 60_000 }, () => {
 
     it('recovery-kit runs the CLI with the secret names only', async () => {
         const result = await run(['recovery-kit'], { DB_PASSWORD: 'from-environment' })
-        const lines = await logLines()
         expectCleanExit(result)
-        expect(lines).toEqual([
-            expect.stringMatching(
-                /^run --rm -i --user \d+:\d+ -e HOME=\/tmp -e DB_PASSWORD -e BACKEND_JWT_SECRET -e BACKEND_ENCRYPTION_SECRET -e MAIL_PASSWORD -v .+:\/project ghcr\.io\/schwarzdavid\/mailer:1\.0\.0 mailer recovery-kit$/,
-            ),
-        ])
+        expect(await argvCalls()).toEqual([cliRun('1.0.0', secretNameFlags, ['recovery-kit'])])
     })
 })
