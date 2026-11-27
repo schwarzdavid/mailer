@@ -16,7 +16,7 @@ The examples update from `v1.0.0` to `v1.1.0`. Replace both with your versions. 
 - **Take a database backup.** An update takes no database dump by itself, so make one first, to go back even if something goes wrong that a rollback cannot undo:
 
     ```bash
-    (set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F)-before-update.dump"
+    sh mailer.sh compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F)-before-update.dump"
     ```
 
     [Backup and restore](/operations/backup-restore) explains the dump and how to restore it.
@@ -143,14 +143,16 @@ The update has already set `IMAGE_TAG` to the new version, so the same `update -
 Skip this section unless your installation dates from a very old version. Very old versions stored the names of applied migrations with a `.ts` extension, so the current backend would take every migration for new and fail on the first one. Check the names while the old version still runs:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT name FROM "SequelizeMeta" ORDER BY name;')
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT name FROM "SequelizeMeta" ORDER BY name;
+SQL
 ```
 
 If the names end in `.ts`, for example `001-create-users.ts`, remove the extension once, right before you run the update. Stop the backend first, so the old version does not start against the renamed list:
 
 ```bash
 sh mailer.sh compose stop backend
-(set -a; . ./.env; sh mailer.sh compose exec -T postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE") <<'SQL'
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
 UPDATE "SequelizeMeta" SET name = regexp_replace(name, '\.ts$', '');
 SQL
 ```

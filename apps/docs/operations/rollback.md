@@ -26,7 +26,7 @@ Reverting a migration undoes what it changed in the database. A migration that a
 Everything the newer version stored in tables or columns that its migrations created is deleted when you revert them. Dump the database first, so you can get it back:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F)-before-rollback.dump"
+sh mailer.sh compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F)-before-rollback.dump"
 ```
 
 :::
@@ -73,7 +73,7 @@ Everything the newer version stored in tables or columns that its migrations cre
 
 ## Put the snapshot back
 
-The update saved the previous `compose.yml`, `.env` and `mailer.sh` in a directory named after its start time. List them and pick the newest one that was taken before the update you are undoing:
+The update saved the previous `compose.yml`, `.env` and `mailer.sh` in a directory named after its start time. Use the one the update printed as `Snapshot: backups/snapshots/<name>`; it is the newest directory under `backups/snapshots/` if no later update ran:
 
 ```bash
 ls backups/snapshots/

@@ -66,7 +66,9 @@ Four jobs run in the background. With several instances, each job still runs on 
 You can see the leases in the database:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT key, owner, expires_at FROM locks ORDER BY key;')
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT key, owner, expires_at FROM locks ORDER BY key;
+SQL
 ```
 
 The query returns up to two rows per job; the run-lock row appears after the first run. A `…:owner` row with an `expires_at` in the future is the lease of a running instance; an empty `owner` there means the lease was given back. The row with the bare job name is the run lock: it has an owner only while a run lasts and is empty between runs, which is normal.
@@ -86,7 +88,9 @@ DB_POOL_MAX × number of backend instances
 plus the connections of your own tools. The bundled Postgres allows 100 connections unless configured otherwise; ask it with:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SHOW max_connections;')
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SHOW max_connections;
+SQL
 ```
 
 Managed databases often allow fewer; see [Size the connection pool](/installation/advanced-configuration#database-tls). To change `DB_POOL_MAX`, set it in `.env` and recreate the backend with `sh mailer.sh compose up -d --scale backend=2`.

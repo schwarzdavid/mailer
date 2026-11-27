@@ -92,7 +92,9 @@ sh mailer.sh compose logs --tail 50 backend | grep -E 'Migration |Config validat
 **Check.** Count the users and the backend instances:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT count(*) FROM users;')
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT count(*) FROM users;
+SQL
 sh mailer.sh compose ps backend
 ```
 
@@ -117,10 +119,10 @@ sh mailer.sh compose ps backend
 
 | Message                                                                     | Cause and fix                                                                                                                                                                                                                                                           |
 | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Docker Compose 2.23.1 or newer is required (found …).`                     | The Compose plugin is too old, or `docker compose` does not work at all (`found none`). Update Docker as in [Before you start](/installation/#before-you-start).                                                                                                        |
-| `DB_PASSWORD is not set` (or another of the four secrets)                   | The secret is neither in the environment nor in `.env`. Restore it from your [recovery kit](/installation/#keep-the-recovery-kit). `sh mailer.sh doctor` checks all four.                                                                                               |
-| `… is not set; the secrets wrapper did not provide it`                      | `MAILER_SECRETS_WRAPPER` is set, but the command did not hand the secret over. Run the wrapper by hand, for example `doppler run -- env`, and check the names. See [Secrets from a secret manager](/installation/advanced-configuration#secrets-from-a-secret-manager). |
-| `.env not found next to mailer.sh; run: sh mailer.sh setup`                 | You are not in the install directory, or the directory was never set up.                                                                                                                                                                                                |
+| `mailer.sh: Docker Compose 2.23.1 or newer is required (found …).`          | The Compose plugin is too old, or `docker compose` does not work at all (`found none`). Update Docker as in [Before you start](/installation/#before-you-start).                                                                                                        |
+| `mailer.sh: DB_PASSWORD is not set` (or another of the four secrets)        | The secret is neither in the environment nor in `.env`. Restore it from your [recovery kit](/installation/#keep-the-recovery-kit). `sh mailer.sh doctor` checks all four.                                                                                               |
+| `mailer.sh: … is not set; the secrets wrapper did not provide it`           | `MAILER_SECRETS_WRAPPER` is set, but the command did not hand the secret over. Run the wrapper by hand, for example `doppler run -- env`, and check the names. See [Secrets from a secret manager](/installation/advanced-configuration#secrets-from-a-secret-manager). |
+| `mailer.sh: .env not found next to mailer.sh; run: sh mailer.sh setup`      | You are not in the install directory, or the directory was never set up.                                                                                                                                                                                                |
 | `Another update is running. If none is, remove .update-lock and try again.` | An update holds `.update-lock`. If you are sure none runs, `rmdir .update-lock`.                                                                                                                                                                                        |
 
 A typed `docker compose` does not read the secrets from a wrapper and lets an exported `IMAGE_TAG` win over `.env`. Use `sh mailer.sh compose …` instead ([why](/operations/mailer-sh#why-use-mailer-sh-instead-of-docker-compose)).
@@ -166,7 +168,9 @@ sh mailer.sh compose exec backend node -e "require('node:dns').promises.resolveT
 **Check.** Open the domain under **Domains** and look for records that are not **Valid**. The pending deliveries and their errors:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", attempts, error FROM inbound_form_delivery WHERE status = 'pending' AND error LIKE '%not valid yet%'")
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT "inboundFormDeliveryId", attempts, error FROM inbound_form_delivery WHERE status = 'pending' AND error LIKE '%not valid yet%';
+SQL
 ```
 
 **Fix.** Repair the invalid records as described under [DNS records stay invalid](#dns-records-stay-invalid) and click **Check again** on the domain's page; waiting deliveries then go out on their next attempt, and failed ones can be resent ([Resend a failed delivery](/admin-guide/inbound-forms/deliveries#resend-a-failed-delivery)). After a `MAIL_HOSTNAME` change every customer must publish the new SPF include ([Change MAIL_HOSTNAME](/admin-guide/settings#change-mail-hostname)). To send without this rule, set `SEND_REQUIRE_VALID_DNS=false` ([SEND_REQUIRE_VALID_DNS](/installation/advanced-configuration#send-require-valid-dns)); receivers are then likely to reject the mail.
@@ -180,7 +184,9 @@ sh mailer.sh compose exec backend node -e "require('node:dns').promises.resolveT
 **Check.** List the waiting deliveries with their attempts, and look at the readiness check:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", attempts, error, \"updatedAt\" FROM inbound_form_delivery WHERE status = 'pending' ORDER BY \"updatedAt\"")
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT "inboundFormDeliveryId", attempts, error, "updatedAt" FROM inbound_form_delivery WHERE status = 'pending' ORDER BY "updatedAt";
+SQL
 curl -s https://app.example.com/api/health/ready
 sh mailer.sh compose logs --since 1h backend | grep 'Delivery '
 ```
@@ -257,7 +263,9 @@ done
 **Check.** List the registrable domains in use:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT fqdn, "rootDomain" FROM domains ORDER BY "rootDomain";')
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT fqdn, "rootDomain" FROM domains ORDER BY "rootDomain";
+SQL
 ```
 
 **Fix.** Send from a domain under a different registrable domain, for example `mail.example.net`. If a sender domain under the same registrable domain already exists, send from that one, or delete it first ([Delete a domain](/admin-guide/domains#delete-a-domain)). [Choose the domain name](/admin-guide/domains#choose-the-domain-name) explains the rule.

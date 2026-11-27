@@ -122,7 +122,9 @@ The admin UI has no list of deliveries. To see the failed ones, newest first, qu
 
 ```bash
 cd /opt/mailer
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "SELECT \"inboundFormDeliveryId\", \"emailTo\", attempts, error, \"updatedAt\" FROM inbound_form_delivery WHERE status = 'failed' ORDER BY \"updatedAt\" DESC LIMIT 20")
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT "inboundFormDeliveryId", "emailTo", attempts, error, "updatedAt" FROM inbound_form_delivery WHERE status = 'failed' ORDER BY "updatedAt" DESC LIMIT 20;
+SQL
 ```
 
 `emailTo` is the recipient as configured on the receiver, for example <code v-pre>{{email}}</code> for a placeholder that could not be resolved, or the resolved address once a delivery was sent. Replace `'failed'` with `'pending'` to see deliveries that are still waiting.
@@ -133,7 +135,9 @@ The admin UI has no button to resend a `failed` delivery. To resend one, set its
 
 ```bash
 cd /opt/mailer
-(set -a; . ./.env; sh mailer.sh compose exec postgres psql -U "$DB_USERNAME" -d "$DB_DATABASE" -c "UPDATE inbound_form_delivery SET status = 'pending', attempts = 0 WHERE \"inboundFormDeliveryId\" = <id> AND status = 'failed'")
+sh mailer.sh compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+UPDATE inbound_form_delivery SET status = 'pending', attempts = 0 WHERE "inboundFormDeliveryId" = <id> AND status = 'failed';
+SQL
 ```
 
 `psql` answers `UPDATE 1`. The recovery sweep queues the delivery within about two minutes, and it gets a fresh set of 8 attempts. Reset `attempts` as well: the sweep waits for the retry pause that belongs to the attempts count, so a delivery that keeps 8 attempts would wait more than two hours.

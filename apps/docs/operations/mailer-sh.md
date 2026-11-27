@@ -38,7 +38,7 @@ The pages of this documentation therefore give `sh mailer.sh compose …` (or th
 sh mailer.sh setup
 ```
 
-Sets up the directory and starts mailer: the wizard asks for the settings and the secrets, writes `.env`, `compose.yml` and `mailer.sh`, prints the recovery kit when it generated secrets, starts the stack and creates the bounce mailbox. It runs the wizard from the image `ghcr.io/schwarzdavid/mailer:<IMAGE_TAG>` and pulls `latest` first when no version is pinned yet. [Installation](/installation/) walks through it, including the options for an [unattended installation](/installation/#unattended-installation) (`--yes`, `--site-address`, `--mail-hostname`, `--mail-ipv4`, `--mail-ipv6`, `--image-tag`, `--secrets` and `--secrets-wrapper`). It is safe to run again: it never overwrites a secret, and it sets the mailbox password from `.env` again.
+Sets up the directory and starts mailer: the wizard asks for the settings and the secrets, writes `.env`, `compose.yml` and `mailer.sh`, prints the recovery kit when it generated secrets, starts the stack and creates the bounce mailbox. It runs the wizard from the image `ghcr.io/schwarzdavid/mailer:<IMAGE_TAG>` and pulls it first when the tag is `latest` or unset. [Installation](/installation/) walks through it, including the options for an [unattended installation](/installation/#unattended-installation) (`--yes`, `--site-address`, `--mail-hostname`, `--mail-ipv4`, `--mail-ipv6`, `--secrets` and `--secrets-wrapper`). It is safe to run again: it never overwrites a secret, and it sets the mailbox password from `.env` again.
 
 At the end it prints:
 
@@ -50,13 +50,13 @@ mailer runs at https://app.example.com. Setup token for the first login: sh mail
 
 On a repeated run the first line reads `Updated the password of bounce@mx.example.com.`, and the alias line is left out when the alias exists.
 
-| Message                                                                                                | Meaning                                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Missing settings: SITE_ADDRESS, …. Pass them as options or set them in .env.`                         | A run without a terminal (or with `--yes`) lacks a required setting. Exit code `2`.                                                                |
-| `MAIL_HOSTNAME must differ from SITE_ADDRESS.`                                                         | The two names are equal. Exit code `2`.                                                                                                            |
-| `This installation is newer than the image; a downgrade is not supported.`                             | `.env` records a newer project format than the image knows. Exit code `3`.                                                                         |
-| `could not hash the mailbox password`                                                                  | `doveadm` in the `mail` container could not hash `MAIL_PASSWORD`, or it is empty. The launcher stops at once.                                      |
-| `the mail service did not accept the account within 10 minutes; check: docker compose logs proxy mail` | The `mail` service never became ready, usually because Caddy has no certificate for `MAIL_HOSTNAME` yet. Fix the DNS record and run `setup` again. |
+| Message                                                                                                           | Meaning                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Missing settings: SITE_ADDRESS, …. Pass them as options or set them in .env.`                                    | A run without a terminal (or with `--yes`) lacks a required setting. Exit code `2`.                                                                |
+| `MAIL_HOSTNAME must differ from SITE_ADDRESS.`                                                                    | The two names are equal. Exit code `2`.                                                                                                            |
+| `This installation is newer than the image; a downgrade is not supported.`                                        | `.env` records a newer project format than the image knows. Exit code `3`.                                                                         |
+| `could not hash the mailbox password`                                                                             | `doveadm` in the `mail` container could not hash `MAIL_PASSWORD`, or it is empty. The launcher stops at once.                                      |
+| `mailer.sh: the mail service did not accept the account within 10 minutes; check: docker compose logs proxy mail` | The `mail` service never became ready, usually because Caddy has no certificate for `MAIL_HOSTNAME` yet. Fix the DNS record and run `setup` again. |
 
 ## start, stop, restart and status
 
@@ -72,11 +72,11 @@ sh mailer.sh stop
 
 `start` can stop with one of these messages (exit code `1`):
 
-| Message                                                          | Meaning                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `Docker Compose 2.23.1 or newer is required (found 2.20.0).`     | The Compose plugin is too old, or `none` is printed when `docker compose` does not work at all.              |
-| `DB_PASSWORD is not set`                                         | The secret is neither in the environment nor in `.env`. The same message exists for the other three secrets. |
-| `DB_PASSWORD is not set; the secrets wrapper did not provide it` | The same, with a wrapper configured: the wrapper command did not hand the secret over.                       |
+| Message                                                                     | Meaning                                                                                                      |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `mailer.sh: Docker Compose 2.23.1 or newer is required (found 2.20.0).`     | The Compose plugin is too old, or `none` is printed when `docker compose` does not work at all.              |
+| `mailer.sh: DB_PASSWORD is not set`                                         | The secret is neither in the environment nor in `.env`. The same message exists for the other three secrets. |
+| `mailer.sh: DB_PASSWORD is not set; the secrets wrapper did not provide it` | The same, with a wrapper configured: the wrapper command did not hand the secret over.                       |
 
 ## logs
 
@@ -150,7 +150,7 @@ A failed check prints a message such as `mailer.sh: MAIL_HOSTNAME is empty in .e
 sh mailer.sh recovery-kit
 ```
 
-Prints the site, the mail hostname, the version, the four secrets and the fingerprint of the encryption secret, the same text the setup shows at its end. Keep it in a password manager; see [Keep the recovery kit](/installation/#keep-the-recovery-kit). A value that is neither in the environment nor in `.env` prints as `(not available)`.
+Prints the site, the mail hostname, the version, the four secrets and the fingerprint of the encryption secret, the same lines the setup shows at its end, without its closing reminder to store them in a password manager. Keep it in a password manager; see [Keep the recovery kit](/installation/#keep-the-recovery-kit). A value that is neither in the environment nor in `.env` prints as `(not available)`.
 
 ## update
 
@@ -184,12 +184,12 @@ Prints the usage shown at the top of this page; `-h` and `--help` do the same, a
 
 ## Exit codes
 
-| Code | Meaning                                                                       |
-| ---- | ----------------------------------------------------------------------------- |
-| `0`  | The command succeeded.                                                        |
-| `1`  | The command failed; the message names the reason.                             |
-| `2`  | The command line is wrong: unknown command or argument, or a missing setting. |
-| `3`  | `update` needs manual action and changed nothing.                             |
+| Code | Meaning                                                                                                                         |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | The command succeeded.                                                                                                          |
+| `1`  | The command failed; the message names the reason.                                                                               |
+| `2`  | The command line is wrong: unknown command or argument, or a missing setting.                                                   |
+| `3`  | `update` needs manual action and changed nothing; `setup` also exits with it when `.env` records a newer format than the image. |
 
 The commands that pass through to Docker Compose (`stop`, `restart`, `status`, `logs` and `compose`) exit with Docker's own code.
 

@@ -36,7 +36,7 @@ Three things cannot be recreated if the server is lost:
 `pg_dump` writes a consistent copy of the database while mailer keeps running. It runs inside the `postgres` container, so nothing needs to be installed on the server:
 
 ```bash
-(set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F).dump"
+sh mailer.sh compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F).dump"
 ```
 
 This writes a compressed dump such as `mailer-2026-10-23.dump` into `/opt/mailer`. `-Fc` selects PostgreSQL's custom format, which `pg_restore` reads. `-T` keeps Docker from adding terminal control characters to the output. The command reads `.env` in a subshell, so no variable stays exported in your shell.
@@ -54,16 +54,16 @@ A cron job takes the dump every night at 03:15 and deletes dumps older than 14 d
 ```bash
 mkdir -p /opt/mailer/backups
 cat > /etc/cron.d/mailer-backup <<'CRON'
-15 3 * * * root cd /opt/mailer && (set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "backups/mailer-$(date +\%F).dump" && find backups -name 'mailer-*.dump' -mtime +14 -delete
+15 3 * * * root cd /opt/mailer && sh mailer.sh compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "backups/mailer-$(date +\%F).dump" && find backups -name 'mailer-*.dump' -mtime +14 -delete
 CRON
 ```
 
 The `%` sign is escaped as `\%` because cron treats a bare `%` as the end of the command. Copy the dumps off the server as well, for example with `scp` or your provider's backup storage: a dump on the same disk does not survive the loss of that server.
 
-With an [external Postgres](/installation/advanced-configuration#database-tls) there is no `postgres` container. Run `pg_dump` from a throwaway `postgres:17-alpine` container instead, with your database host in place of `db.example.com`, and use this form in the cron line too:
+With an [external Postgres](/installation/advanced-configuration#database-tls) there is no `postgres` container. Run `pg_dump` from a throwaway `postgres:17-alpine` container instead, with your own host, user, database name and password in place of the example values (the password is in `.env`, or in your secret manager), and use this form in the cron line too:
 
 ```bash
-(set -a; . ./.env; docker run --rm -i -e PGPASSWORD="$DB_PASSWORD" postgres:17-alpine pg_dump -h db.example.com -p 5432 -U "$DB_USERNAME" -d "$DB_DATABASE" -Fc) > "mailer-$(date +%F).dump"
+docker run --rm -i -e PGPASSWORD='<database password>' postgres:17-alpine pg_dump -h db.example.com -p 5432 -U <database user> -d <database name> -Fc > "mailer-$(date +%F).dump"
 ```
 
 ## Back up `.env` and the mail accounts
@@ -130,7 +130,7 @@ The backend creates every table itself the first time it starts. If it starts be
 6. **Restore the dump** into it:
 
     ```bash
-    (set -a; . ./.env; sh mailer.sh compose exec -T postgres pg_restore -U "$DB_USERNAME" -d "$DB_DATABASE" --no-owner) < mailer.dump
+    sh mailer.sh compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' < mailer.dump
     ```
 
     No output means success. `--no-owner` gives every restored object to the database user from `.env`, so the restore also works if the user name changed.
@@ -138,7 +138,7 @@ The backend creates every table itself the first time it starts. If it starts be
     If the new installation uses an external Postgres instead of the bundled one, restore into that database from a throwaway container before you start the backend:
 
     ```bash
-    (set -a; . ./.env; docker run --rm -i -e PGPASSWORD="$DB_PASSWORD" postgres:17-alpine pg_restore -h db.example.com -p 5432 -U "$DB_USERNAME" -d "$DB_DATABASE" --no-owner) < mailer.dump
+    docker run --rm -i -e PGPASSWORD='<database password>' postgres:17-alpine pg_restore -h db.example.com -p 5432 -U <database user> -d <database name> --no-owner < mailer.dump
     ```
 
 7. **Restore the mail accounts, if you backed them up.** Skip this step if you did not; step 8 recreates them instead. The archive must go into the volume before `mail` starts for the first time. `sh mailer.sh compose create mail` creates the `mail` container and its volumes without starting it; copy `mail-config.tar.gz` to `/opt/mailer` and unpack it into the volume:

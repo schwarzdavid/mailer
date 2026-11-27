@@ -116,7 +116,7 @@ The workaround is to purge the mailbox by hand from time to time. mailer itself 
 
     ```bash
     cd /opt/mailer
-    (set -a; . ./.env; sh mailer.sh compose exec mail doveadm search -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
+    sh mailer.sh compose exec mail sh -c 'doveadm search -u "bounce@$OVERRIDE_HOSTNAME" mailbox INBOX SEEN savedbefore 30d'
     ```
 
     Each line of the output is one mail. No output means there is nothing to remove.
@@ -125,7 +125,7 @@ The workaround is to purge the mailbox by hand from time to time. mailer itself 
 
     ```bash
     cd /opt/mailer
-    (set -a; . ./.env; sh mailer.sh compose exec mail doveadm expunge -u "bounce@$MAIL_HOSTNAME" mailbox INBOX SEEN savedbefore 30d)
+    sh mailer.sh compose exec mail sh -c 'doveadm expunge -u "bounce@$OVERRIDE_HOSTNAME" mailbox INBOX SEEN savedbefore 30d'
     ```
 
 3. Run the `doveadm search` command from step 1 again: it prints nothing. The `du` command above reports less space.
