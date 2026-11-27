@@ -113,6 +113,23 @@ export async function createStack(imageTag: string): Promise<SmokeStack> {
     }
 }
 
+const launcherEnvKeysToDrop = [
+    'DB_PASSWORD',
+    'BACKEND_JWT_SECRET',
+    'BACKEND_ENCRYPTION_SECRET',
+    'MAIL_PASSWORD',
+    'COMPOSE_FILE',
+    'COMPOSE_PATH_SEPARATOR',
+]
+
+function launcherEnv(): Record<string, string | undefined> {
+    const env: Record<string, string | undefined> = { ...process.env }
+    for (const key of launcherEnvKeysToDrop) {
+        delete env[key]
+    }
+    return { ...env, COMPOSE_PROJECT_NAME: PROJECT_NAME, MSYS_NO_PATHCONV: '1' }
+}
+
 export async function runLauncher(
     stack: SmokeStack,
     args: string[],
@@ -121,7 +138,8 @@ export async function runLauncher(
     const result = await execa('sh', ['mailer.sh', ...args], {
         cwd: stack.dir,
         stdin: 'ignore',
-        env: { COMPOSE_PROJECT_NAME: PROJECT_NAME, MSYS_NO_PATHCONV: '1' },
+        env: launcherEnv(),
+        extendEnv: false,
         reject: options.reject ?? true,
     })
     return {

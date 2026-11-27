@@ -482,7 +482,9 @@ describe('updates', () => {
             'mailer.sh',
         ])
         expect(existsSync(join(current().dir, '.update-lock'))).toBe(false)
-        expect(await compose.containerId('backend')).not.toBe(oldId)
+        const newId = await compose.containerId('backend')
+        expect(newId).not.toBe(oldId)
+        expect(await compose.inspect(newId, '{{.Config.Image}}')).toBe(`${IMAGE}:smoke-next`)
         expect((await request(`${BASE_URL}/api/setup/status`)).status).toBe(200)
     })
 
