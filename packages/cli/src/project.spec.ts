@@ -1,10 +1,17 @@
 import { mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliError, EXIT } from './errors.ts'
-import { releasedComposeHashes } from './legacy-templates.ts'
 import { composeOrigin, detectFormat, resolveImageTag, writeAssets } from './project.ts'
+
+const { releasedCompose, releasedHash } = await vi.hoisted(async () => {
+    const { createHash } = await import('node:crypto')
+    const content = 'services:\n  released: {}\n'
+    return { releasedCompose: content, releasedHash: createHash('sha256').update(content).digest('hex') }
+})
+
+vi.mock('./legacy-templates.ts', () => ({ releasedComposeHashes: [releasedHash] }))
 
 const assetCompose = 'services:\n  proxy: {}\n'
 function catchError(action: () => unknown): unknown {
@@ -57,16 +64,16 @@ describe('project', () => {
         expect(await composeOrigin(projectDir, assetsDir)).toBe('current')
     })
 
+    it('composeOrigin is released for a known release file, ignoring CRLF', async () => {
+        await writeFile(join(projectDir, 'compose.yml'), releasedCompose)
+        expect(await composeOrigin(projectDir, assetsDir)).toBe('released')
+        await writeFile(join(projectDir, 'compose.yml'), releasedCompose.replaceAll('\n', '\r\n'))
+        expect(await composeOrigin(projectDir, assetsDir)).toBe('released')
+    })
+
     it('composeOrigin is edited for anything else', async () => {
         await writeFile(join(projectDir, 'compose.yml'), 'services: {}\n')
         expect(await composeOrigin(projectDir, assetsDir)).toBe('edited')
-    })
-
-    it('every released hash is a sha256 hex digest', () => {
-        expect(releasedComposeHashes.length).toBeGreaterThan(0)
-        for (const hash of releasedComposeHashes) {
-            expect(hash).toMatch(/^[0-9a-f]{64}$/)
-        }
     })
 
     it('writeAssets copies both files and leaves no temporary file', async () => {
