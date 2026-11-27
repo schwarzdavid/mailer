@@ -40,6 +40,7 @@ export const sidebar: DefaultTheme.Sidebar = {
         {
             text: 'Operations',
             items: [
+                { text: 'The mailer.sh command', link: '/operations/mailer-sh' },
                 { text: 'Update', link: '/operations/updating' },
                 { text: 'Roll back', link: '/operations/rollback' },
                 { text: 'Backup and restore', link: '/operations/backup-restore' },

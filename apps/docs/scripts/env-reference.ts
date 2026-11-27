@@ -6,6 +6,9 @@ export const composeVariables: readonly string[] = [
     'HTTP_PORT',
     'HTTPS_PORT',
     'SMTP_PUBLIC_PORT',
+    'MAILER_FORMAT_VERSION',
+    'MAILER_PREVIOUS_IMAGE_TAG',
+    'MAILER_SECRETS_WRAPPER',
 ]
 
 export const runtimeVariables: readonly string[] = ['NODE_EXTRA_CA_CERTS']

@@ -1,10 +1,10 @@
 # Advanced configuration
 
-This page lists every setting mailer reads from its environment, with its default and whether the production `compose.yml` already fixes it. The [installation](/installation/) needs only the keys in the `.env` template; everything here is for when you want to change a default.
+This page lists every setting mailer reads from its environment, with its default and whether the production `compose.yml` already fixes it. The [installation](/installation/) needs only the settings the wizard asks for; everything here is for when you want to change a default.
 
 ## Where the settings live
 
-All settings are plain `KEY=value` lines in `/opt/mailer/.env`, next to `compose.yml`. Compose reads the file for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on. After a change, run `docker compose up -d` to apply it.
+All settings are plain `KEY=value` lines in `/opt/mailer/.env`, next to `compose.yml`. Compose reads the file for two jobs: it fills the `${…}` placeholders inside `compose.yml` (the [compose variables](#compose-variables) below), and it hands the whole file to the `backend` container, so every [backend variable](#backend-variables) you add is passed on. After a change, run `sh mailer.sh start` to apply it. `sh mailer.sh compose …` is `docker compose …` in the install directory; [The mailer.sh command](/operations/mailer-sh#why-use-mailer-sh-instead-of-docker-compose) says why the pages here use it.
 
 Every table has the same columns.
 
@@ -15,22 +15,25 @@ Every table has the same columns.
 An empty value (`KEY=`) counts as unset for the optional text settings, such as `REDIS_USERNAME`, `REDIS_PASSWORD` and `SMTP_TLS_SERVERNAME`. Boolean settings take `true` or `false`.
 
 ::: tip
-When a required variable is missing or a value does not fit (a port outside 1 to 65535, a secret shorter than 32 characters), the backend stops at startup and says which variable is wrong. Read it with `docker compose logs backend`.
+When a required variable is missing or a value does not fit (a port outside 1 to 65535, a secret shorter than 32 characters), the backend stops at startup and says which variable is wrong. Read it with `sh mailer.sh compose logs backend`.
 :::
 
 ## Compose variables
 
 These variables are read by `compose.yml` itself, not by the backend. They exist only in production.
 
-| Variable           | Required | Default  | Set by compose | Description                                                                                                                                                                                                                                                                                             |
-| ------------------ | -------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SITE_ADDRESS`     | yes      | –        | –              | The domain the admin UI and the API are served on, for example `app.example.com`. The proxy (Caddy) obtains a Let's Encrypt certificate for it. Compose refuses to start while it is empty. It must differ from `MAIL_HOSTNAME`.                                                                        |
-| `MAIL_HOSTNAME`    | yes      | –        | –              | The name of the bundled mail server, for example `mx.example.com`. Also the platform's sending domain and the name on the mail server's TLS certificate. See [Mail server](#mail-server). Compose refuses to start while it is empty.                                                                   |
-| `MAIL_PASSWORD`    | yes      | –        | –              | The password of the mailbox `bounce@MAIL_HOSTNAME`. Compose passes it to the backend as `SMTP_PASSWORD` and `IMAP_PASSWORD`. `setup.sh` generates it when it is empty, creates the mailbox with it and sets it on the mailbox again on every run, so to rotate it you change `.env` and run `setup.sh`. |
-| `IMAGE_TAG`        | no       | `latest` | –              | The tag of the backend image `ghcr.io/schwarzdavid/mailer` to run. For production, pin a release version or `sha-<7 characters>` so the image always matches the `compose.yml` next to it. It does not affect the other images.                                                                         |
-| `HTTP_PORT`        | no       | `80`     | –              | The host port that forwards to the proxy's port 80. Change it only when port 80 is taken on the host.                                                                                                                                                                                                   |
-| `HTTPS_PORT`       | no       | `443`    | –              | The host port that forwards to the proxy's port 443, used for both TCP and UDP (HTTP/3).                                                                                                                                                                                                                |
-| `SMTP_PUBLIC_PORT` | no       | `25`     | –              | The host port that forwards to the mail server's port 25, where other mail servers deliver bounces to you. Other mail servers always connect to port 25, so change it only for testing.                                                                                                                 |
+| Variable                    | Required | Default  | Set by compose | Description                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | -------- | -------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SITE_ADDRESS`              | yes      | –        | –              | The domain the admin UI and the API are served on, for example `app.example.com`. The proxy (Caddy) obtains a Let's Encrypt certificate for it. Compose refuses to start while it is empty. It must differ from `MAIL_HOSTNAME`.                                                                                                  |
+| `MAIL_HOSTNAME`             | yes      | –        | –              | The name of the bundled mail server, for example `mx.example.com`. Also the platform's sending domain and the name on the mail server's TLS certificate. See [Mail server](#mail-server). Compose refuses to start while it is empty.                                                                                             |
+| `MAIL_PASSWORD`             | yes      | –        | –              | The password of the mailbox `bounce@MAIL_HOSTNAME`. Compose passes it to the backend as `SMTP_PASSWORD` and `IMAP_PASSWORD`. `sh mailer.sh setup` generates it when it is empty, creates the mailbox with it and sets it on the mailbox again on every run, so to rotate it you change `.env` and run `sh mailer.sh setup --yes`. |
+| `IMAGE_TAG`                 | no       | `latest` | –              | The tag of the backend image `ghcr.io/schwarzdavid/mailer` to run. The setup pins the release version; `sh mailer.sh update` changes it. `mailer.sh` makes this value in `.env` win over an `IMAGE_TAG` exported in your shell. It does not affect the other images.                                                              |
+| `HTTP_PORT`                 | no       | `80`     | –              | The host port that forwards to the proxy's port 80. Change it only when port 80 is taken on the host.                                                                                                                                                                                                                             |
+| `HTTPS_PORT`                | no       | `443`    | –              | The host port that forwards to the proxy's port 443, used for both TCP and UDP (HTTP/3).                                                                                                                                                                                                                                          |
+| `SMTP_PUBLIC_PORT`          | no       | `25`     | –              | The host port that forwards to the mail server's port 25, where other mail servers deliver bounces to you. Other mail servers always connect to port 25, so change it only for testing.                                                                                                                                           |
+| `MAILER_FORMAT_VERSION`     | no       | –        | –              | The layout version of the install directory, written by the setup and by `sh mailer.sh update`. `sh mailer.sh version` prints it. Never edit it by hand: it tells an update which project migrations to run.                                                                                                                      |
+| `MAILER_PREVIOUS_IMAGE_TAG` | no       | –        | –              | The version that ran before the last `sh mailer.sh update`, written by it. Informational.                                                                                                                                                                                                                                         |
+| `MAILER_SECRETS_WRAPPER`    | no       | –        | –              | The command that runs the launcher with the four secrets in its environment. See [Secrets from a secret manager](#secrets-from-a-secret-manager). Leave it out to keep the secrets in `.env`.                                                                                                                                     |
 
 ## Backend variables
 
@@ -75,7 +78,7 @@ Redis holds the delivery queue for inbound forms and the rate-limit counters. Th
 
 ### Secrets
 
-Both secrets must be at least 32 characters. With Docker Compose, `setup.sh` generates them when they are empty in `.env`, as it does `DB_PASSWORD` and `MAIL_PASSWORD`. Otherwise generate each with `openssl rand -base64 48`, and use two different values.
+Both secrets must be at least 32 characters. With Docker Compose, `sh mailer.sh setup` generates them when they are empty in `.env`, as it does `DB_PASSWORD` and `MAIL_PASSWORD`, unless you keep the secrets in a [secret manager](#secrets-from-a-secret-manager). Otherwise generate each with `openssl rand -base64 48`, and use two different values.
 
 | Variable                    | Required | Default | Set by compose | Description                                                                                                                                                                                                                                |
 | --------------------------- | -------- | ------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -160,7 +163,7 @@ When it is unset, empty or `false`, the backend ignores `X-Forwarded-For`.
 Do not set `TRUST_PROXY=true` unless the backend can only be reached through the proxy. It then trusts the left-most address in `X-Forwarded-For`, which any visitor can forge to get around the rate limits.
 :::
 
-With Docker Compose, `TRUST_PROXY` is fixed to `1` in `compose.yml`, because Caddy is the single proxy hop, and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, change the value in `compose.yml` to match the number of proxies, and also list the CDN's address ranges as `trusted_proxies` in the Caddyfile, because Caddy otherwise replaces the incoming `X-Forwarded-For`.
+With Docker Compose, `TRUST_PROXY` is fixed to `1` in `compose.yml`, because Caddy is the single proxy hop, and a value in `.env` does not override it. If you put another proxy or a CDN in front of Caddy, override the value in `compose.override.yml` ([how](#changing-the-compose-file)) to match the number of proxies, and also list the CDN's address ranges as `trusted_proxies` in the Caddyfile, because Caddy otherwise replaces the incoming `X-Forwarded-For`.
 
 Rate-limit counters are stored in Redis, so all backend instances must use the same Redis. If Redis is unreachable, login and first-user setup answer `503`, so that nobody can guess passwords while the limit is down. Every other rate-limited route is let through without a limit, and the backend logs a warning. The exception is forms with the timed token, which refuse submissions with `403 Form token could not be verified` until Redis is back.
 
@@ -170,13 +173,24 @@ The bundled Postgres container speaks plain TCP on the internal Docker network, 
 
 To use a managed Postgres instead:
 
-1. Set `DB_USERNAME`, `DB_PASSWORD` and `DB_DATABASE` in `.env`. Compose fixes `DB_HOST` and `DB_PORT`, so change those two lines under `backend.environment` in `compose.yml` instead.
-2. Set `DB_SSL=true` in `.env`. The backend then verifies the server certificate.
-3. If the provider's certificate comes from a private CA, put the CA file (PEM format) on the backend container and set `NODE_EXTRA_CA_CERTS` in `.env` to its path inside the container. The backend container's file system is read-only, so add a volume to the `backend` service in `compose.yml`:
+1. Set `DB_USERNAME`, `DB_PASSWORD` and `DB_DATABASE` in `.env`. Compose fixes `DB_HOST` and `DB_PORT`, so override those two in `compose.override.yml` instead:
 
     ```yaml
-    volumes:
-        - /opt/mailer/ca.pem:/certs/ca.pem:ro
+    services:
+        backend:
+            environment:
+                DB_HOST: db.example.com
+                DB_PORT: '5432'
+    ```
+
+2. Set `DB_SSL=true` in `.env`. The backend then verifies the server certificate.
+3. If the provider's certificate comes from a private CA, put the CA file (PEM format) on the backend container and set `NODE_EXTRA_CA_CERTS` in `.env` to its path inside the container. The backend container's file system is read-only, so add a volume to the `backend` service in `compose.override.yml`:
+
+    ```yaml
+    services:
+        backend:
+            volumes:
+                - /opt/mailer/ca.pem:/certs/ca.pem:ro
     ```
 
     and set `NODE_EXTRA_CA_CERTS=/certs/ca.pem`.
@@ -191,7 +205,7 @@ The delivery queue for inbound forms lives in Redis. A Redis outage only delays 
 
 To use a managed Redis instead:
 
-1. Set `REDIS_HOST` and `REDIS_PORT`. Compose fixes both, so change those two lines under `backend.environment` in `compose.yml` instead.
+1. Set `REDIS_HOST` and `REDIS_PORT`. Compose fixes both, so override them in `compose.override.yml` instead, the same way as `DB_HOST` and `DB_PORT` above.
 2. Add `REDIS_PASSWORD` in `.env` when it requires a login, and `REDIS_USERNAME` for an ACL user.
 3. Set `REDIS_TLS=true` when it speaks TLS. The backend then verifies the server certificate against `REDIS_HOST`, or against `REDIS_TLS_SERVERNAME` when the certificate names a different host.
 4. When the certificate comes from a private CA, `NODE_EXTRA_CA_CERTS` covers it as well. Use the same file as for Postgres, or one file that holds both CAs.
@@ -201,7 +215,7 @@ To use a managed Redis instead:
 
 STARTTLS is the command that upgrades a plain SMTP connection to an encrypted one. With `SMTP_REQUIRE_TLS=true` (the default), the backend refuses to hand mail to an SMTP server that does not offer STARTTLS, so credentials and mail never cross the network in clear text. It has no effect when `SMTP_SECURE=true`, because that connection is encrypted from the start.
 
-The production compose file sets it to `true` for the bundled mail server. Set it to `false` only when you deliberately use an SMTP server without STARTTLS, such as the MailHog test server in local development, which is why `.env.example` sets it to `false`.
+The production compose file sets it to `true` for the bundled mail server. Set it to `false` only when you deliberately use an SMTP server without STARTTLS, such as the MailHog test server in local development, which is why the development `.env.example` of the repository sets it to `false`.
 
 ## SEND_REQUIRE_VALID_DNS
 
@@ -222,13 +236,13 @@ When a domain is not ready:
 
 No mail is recorded on **Sent mail** while the gate refuses it. [Domains](/admin-guide/domains#sending-needs-valid-records) describes how to get a domain ready.
 
-Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why `.env.example` and the test stacks set it to `false`, while `deploy/.env.example` leaves it out and so keeps the default `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
+Set it to `false` only to send without valid records, for example in local development or in a test stack, where no real DNS zone exists. That is why the development `.env.example` of the repository and the test stacks set it to `false`, while the setup of a production installation leaves it out and so keeps the default `true`. With `false`, the gate is off and the backend does not run the extra DNS check at start.
 
 ## LOG_LEVEL
 
-The backend writes its log to standard output. With `NODE_ENV=production`, as in the Docker image, it writes one JSON object per line, ready for `docker compose logs backend` or a log shipper. In every other environment the same entries are printed in a readable one-line form.
+The backend writes its log to standard output. With `NODE_ENV=production`, as in the Docker image, it writes one JSON object per line, ready for `sh mailer.sh compose logs backend` or a log shipper. In every other environment the same entries are printed in a readable one-line form.
 
-`LOG_LEVEL` picks the lowest level that is written: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`, from least to most verbose. The default is `info`; `.env.example` for local development sets `debug`. Set it in `.env` next to `compose.yml`, then run `docker compose up -d backend` to apply it.
+`LOG_LEVEL` picks the lowest level that is written: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`, from least to most verbose. The default is `info`; the development `.env.example` of the repository sets `debug`. Set it in `.env` next to `compose.yml`, then run `sh mailer.sh compose up -d backend` to apply it.
 
 Every request gets a random request id. The backend returns it in the `X-Request-Id` response header, and every log entry written while handling that request carries it as `reqId`, so an error a user reports with that id leads straight to the matching log lines. After each request the backend logs one `request completed` entry with the method, the path, the client address, the status code and the response time. Health checks are not logged. Entries never contain the query string, headers or request bodies, so API keys passed as `?key=…` never reach the log.
 
@@ -248,3 +262,53 @@ Every rate limit is a pair of variables: a count and a window. When a caller exc
 The login has its own limit that you cannot change: 10 attempts per minute, followed by a block of 5 minutes.
 
 The counters depend on the real client address, so set `TRUST_PROXY` correctly (see [TRUST_PROXY](#trust-proxy)); otherwise all visitors behind a proxy share one limit.
+
+## Changing the compose file
+
+`compose.yml` and `mailer.sh` belong to the release: the setup and every `sh mailer.sh update` replace them with the files of the image, and an edit you made to them is lost. Put your own changes in a file named `compose.override.yml` in the install directory instead. Docker Compose merges it into `compose.yml` automatically, and mailer never touches it.
+
+```yaml
+services:
+    backend:
+        environment:
+            TRUST_PROXY: '2'
+        volumes:
+            - /opt/mailer/ca.pem:/certs/ca.pem:ro
+```
+
+Values under `environment` replace the ones of `compose.yml`, and list entries such as `volumes` and `ports` are added to its lists. Apply the change with `sh mailer.sh start`. To see the result of the merge, run `sh mailer.sh compose config`; its output contains your secrets, so do not paste it anywhere.
+
+## Secrets from a secret manager
+
+By default the four secrets (`DB_PASSWORD`, `BACKEND_JWT_SECRET`, `BACKEND_ENCRYPTION_SECRET` and `MAIL_PASSWORD`) live in `.env`, readable only by their owner. This section is optional: it keeps them out of the file, in a tool such as 1Password, Infisical, Doppler or SOPS.
+
+You tell mailer the command that provides them, as `MAILER_SECRETS_WRAPPER` in `.env`. `mailer.sh` starts itself again under that command, so the secrets exist as environment variables for the launcher and for Docker Compose. `compose.yml` passes them to the services from there. The environment wins over `.env` for these four, which is what makes the wrapper work, and `.env` then holds no value for them.
+
+Most tools take the command to run as the rest of their command line, so the launcher appends itself to the wrapper:
+
+```text
+MAILER_SECRETS_WRAPPER=op run --env-file=secrets.env --
+```
+
+Some tools take the command as one quoted argument. For them, write `{}` where the command goes, **without quotes**: the launcher quotes the command itself.
+
+```text
+MAILER_SECRETS_WRAPPER=sops exec-env secrets.enc.env {}
+```
+
+The wrapper runs in the install directory, so a relative file name such as `secrets.env` is found there. These wrappers cover the common tools:
+
+| Tool          | `MAILER_SECRETS_WRAPPER`           |
+| ------------- | ---------------------------------- |
+| 1Password     | `op run --env-file=secrets.env --` |
+| Infisical     | `infisical run --`                 |
+| Doppler       | `doppler run --`                   |
+| SOPS (`age`…) | `sops exec-env secrets.enc.env {}` |
+
+Each of them has to provide the four variables by their names. The file `secrets.env` of 1Password, for example, holds `DB_PASSWORD=op://vault/mailer/db-password` and the three other lines of the same kind.
+
+To set it up, choose **keep them outside `.env`** in the wizard and enter the command, or pass it for an [unattended installation](/installation/#unattended-installation): `sh mailer.sh setup --yes --secrets external --secrets-wrapper 'doppler run --'`. The wizard can generate the four values and show them once, so you can store them in the manager. The setup then starts the stack under the wrapper, so the manager must hold the values by then: if it stops with `DB_PASSWORD is not set; the secrets wrapper did not provide it`, store the four secrets and run `sh mailer.sh setup --yes` again. `.env` already holds the wrapper at that point.
+
+Check the result with `sh mailer.sh doctor`: it prints `ok: <name> is available` for every secret the wrapper provides, and stops with the message above for one it does not. Every `sh mailer.sh` command, `start` and `update` included, fails the same way when the wrapper cannot provide a secret.
+
+A plain `docker compose` typed by hand does not run under the wrapper and fails with `DB_PASSWORD is required`; use `sh mailer.sh compose …`.
