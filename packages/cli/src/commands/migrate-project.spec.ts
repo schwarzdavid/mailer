@@ -62,6 +62,8 @@ describe('migrateProject', () => {
     it.each(fixtureNames)('migrates the %s fixture to the current format', async (name) => {
         await copyFixture(name, projectDir)
         const fixtureCompose = await readFile(join(projectDir, 'compose.yml'), 'utf8')
+        expect(fixtureCompose).not.toBe(assetCompose)
+        expect(await readFile(join(projectDir, 'mailer.sh'), 'utf8')).not.toBe(assetScript)
         const result = await migrateProject(ctx(), { imageTag: '9.9.9', dryRun: false })
         const env = await EnvFile.read(join(projectDir, '.env'))
         expect(result.to).toBe(CURRENT_FORMAT)

@@ -98,7 +98,7 @@ const recordingStub = [
 const recordingWrapper =
     '#!/bin/sh\nprintf \'%s\\n\' "${X:-}" >>wrapper.ran\nDB_PASSWORD=from-wrapper\nexport DB_PASSWORD\nexec "$@"\n'
 
-const releasedLauncher = launcherSource
+const releasedLauncher = join(import.meta.dirname, 'fixtures/format-1/mailer.sh')
 
 function recorded(args: string[]): string {
     return args.map((arg) => `[${arg}]`).join('')
