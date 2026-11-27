@@ -258,13 +258,16 @@ export async function runSetup(
     const envPath = join(ctx.projectDir, '.env')
     const env = await EnvFile.read(envPath)
     const format = await detectFormat(ctx.projectDir)
+    if (typeof format === 'number' && format > CURRENT_FORMAT) {
+        throw new CliError('This installation is newer than the image; a downgrade is not supported.', EXIT.manual)
+    }
     const asking = ctx.interactive && !options.yes
     const settings = asking ? await askSettings(env, options, prompter, resolver) : settingsFromValues(env, options)
     checkSettings(settings)
     const secrets = await planSecrets(env, options, asking ? prompter : undefined)
     const imageTag = resolveImageTag(options.imageTag ?? filled(env.get('IMAGE_TAG')), ctx.bakedVersion)
 
-    const legacyComposeKept = await keepEditedCompose(ctx, prompter)
+    const legacyComposeKept = format === 0 && (await keepEditedCompose(ctx, prompter))
     if (format === 0) {
         await rm(join(ctx.projectDir, 'setup.sh'), { force: true })
     }

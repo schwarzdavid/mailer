@@ -278,6 +278,33 @@ describe('runSetup', () => {
         expect(await readdir(projectDir)).not.toContain('compose.yml.legacy')
     })
 
+    it('overwrites a differing compose.yml of a format 1 installation without a .legacy copy', async () => {
+        const prompter = scriptedPrompter()
+        await writeFile(join(projectDir, '.env'), filledEnv)
+        await writeFile(join(projectDir, 'compose.yml'), 'services:\n  older-cli: {}\n')
+        const result = await runSetup(ctx(), { yes: true, imageTag: 'ci' }, prompter, resolver)
+        expect(result.legacyComposeKept).toBe(false)
+        expect(await readFile(join(projectDir, 'compose.yml'), 'utf8')).toBe(assetCompose)
+        expect(await readdir(projectDir)).not.toContain('compose.yml.legacy')
+        expect(prompter.note).not.toHaveBeenCalledWith(expect.stringContaining('compose.override.yml'))
+    })
+
+    it('refuses an installation newer than the image before prompting or writing', async () => {
+        const prompter = scriptedPrompter()
+        const newerEnv = filledEnv.replace('MAILER_FORMAT_VERSION=1', 'MAILER_FORMAT_VERSION=99')
+        await writeFile(join(projectDir, '.env'), newerEnv)
+        await writeFile(join(projectDir, 'compose.yml'), 'services:\n  newer: {}\n')
+        const failure = runSetup(ctx({ interactive: true }), { yes: false, imageTag: 'ci' }, prompter, resolver)
+        await expect(failure).rejects.toThrow(
+            'This installation is newer than the image; a downgrade is not supported.',
+        )
+        expect(await exitCodeOf(runSetup(ctx(), { yes: true, imageTag: 'ci' }, prompter, resolver))).toBe(3)
+        expect((await readdir(projectDir)).sort()).toEqual(['.env', 'compose.yml'])
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(newerEnv)
+        expect(prompter.text).not.toHaveBeenCalled()
+        expect(prompter.note).not.toHaveBeenCalled()
+    })
+
     it('keeps the foreign lines of a prepared .env when no compose.yml exists yet', async () => {
         await writeFile(join(projectDir, '.env'), `${filledEnv}CUSTOM_SETTING=kept\n`)
         await runSetup(ctx(), { yes: true, imageTag: 'ci' }, scriptedPrompter(), resolver)
