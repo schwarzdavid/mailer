@@ -39,7 +39,7 @@ Three things cannot be recreated if the server is lost:
 sh mailer.sh compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F).dump"
 ```
 
-This writes a compressed dump such as `mailer-2026-10-23.dump` into `/opt/mailer`. `-Fc` selects PostgreSQL's custom format, which `pg_restore` reads. `-T` keeps Docker from adding terminal control characters to the output. The command reads `.env` in a subshell, so no variable stays exported in your shell.
+This writes a compressed dump such as `mailer-2026-10-23.dump` into `/opt/mailer`. `-Fc` selects PostgreSQL's custom format, which `pg_restore` reads. `-T` keeps Docker from adding terminal control characters to the output. The shell inside the container reads the database user and name from the container's own environment, so neither `.env` nor a password appears on the command line.
 
 Check that the dump is complete; `pg_restore --list` prints its table of contents and fails on a broken file:
 
@@ -60,10 +60,10 @@ CRON
 
 The `%` sign is escaped as `\%` because cron treats a bare `%` as the end of the command. Copy the dumps off the server as well, for example with `scp` or your provider's backup storage: a dump on the same disk does not survive the loss of that server.
 
-With an [external Postgres](/installation/advanced-configuration#database-tls) there is no `postgres` container. Run `pg_dump` from a throwaway `postgres:17-alpine` container instead, with your own host, user, database name and password in place of the example values (the password is in `.env`, or in your secret manager), and use this form in the cron line too:
+With an [external Postgres](/installation/advanced-configuration#database-tls) the bundled database server stays unused. Run `pg_dump` from a one-off container of the `postgres` service instead: `--no-deps` keeps the database server from starting, so the container only runs the client, and Compose hands it the credentials from `.env` or your secret manager, so the password is on no command line. Replace `db.example.com` with your database host, and use this form in the cron line too:
 
 ```bash
-docker run --rm -i -e PGPASSWORD='<database password>' postgres:17-alpine pg_dump -h db.example.com -p 5432 -U <database user> -d <database name> -Fc > "mailer-$(date +%F).dump"
+sh mailer.sh compose run --rm -T --no-deps postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h db.example.com -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "mailer-$(date +%F).dump"
 ```
 
 ## Back up `.env` and the mail accounts
@@ -135,10 +135,10 @@ The backend creates every table itself the first time it starts. If it starts be
 
     No output means success. `--no-owner` gives every restored object to the database user from `.env`, so the restore also works if the user name changed.
 
-    If the new installation uses an external Postgres instead of the bundled one, restore into that database from a throwaway container before you start the backend:
+    If the new installation uses an external Postgres instead of the bundled one, restore into that database from a one-off container of the `postgres` service before you start the backend:
 
     ```bash
-    docker run --rm -i -e PGPASSWORD='<database password>' postgres:17-alpine pg_restore -h db.example.com -p 5432 -U <database user> -d <database name> --no-owner < mailer.dump
+    sh mailer.sh compose run --rm -T --no-deps postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h db.example.com -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' < mailer.dump
     ```
 
 7. **Restore the mail accounts, if you backed them up.** Skip this step if you did not; step 8 recreates them instead. The archive must go into the volume before `mail` starts for the first time. `sh mailer.sh compose create mail` creates the `mail` container and its volumes without starting it; copy `mail-config.tar.gz` to `/opt/mailer` and unpack it into the volume:

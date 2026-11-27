@@ -209,7 +209,7 @@ mx2.example.com.
 The mail server presents the certificate for the new name, and the backend reaches it again:
 
 ```bash
-(. ./.env; openssl s_client -starttls smtp -connect "$MAIL_HOSTNAME:25" -servername "$MAIL_HOSTNAME" </dev/null 2>/dev/null | openssl x509 -noout -subject)
+openssl s_client -starttls smtp -connect mx2.example.com:25 -servername mx2.example.com </dev/null 2>/dev/null | openssl x509 -noout -subject
 curl -s https://app.example.com/api/health/ready
 ```
 
