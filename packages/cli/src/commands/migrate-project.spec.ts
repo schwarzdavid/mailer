@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs'
-import { cp, mkdtemp, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Mock } from 'vitest'
@@ -96,6 +96,38 @@ describe('migrateProject', () => {
         expect(env.get('IMAGE_TAG')).toBe('1.0.0')
     })
 
+    it('does not record an empty image tag as the previous one', async () => {
+        await copyFixture('format-1', projectDir)
+        const env = await EnvFile.read(join(projectDir, '.env'))
+        env.set('IMAGE_TAG', '')
+        await env.write(join(projectDir, '.env'))
+        await migrateProject(ctx(), { imageTag: '9.9.9', dryRun: false })
+        const migrated = await EnvFile.read(join(projectDir, '.env'))
+        expect(migrated.get('MAILER_PREVIOUS_IMAGE_TAG')).toBeUndefined()
+        expect(migrated.get('IMAGE_TAG')).toBe('9.9.9')
+    })
+
+    it('reports manual action for a recorded format without compose.yml', async () => {
+        await copyFixture('format-1', projectDir)
+        await rm(join(projectDir, 'compose.yml'))
+        const before = await listing(projectDir)
+        const error = await errorOf(migrateProject(ctx(), { imageTag: '9.9.9', dryRun: false }))
+        expect(error?.exitCode).toBe(3)
+        expect(error?.message).toBe('This directory was not set up by mailer.sh; run: sh mailer.sh setup')
+        expect(await listing(projectDir)).toEqual(before)
+    })
+
+    it('reports a format newer than the image even without compose.yml', async () => {
+        await copyFixture('format-1', projectDir)
+        await rm(join(projectDir, 'compose.yml'))
+        const env = await EnvFile.read(join(projectDir, '.env'))
+        env.set('MAILER_FORMAT_VERSION', '99')
+        await env.write(join(projectDir, '.env'))
+        const error = await errorOf(migrateProject(ctx(), { imageTag: '9.9.9', dryRun: false }))
+        expect(error?.exitCode).toBe(3)
+        expect(error?.message).toBe('This installation is newer than the image; a downgrade is not supported.')
+    })
+
     it('--dry-run changes nothing and takes no lock', async () => {
         await copyFixture('format-1', projectDir)
         const before = await listing(projectDir)
@@ -188,11 +220,64 @@ describe('migrateProject', () => {
                 throw new Error('boom')
             },
         }
+        const files = await readdir(projectDir)
         const error = await errorOf(migrateProjectTo(ctx(), { imageTag: '9.9.9', dryRun: false }, 2, [failing]))
         expect(error?.message).toBe('boom')
         expect(await snapshotOf()).toEqual(before)
         expect(existsSync(join(projectDir, '.update-lock'))).toBe(false)
         expect(existsSync(join(projectDir, 'backups', 'snapshots'))).toBe(true)
+        expect((await readdir(projectDir)).sort()).toEqual([...files, 'backups'].sort())
+    })
+
+    it('restores only the files that differ, by replacing them', async () => {
+        await copyFixture('format-1', projectDir)
+        const before = await snapshotOf()
+        const inode = async (name: string) => (await stat(join(projectDir, name), { bigint: true })).ino
+        const composeInode = await inode('compose.yml')
+        await chmod(join(projectDir, 'mailer.sh'), 0o444)
+        const failing: ProjectMigration = {
+            from: 1,
+            run: async (dir) => {
+                await writeFile(join(dir, 'compose.yml'), 'broken')
+                throw new Error('boom')
+            },
+        }
+        const error = await errorOf(migrateProjectTo(ctx(), { imageTag: '9.9.9', dryRun: false }, 2, [failing]))
+        await chmod(join(projectDir, 'mailer.sh'), 0o644)
+        expect(error?.message).toBe('boom')
+        expect(await snapshotOf()).toEqual(before)
+        expect(await inode('compose.yml')).not.toBe(composeInode)
+        expect(existsSync(join(projectDir, '.update-lock'))).toBe(false)
+    })
+
+    it('keeps the cause and names the snapshot when the restore fails as well', async () => {
+        await copyFixture('format-1', projectDir)
+        const failing: ProjectMigration = {
+            from: 1,
+            run: async (dir) => {
+                await rm(join(dir, 'compose.yml'))
+                await mkdir(join(dir, 'compose.yml'))
+                await writeFile(join(dir, 'compose.yml', 'blocker'), 'x')
+                throw new Error('boom')
+            },
+        }
+        const error = await errorOf(migrateProjectTo(ctx(), { imageTag: '9.9.9', dryRun: false }, 2, [failing]))
+        const [name] = await readdir(join(projectDir, 'backups', 'snapshots'))
+        expect(error?.message).toMatch(/^boom/)
+        expect(error?.message).toMatch(new RegExp(` The previous files are in backups/snapshots/${name}\\.$`))
+        expect(existsSync(join(projectDir, '.update-lock'))).toBe(false)
+        expect(
+            (await readdir(projectDir)).filter((entry) => entry.includes('.tmp') || entry.includes('restore')),
+        ).toEqual([])
+    })
+
+    it.skipIf(process.platform === 'win32')('keeps backups and the snapshot private', async () => {
+        await copyFixture('format-1', projectDir)
+        const result = await migrateProject(ctx(), { imageTag: '9.9.9', dryRun: false })
+        expect((await stat(join(projectDir, 'backups'))).mode & 0o777).toBe(0o700)
+        expect((await stat(join(projectDir, 'backups', 'snapshots'))).mode & 0o777).toBe(0o700)
+        expect((await stat(result.snapshotDir!)).mode & 0o777).toBe(0o700)
+        expect((await stat(join(result.snapshotDir!, '.env'))).mode & 0o077).toBe(0)
     })
 
     it('restores the snapshot when writing the assets fails', async () => {

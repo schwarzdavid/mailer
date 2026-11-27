@@ -1,15 +1,16 @@
 import { randomBytes } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/
+const INLINE_COMMENT = /\s+#.*$/
 
-function unquote(raw: string): string {
+function valueOf(raw: string): string {
     const first = raw[0]
-    if (raw.length >= 2 && (first === '"' || first === "'") && raw.endsWith(first)) {
-        return raw.slice(1, -1)
+    if (first === '"' || first === "'") {
+        return raw.length >= 2 && raw.endsWith(first) ? raw.slice(1, -1) : raw
     }
-    return raw
+    return raw.replace(INLINE_COMMENT, '')
 }
 
 export class EnvFile {
@@ -43,7 +44,7 @@ export class EnvFile {
         for (const line of this.lines) {
             const match = ASSIGNMENT.exec(line)
             if (match?.[1] === key) {
-                value = unquote(match[2] ?? '')
+                value = valueOf(match[2] ?? '')
             }
         }
         return value
@@ -75,7 +76,12 @@ export class EnvFile {
 
     async write(path: string): Promise<void> {
         const temporary = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString('hex')}.tmp`)
-        await writeFile(temporary, this.toString(), { mode: 0o600 })
-        await rename(temporary, path)
+        try {
+            await writeFile(temporary, this.toString(), { mode: 0o600 })
+            await rename(temporary, path)
+        } catch (error) {
+            await rm(temporary, { force: true })
+            throw error
+        }
     }
 }

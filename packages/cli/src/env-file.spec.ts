@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -11,6 +11,26 @@ describe('EnvFile', () => {
         expect(env.get('B')).toBe('two words')
         expect(env.get('C')).toBe('x')
         expect(env.get('MISSING')).toBeUndefined()
+    })
+
+    it('reads an unquoted value up to an inline comment, as Compose does, and writes lines unchanged', () => {
+        const content = 'A=1.0.0 # pinned\nB="x # y"\nC=a#b\nD=v\t# tab\nE=two  # spaces\n'
+        const env = EnvFile.parse(content)
+        expect(env.get('A')).toBe('1.0.0')
+        expect(env.get('B')).toBe('x # y')
+        expect(env.get('C')).toBe('a#b')
+        expect(env.get('D')).toBe('v')
+        expect(env.get('E')).toBe('two')
+        expect(env.toString()).toBe(content)
+    })
+
+    it('write() removes its temporary file when the rename fails', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'mailer-cli-'))
+        const path = join(dir, '.env')
+        await mkdir(path)
+        await writeFile(join(path, 'blocker'), 'x')
+        await expect(EnvFile.parse('A=1\n').write(path)).rejects.toThrow()
+        expect(await readdir(dir)).toEqual(['.env'])
     })
 
     it('has() is false for an empty value', () => {

@@ -1,11 +1,12 @@
-import { copyFile, mkdir, rm } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { copyFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { CliContext } from '../context.ts'
 import { EnvFile } from '../env-file.ts'
 import { CliError, EXIT } from '../errors.ts'
 import { projectMigrations } from '../migrations/index.ts'
 import type { ProjectMigration } from '../migrations/index.ts'
-import { CURRENT_FORMAT, detectFormat, writeAssets } from '../project.ts'
+import { CURRENT_FORMAT, detectFormat, hasComposeFile, writeAssets } from '../project.ts'
 
 export interface MigrateOptions {
     imageTag: string
@@ -21,6 +22,7 @@ export interface MigrateResult {
 const LOCK_NAME = '.update-lock'
 const SNAPSHOT_FILES = ['compose.yml', '.env', 'mailer.sh']
 const PRIVATE_DIRECTORY = 0o700
+const NOT_SET_UP = 'This directory was not set up by mailer.sh; run: sh mailer.sh setup'
 
 function snapshotName(now: Date): string {
     return now
@@ -52,17 +54,55 @@ async function takeLock(lockPath: string): Promise<void> {
     }
 }
 
-async function copyProjectFiles(fromDir: string, toDir: string): Promise<void> {
-    for (const name of SNAPSHOT_FILES) {
-        await copyFile(join(fromDir, name), join(toDir, name))
-    }
-}
-
 async function takeSnapshot(projectDir: string): Promise<string> {
     const snapshotDir = join(projectDir, 'backups', 'snapshots', snapshotName(new Date()))
     await mkdir(snapshotDir, { recursive: true, mode: PRIVATE_DIRECTORY })
-    await copyProjectFiles(projectDir, snapshotDir)
+    for (const name of SNAPSHOT_FILES) {
+        await copyFile(join(projectDir, name), join(snapshotDir, name))
+    }
     return snapshotDir
+}
+
+async function contentOrUndefined(path: string): Promise<Buffer | undefined> {
+    try {
+        return await readFile(path)
+    } catch {
+        return undefined
+    }
+}
+
+async function restoreFile(snapshotDir: string, projectDir: string, name: string): Promise<void> {
+    const saved = join(snapshotDir, name)
+    const target = join(projectDir, name)
+    const current = await contentOrUndefined(target)
+    if (current?.equals(await readFile(saved))) {
+        return
+    }
+    const temporary = join(projectDir, `.${name}.${randomUUID()}.tmp`)
+    try {
+        await copyFile(saved, temporary)
+        await rename(temporary, target)
+    } catch (error) {
+        await rm(temporary, { force: true })
+        throw error
+    }
+}
+
+async function restoreSnapshot(snapshotDir: string, projectDir: string, cause: unknown): Promise<void> {
+    try {
+        for (const name of SNAPSHOT_FILES) {
+            await restoreFile(snapshotDir, projectDir, name)
+        }
+    } catch (restoreError) {
+        throw new CliError(
+            `${sentence(cause)} Restoring the project files failed as well: ${sentence(restoreError)} The previous files are in backups/snapshots/${basename(snapshotDir)}.`,
+        )
+    }
+}
+
+function sentence(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error)
+    return /[.!?]$/.test(message) ? message : `${message}.`
 }
 
 async function applyMigration(
@@ -78,7 +118,7 @@ async function applyMigration(
     }
     await writeAssets(ctx.projectDir, ctx.assetsDir)
     const previousTag = env.get('IMAGE_TAG')
-    if (previousTag !== undefined && previousTag !== options.imageTag) {
+    if (previousTag !== undefined && previousTag !== '' && previousTag !== options.imageTag) {
         env.set('MAILER_PREVIOUS_IMAGE_TAG', previousTag)
     }
     env.set('IMAGE_TAG', options.imageTag)
@@ -94,10 +134,13 @@ export async function migrateProjectTo(
 ): Promise<MigrateResult> {
     const format = await detectFormat(ctx.projectDir)
     if (format === 'fresh' || format === 0) {
-        throw new CliError('This directory was not set up by mailer.sh; run: sh mailer.sh setup', EXIT.manual)
+        throw new CliError(NOT_SET_UP, EXIT.manual)
     }
     if (format > targetFormat) {
         throw new CliError('This installation is newer than the image; a downgrade is not supported.', EXIT.manual)
+    }
+    if (!(await hasComposeFile(ctx.projectDir))) {
+        throw new CliError(NOT_SET_UP, EXIT.manual)
     }
     const steps = stepsBetween(format, targetFormat, migrations)
     if (options.dryRun) {
@@ -117,7 +160,7 @@ export async function migrateProjectTo(
         await applyMigration(ctx, options, targetFormat, steps)
     } catch (error) {
         try {
-            await copyProjectFiles(snapshotDir, ctx.projectDir)
+            await restoreSnapshot(snapshotDir, ctx.projectDir, error)
         } finally {
             await rm(lockPath, { recursive: true, force: true })
         }

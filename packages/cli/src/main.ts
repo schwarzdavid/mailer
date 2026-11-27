@@ -6,6 +6,7 @@ import { recoveryKit } from './commands/recovery-kit.ts'
 import { runSetup } from './commands/setup.ts'
 import type { HostResolver, SecretsMode, SetupOptions } from './commands/setup.ts'
 import { CliError, EXIT } from './errors.ts'
+import { resolveImageTag } from './project.ts'
 import type { Prompter } from './prompter.ts'
 
 export interface MainDeps {
@@ -40,7 +41,7 @@ function contextFor(env: Record<string, string | undefined>, deps: MainDeps): Cl
     }
 }
 
-async function setupCommand(argv: string[], ctx: CliContext, deps: MainDeps): Promise<void> {
+async function setupCommand(argv: string[], ctx: CliContext, deps: MainDeps): Promise<number> {
     const values = parseOptions(argv, {
         yes: { type: 'boolean' },
         'image-tag': { type: 'string' },
@@ -71,30 +72,35 @@ async function setupCommand(argv: string[], ctx: CliContext, deps: MainDeps): Pr
         }
         deps.out(RECOVERY_KIT_REMINDER)
     }
+    return result.legacyComposeKept ? EXIT.review : EXIT.ok
 }
 
-async function migrateCommand(argv: string[], ctx: CliContext): Promise<void> {
+async function migrateCommand(argv: string[], ctx: CliContext): Promise<number> {
     const values = parseOptions(argv, { 'image-tag': { type: 'string' }, 'dry-run': { type: 'boolean' } })
-    if (values['image-tag'] === undefined) {
+    const requested = values['image-tag']
+    if (requested === undefined || requested === '') {
         throw new CliError('migrate-project needs --image-tag <tag>.', EXIT.usage)
     }
-    await migrateProject(ctx, { imageTag: values['image-tag'], dryRun: values['dry-run'] ?? false })
+    const imageTag = resolveImageTag(requested, ctx.bakedVersion)
+    await migrateProject(ctx, { imageTag, dryRun: values['dry-run'] ?? false })
+    return EXIT.ok
 }
 
-async function recoveryKitCommand(argv: string[], ctx: CliContext): Promise<void> {
+async function recoveryKitCommand(argv: string[], ctx: CliContext): Promise<number> {
     parseOptions(argv, {})
     for (const line of await recoveryKit(ctx)) {
         ctx.out(line)
     }
+    return EXIT.ok
 }
 
-async function dispatch(argv: string[], env: Record<string, string | undefined>, deps: MainDeps): Promise<void> {
+async function dispatch(argv: string[], env: Record<string, string | undefined>, deps: MainDeps): Promise<number> {
     const ctx = contextFor(env, deps)
     const [command, ...rest] = argv
     switch (command) {
         case '--version':
             deps.out(ctx.bakedVersion)
-            return
+            return EXIT.ok
         case 'setup':
             return setupCommand(rest, ctx, deps)
         case 'migrate-project':
@@ -113,8 +119,7 @@ async function dispatch(argv: string[], env: Record<string, string | undefined>,
 
 export async function run(argv: string[], env: Record<string, string | undefined>, deps: MainDeps): Promise<number> {
     try {
-        await dispatch(argv, env, deps)
-        return EXIT.ok
+        return await dispatch(argv, env, deps)
     } catch (error) {
         if (error instanceof CliError) {
             deps.err(error.message)

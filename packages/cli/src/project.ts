@@ -28,13 +28,17 @@ function hashNormalised(content: string): string {
     return createHash('sha256').update(content.replaceAll('\r\n', '\n')).digest('hex')
 }
 
+export async function hasComposeFile(projectDir: string): Promise<boolean> {
+    return (await readIfPresent(join(projectDir, 'compose.yml'))) !== undefined
+}
+
 export async function detectFormat(projectDir: string): Promise<ProjectFormat> {
-    if ((await readIfPresent(join(projectDir, 'compose.yml'))) === undefined) {
-        return 'fresh'
-    }
     const env = await EnvFile.read(join(projectDir, '.env'))
     const recorded = env.get('MAILER_FORMAT_VERSION')
-    return recorded !== undefined && /^\d+$/.test(recorded) ? Number(recorded) : 0
+    if (recorded !== undefined && /^\d+$/.test(recorded)) {
+        return Number(recorded)
+    }
+    return (await hasComposeFile(projectDir)) ? 0 : 'fresh'
 }
 
 export async function composeOrigin(projectDir: string, assetsDir: string): Promise<ComposeOrigin> {

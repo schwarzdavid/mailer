@@ -36,10 +36,15 @@ describe('project', () => {
         await writeFile(join(assetsDir, 'mailer.sh'), assetScript)
     })
 
-    it('detectFormat treats a directory without compose.yml as fresh, even with a lone .env', async () => {
+    it('detectFormat treats a directory without compose.yml and without a recorded format as fresh', async () => {
         expect(await detectFormat(projectDir)).toBe('fresh')
-        await writeFile(join(projectDir, '.env'), 'MAILER_FORMAT_VERSION=1\n')
+        await writeFile(join(projectDir, '.env'), 'SITE_ADDRESS=admin.example.org\nMAILER_FORMAT_VERSION=\n')
         expect(await detectFormat(projectDir)).toBe('fresh')
+    })
+
+    it('detectFormat returns a recorded format version even without compose.yml', async () => {
+        await writeFile(join(projectDir, '.env'), 'MAILER_FORMAT_VERSION=99\n')
+        expect(await detectFormat(projectDir)).toBe(99)
     })
 
     it('detectFormat returns 0 for a compose.yml without a numeric format version', async () => {

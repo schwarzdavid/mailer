@@ -55,8 +55,22 @@ function filled(value: string | undefined): string | undefined {
     return value === undefined || value === '' ? undefined : value
 }
 
+function trimmed(value: string | undefined): string | undefined {
+    return filled(value?.trim())
+}
+
 function required(value: string): string | undefined {
     return value.trim() === '' ? 'A value is required' : undefined
+}
+
+function secretsModeOf(options: SetupOptions): SecretsMode | undefined {
+    if (filled(options.secretsWrapper) === undefined) {
+        return options.secrets
+    }
+    if (options.secrets !== undefined && options.secrets !== 'external') {
+        throw new CliError('--secrets-wrapper works only with --secrets external.', EXIT.usage)
+    }
+    return 'external'
 }
 
 async function firstRecord(resolve: () => Promise<string[]>): Promise<string | undefined> {
@@ -73,40 +87,51 @@ async function askSettings(
     prompter: Prompter,
     resolver: HostResolver,
 ): Promise<Settings> {
-    const siteAddress = await prompter.text({
-        message: 'SITE_ADDRESS: the domain the admin UI is served on',
-        initial: options.siteAddress ?? filled(env.get('SITE_ADDRESS')),
-        validate: required,
-    })
+    const siteAddress = (
+        await prompter.text({
+            message: 'SITE_ADDRESS: the domain the admin UI is served on',
+            initial: trimmed(options.siteAddress) ?? trimmed(env.get('SITE_ADDRESS')),
+            validate: required,
+        })
+    ).trim()
     prompter.note(REGISTRABLE_DOMAIN_WARNING)
-    const mailHostname = await prompter.text({
-        message: 'MAIL_HOSTNAME: the platform sending domain (must differ from SITE_ADDRESS)',
-        initial: options.mailHostname ?? filled(env.get('MAIL_HOSTNAME')),
-        validate: required,
-    })
+    const mailHostname = (
+        await prompter.text({
+            message: 'MAIL_HOSTNAME: the platform sending domain (must differ from SITE_ADDRESS)',
+            initial: trimmed(options.mailHostname) ?? trimmed(env.get('MAIL_HOSTNAME')),
+            validate: (value) =>
+                required(value) ??
+                (value.trim() === siteAddress ? 'MAIL_HOSTNAME must differ from SITE_ADDRESS' : undefined),
+        })
+    ).trim()
     const resolved4 = await firstRecord(() => resolver.resolve4(mailHostname))
     const resolved6 = await firstRecord(() => resolver.resolve6(mailHostname))
     if (resolved4 === undefined && resolved6 === undefined) {
         prompter.note(`${mailHostname} does not resolve yet. Create its A and AAAA records before you send mail.`)
     }
-    const mailIpv4 = await prompter.text({
-        message: 'MAIL_SERVER_IPV4: the public IPv4 address of this server',
-        initial: options.mailIpv4 ?? filled(env.get('MAIL_SERVER_IPV4')) ?? resolved4,
-        validate: (value) => (isIPv4(value) ? undefined : 'Enter an IPv4 address'),
-    })
-    const mailIpv6 = await prompter.text({
-        message: 'MAIL_SERVER_IPV6: the public IPv6 address of this server (optional)',
-        initial: options.mailIpv6 ?? filled(env.get('MAIL_SERVER_IPV6')) ?? resolved6,
-        validate: (value) => (value === '' || isIPv6(value) ? undefined : 'Enter an IPv6 address or leave it empty'),
-    })
+    const mailIpv4 = (
+        await prompter.text({
+            message: 'MAIL_SERVER_IPV4: the public IPv4 address of this server',
+            initial: trimmed(options.mailIpv4) ?? trimmed(env.get('MAIL_SERVER_IPV4')) ?? resolved4,
+            validate: (value) => (isIPv4(value.trim()) ? undefined : 'Enter an IPv4 address'),
+        })
+    ).trim()
+    const mailIpv6 = (
+        await prompter.text({
+            message: 'MAIL_SERVER_IPV6: the public IPv6 address of this server (optional)',
+            initial: trimmed(options.mailIpv6) ?? trimmed(env.get('MAIL_SERVER_IPV6')) ?? resolved6,
+            validate: (value) =>
+                value.trim() === '' || isIPv6(value.trim()) ? undefined : 'Enter an IPv6 address or leave it empty',
+        })
+    ).trim()
     return { siteAddress, mailHostname, mailIpv4, mailIpv6 }
 }
 
 function settingsFromValues(env: EnvFile, options: SetupOptions): Settings {
-    const siteAddress = options.siteAddress ?? filled(env.get('SITE_ADDRESS'))
-    const mailHostname = options.mailHostname ?? filled(env.get('MAIL_HOSTNAME'))
-    const mailIpv4 = options.mailIpv4 ?? filled(env.get('MAIL_SERVER_IPV4'))
-    const mailIpv6 = options.mailIpv6 ?? filled(env.get('MAIL_SERVER_IPV6')) ?? ''
+    const siteAddress = trimmed(options.siteAddress) ?? trimmed(env.get('SITE_ADDRESS'))
+    const mailHostname = trimmed(options.mailHostname) ?? trimmed(env.get('MAIL_HOSTNAME'))
+    const mailIpv4 = trimmed(options.mailIpv4) ?? trimmed(env.get('MAIL_SERVER_IPV4'))
+    const mailIpv6 = trimmed(options.mailIpv6) ?? trimmed(env.get('MAIL_SERVER_IPV6')) ?? ''
     if (siteAddress === undefined || mailHostname === undefined || mailIpv4 === undefined) {
         const missing = [
             siteAddress === undefined ? 'SITE_ADDRESS' : undefined,
@@ -162,7 +187,7 @@ async function planExternal(
     options: SetupOptions,
     prompter: Prompter | undefined,
 ): Promise<SecretPlan> {
-    const plan: SecretPlan = { values: {}, generated: [], wrapper: options.secretsWrapper ?? existingWrapper }
+    const plan: SecretPlan = { values: {}, generated: [], wrapper: filled(options.secretsWrapper) ?? existingWrapper }
     if (prompter === undefined) {
         if (plan.wrapper === undefined) {
             throw new CliError('External secrets need a wrapper: pass --secrets-wrapper <command>.', EXIT.usage)
@@ -173,7 +198,12 @@ async function planExternal(
         message: 'MAILER_SECRETS_WRAPPER: the command that runs docker compose with the secrets in its environment',
         validate: required,
     })
-    if (await prompter.confirm({ message: 'Generate the four secrets and show them once?', initial: true })) {
+    if (
+        await prompter.confirm({
+            message: 'Generate the four secrets and show them once?',
+            initial: existingWrapper === undefined,
+        })
+    ) {
         plan.shownOnce = {
             DB_PASSWORD: generateSecret(),
             BACKEND_JWT_SECRET: generateSecret(),
@@ -251,10 +281,11 @@ function applySettings(env: EnvFile, settings: Settings, imageTag: string, secre
 
 export async function runSetup(
     ctx: CliContext,
-    options: SetupOptions,
+    requested: SetupOptions,
     prompter: Prompter,
     resolver: HostResolver,
 ): Promise<SetupResult> {
+    const options: SetupOptions = { ...requested, secrets: secretsModeOf(requested) }
     const envPath = join(ctx.projectDir, '.env')
     const env = await EnvFile.read(envPath)
     const format = await detectFormat(ctx.projectDir)

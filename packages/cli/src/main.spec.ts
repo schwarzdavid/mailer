@@ -118,6 +118,50 @@ describe('run', () => {
         expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(filledEnv)
     })
 
+    it('migrate-project pins the baked version for --image-tag latest', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv)
+        await writeFile(join(projectDir, 'compose.yml'), 'services:\n  old: {}\n')
+        await writeFile(join(projectDir, 'mailer.sh'), '#!/bin/sh\necho old\n')
+        expect(await run(['migrate-project', '--image-tag', 'latest'], environment(), deps)).toBe(0)
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toMatch(/^IMAGE_TAG=1\.4\.0$/m)
+    })
+
+    it('migrate-project refuses an empty --image-tag with the usage code', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv)
+        await writeFile(join(projectDir, 'compose.yml'), 'services:\n  old: {}\n')
+        await writeFile(join(projectDir, 'mailer.sh'), '#!/bin/sh\necho old\n')
+        expect(await run(['migrate-project', '--image-tag', ''], environment(), deps)).toBe(2)
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(filledEnv)
+    })
+
+    it('setup refuses --secrets-wrapper together with another secrets mode', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv)
+        const code = await run(
+            ['setup', '--yes', '--image-tag', 'ci', '--secrets', 'generate', '--secrets-wrapper', 'op run --'],
+            environment(),
+            deps,
+        )
+        expect(code).toBe(2)
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(filledEnv)
+    })
+
+    it.each([[['--yes']], [[]]])(
+        'setup %j returns 4 after it kept an edited compose.yml, and prints the recovery kit first',
+        async (flags) => {
+            const legacyEnv = filledEnv
+                .replace('MAILER_FORMAT_VERSION=1\n', '')
+                .replace('MAIL_PASSWORD=existing-mail-password', 'MAIL_PASSWORD=')
+            await writeFile(join(projectDir, '.env'), legacyEnv)
+            await writeFile(join(projectDir, 'compose.yml'), 'services:\n  mine: {}\n')
+            expect(await run(['setup', ...flags, '--image-tag', 'ci'], environment(), deps)).toBe(4)
+            expect(await readFile(join(projectDir, 'compose.yml.legacy'), 'utf8')).toBe('services:\n  mine: {}\n')
+            expect(await readFile(join(projectDir, '.env'), 'utf8')).toMatch(/^MAILER_FORMAT_VERSION=1$/m)
+            expect(out.mock.calls.map(([line]) => line).at(-1)).toBe(
+                'Store this recovery kit in a password manager. A database backup is worthless without BACKEND_ENCRYPTION_SECRET.',
+            )
+        },
+    )
+
     it('setup --yes on a filled .env returns 0 and prints no recovery kit', async () => {
         await writeFile(join(projectDir, '.env'), filledEnv)
         expect(await run(['setup', '--yes', '--image-tag', 'ci'], environment(), deps)).toBe(0)

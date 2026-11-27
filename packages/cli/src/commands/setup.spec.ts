@@ -305,6 +305,101 @@ describe('runSetup', () => {
         expect(prompter.note).not.toHaveBeenCalled()
     })
 
+    it('refuses a recorded format newer than the image even without compose.yml', async () => {
+        const newerEnv = filledEnv.replace('MAILER_FORMAT_VERSION=1', 'MAILER_FORMAT_VERSION=99')
+        await writeFile(join(projectDir, '.env'), newerEnv)
+        expect(await exitCodeOf(runSetup(ctx(), { yes: true, imageTag: 'ci' }, scriptedPrompter(), resolver))).toBe(3)
+        expect(await readdir(projectDir)).toEqual(['.env'])
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(newerEnv)
+    })
+
+    it('treats a prepared .env without a format version and without compose.yml as fresh', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv.replace('MAILER_FORMAT_VERSION=1\n', ''))
+        const result = await runSetup(ctx(), { yes: true, imageTag: 'ci' }, scriptedPrompter(), resolver)
+        expect(result.legacyComposeKept).toBe(false)
+        expect((await readdir(projectDir)).sort()).toEqual(['.env', 'compose.yml', 'mailer.sh'])
+        expect((await EnvFile.read(join(projectDir, '.env'))).get('MAILER_FORMAT_VERSION')).toBe('1')
+    })
+
+    it('stores pasted answers without their surrounding spaces', async () => {
+        const prompter = scriptedPrompter({
+            text: [' admin.example.org ', 'mx.example.net ', '203.0.113.10 ', ' 2001:db8::10 '],
+            select: ['generate'],
+        })
+        await runSetup(ctx({ interactive: true }), { yes: false, imageTag: 'ci' }, prompter, resolver)
+        const env = await EnvFile.read(join(projectDir, '.env'))
+        expect(env.get('SITE_ADDRESS')).toBe('admin.example.org')
+        expect(env.get('MAIL_HOSTNAME')).toBe('mx.example.net')
+        expect(env.get('MAIL_SERVER_IPV4')).toBe('203.0.113.10')
+        expect(env.get('MAIL_SERVER_IPV6')).toBe('2001:db8::10')
+        expect(resolver.resolve4).toHaveBeenCalledWith('mx.example.net')
+        const ipv4Prompt = prompter.text.mock.calls.find(([call]) => call.message.startsWith('MAIL_SERVER_IPV4'))?.[0]
+        expect(ipv4Prompt?.validate?.('203.0.113.10 ')).toBeUndefined()
+    })
+
+    it('trims values from options and .env', async () => {
+        await writeFile(
+            join(projectDir, '.env'),
+            filledEnv.replace('MAIL_SERVER_IPV4=203.0.113.10', 'MAIL_SERVER_IPV4=203.0.113.10 '),
+        )
+        await runSetup(
+            ctx(),
+            { yes: true, imageTag: 'ci', siteAddress: ' a.example.org ', mailHostname: 'mx.example.net ' },
+            scriptedPrompter(),
+            resolver,
+        )
+        const env = await EnvFile.read(join(projectDir, '.env'))
+        expect(env.get('SITE_ADDRESS')).toBe('a.example.org')
+        expect(env.get('MAIL_HOSTNAME')).toBe('mx.example.net')
+        expect(env.get('MAIL_SERVER_IPV4')).toBe('203.0.113.10')
+    })
+
+    it('the MAIL_HOSTNAME prompt refuses the site address', async () => {
+        const prompter = scriptedPrompter({
+            text: ['admin.example.org', 'mx.example.net', '203.0.113.10', ''],
+            select: ['generate'],
+        })
+        await runSetup(ctx({ interactive: true }), { yes: false, imageTag: 'ci' }, prompter, resolver)
+        const hostnamePrompt = prompter.text.mock.calls.find(([call]) => call.message.startsWith('MAIL_HOSTNAME'))?.[0]
+        expect(hostnamePrompt?.validate?.('admin.example.org')).toEqual(expect.any(String))
+        expect(hostnamePrompt?.validate?.(' admin.example.org ')).toEqual(expect.any(String))
+        expect(hostnamePrompt?.validate?.('mx.example.net')).toBeUndefined()
+        expect(hostnamePrompt?.validate?.(' ')).toEqual(expect.any(String))
+    })
+
+    it('refuses --secrets-wrapper with a secrets mode other than external', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv)
+        const options = { yes: true, imageTag: 'ci', secrets: 'generate' as const, secretsWrapper: 'op run --' }
+        expect(await exitCodeOf(runSetup(ctx(), options, scriptedPrompter(), resolver))).toBe(2)
+        expect(await readFile(join(projectDir, '.env'), 'utf8')).toBe(filledEnv)
+    })
+
+    it('--secrets-wrapper alone means external secrets', async () => {
+        await writeFile(join(projectDir, '.env'), filledEnv.replace(/^(DB_|BACKEND_|MAIL_PASSWORD).*\n/gm, ''))
+        const result = await runSetup(
+            ctx(),
+            { yes: true, imageTag: 'ci', secretsWrapper: 'op run --' },
+            scriptedPrompter(),
+            resolver,
+        )
+        const env = await EnvFile.read(join(projectDir, '.env'))
+        expect(result.generated).toEqual([])
+        expect(env.get('MAILER_SECRETS_WRAPPER')).toBe('op run --')
+        expect(env.has('DB_PASSWORD')).toBe(false)
+    })
+
+    it('a re-run with a configured wrapper offers to generate secrets with no as the default', async () => {
+        const withWrapper = `${filledEnv.replace(/^(DB_|BACKEND_|MAIL_PASSWORD).*\n/gm, '')}MAILER_SECRETS_WRAPPER=op run --\n`
+        await writeFile(join(projectDir, '.env'), withWrapper)
+        const prompter = scriptedPrompter({
+            text: ['admin.example.org', 'mx.example.net', '203.0.113.10', ''],
+            select: ['external'],
+            confirm: [false],
+        })
+        await runSetup(ctx({ interactive: true }), { yes: false, imageTag: 'ci' }, prompter, resolver)
+        expect(prompter.confirm).toHaveBeenCalledWith(expect.objectContaining({ initial: false }))
+    })
+
     it('keeps the foreign lines of a prepared .env when no compose.yml exists yet', async () => {
         await writeFile(join(projectDir, '.env'), `${filledEnv}CUSTOM_SETTING=kept\n`)
         await runSetup(ctx(), { yes: true, imageTag: 'ci' }, scriptedPrompter(), resolver)
