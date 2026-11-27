@@ -1,15 +1,28 @@
 import { randomBytes } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execa } from 'execa'
 import { Compose } from './support/compose.js'
 import { issueLeaf, serialOf, servedImapSerial, servedSmtpSerial } from './support/pki.js'
 import { request, statusOf } from './support/http.js'
 import { requestLogEntry, setupTokenFrom } from './support/logs.js'
 import { deliverDsn, relayFromOutside, smtpGreeting } from './support/smtp.js'
-import { BASE_URL, MAIL_HOSTNAME, SMTP_PORT, createStack, destroyStack, runSetup } from './support/stack.js'
+import {
+    BASE_URL,
+    IMAGE,
+    MAIL_HOSTNAME,
+    SMTP_PORT,
+    createStack,
+    destroyStack,
+    runLauncher,
+    sourceComposeFile,
+    sourceLauncherFile,
+} from './support/stack.js'
 import type { SmokeStack } from './support/stack.js'
 
+const imageTag = process.env.IMAGE_TAG ?? 'local'
 let stack: SmokeStack | undefined
 let compose: Compose
 let indexHtml = ''
@@ -31,7 +44,7 @@ function envValue(env: string, key: string): string | undefined {
 }
 
 beforeAll(async () => {
-    stack = await createStack(process.env.IMAGE_TAG ?? 'local')
+    stack = await createStack(imageTag)
     compose = new Compose(stack)
 })
 
@@ -129,11 +142,17 @@ describe('boot without the mail server', () => {
 })
 
 describe('mail server', () => {
-    it('setup.sh starts mail and creates the bounce account and the postmaster alias', async () => {
-        const output = await runSetup(current())
-        expect(output).not.toContain('Generated')
-        expect(output).toContain(`Created the mailbox bounce@${MAIL_HOSTNAME}.`)
-        expect(output).toContain(`Created the alias postmaster@${MAIL_HOSTNAME} -> bounce@${MAIL_HOSTNAME}.`)
+    it('mailer.sh setup adopts the directory, starts mail and creates the bounce account and the postmaster alias', async () => {
+        const { stdout } = await runLauncher(current(), ['setup', '--yes'])
+        expect(stdout).not.toContain('Generated')
+        expect(stdout).toContain(`Created the mailbox bounce@${MAIL_HOSTNAME}.`)
+        expect(stdout).toContain(`Created the alias postmaster@${MAIL_HOSTNAME} -> bounce@${MAIL_HOSTNAME}.`)
+        const env = await readFile(current().envFile, 'utf8')
+        expect(envValue(env, 'MAILER_FORMAT_VERSION')).toBe('1')
+        expect(envValue(env, 'IMAGE_TAG')).toBe(imageTag)
+        expect(await readFile(current().composeFile, 'utf8')).toBe(await readFile(sourceComposeFile, 'utf8'))
+        expect(await readFile(current().launcherFile, 'utf8')).toBe(await readFile(sourceLauncherFile, 'utf8'))
+        expect(existsSync(join(current().dir, 'compose.yml.legacy'))).toBe(false)
         expect(await compose.waitHealthy('mail', 120_000)).toBe(true)
     })
 
@@ -176,15 +195,15 @@ describe('mail server', () => {
         }
     })
 
-    it('setup.sh run again with an emptied MAIL_PASSWORD generates a new one and rotates it for mail and backend', async () => {
+    it('mailer.sh setup run again with an emptied MAIL_PASSWORD generates a new one and rotates it for mail and backend', async () => {
         const { envFile } = current()
         const before = await readFile(envFile, 'utf8')
         await writeFile(envFile, withEnvValue(before, 'MAIL_PASSWORD', ''))
-        const output = await runSetup(current())
-        expect(output).toContain('Generated MAIL_PASSWORD in .env.')
-        expect(output).toContain('Back up .env now: it holds the secrets generated above (MAIL_PASSWORD)')
-        expect(output).toContain(`Updated the password of bounce@${MAIL_HOSTNAME}.`)
-        expect(output).not.toContain('Created the alias')
+        const { stdout } = await runLauncher(current(), ['setup', '--yes'])
+        expect(stdout).toContain('Generated MAIL_PASSWORD in .env.')
+        expect(stdout).toContain('Store this recovery kit in a password manager.')
+        expect(stdout).toContain(`Updated the password of bounce@${MAIL_HOSTNAME}.`)
+        expect(stdout).not.toContain('Created the alias')
         const after = await readFile(envFile, 'utf8')
         expect(envValue(after, 'MAIL_PASSWORD')).toMatch(/^[A-Za-z0-9+/]{64}$/)
         for (const key of ['DB_PASSWORD', 'BACKEND_JWT_SECRET', 'BACKEND_ENCRYPTION_SECRET']) {
@@ -196,6 +215,17 @@ describe('mail server', () => {
                 timeout: 90_000,
             })
             .toBe(200)
+    })
+
+    it('mailer.sh token prints the setup token the backend logged', async () => {
+        const { stdout } = await runLauncher(current(), ['token'])
+        expect(stdout.trim()).toMatch(/^[0-9a-f]{32}$/)
+        expect(stdout.trim()).toBe(setupTokenFrom(await compose.logs('backend')))
+    })
+
+    it('mailer.sh status lists the backend', async () => {
+        const { stdout } = await runLauncher(current(), ['status'])
+        expect(stdout).toContain('backend')
     })
 })
 
@@ -435,16 +465,31 @@ describe('migrations', () => {
 })
 
 describe('updates', () => {
-    it('up -d replaces the backend', async () => {
+    it('mailer.sh update hands over to the target image and replaces the backend', async () => {
         const oldId = await compose.containerId('backend')
         expect(oldId).not.toBe('')
-        const revisionFile = join(current().dir, 'compose.revision.yml')
-        await writeFile(
-            revisionFile,
-            ['services:', '    backend:', '        environment:', '            SMOKE_REVISION: "2"', ''].join('\n'),
-        )
-        await compose.withFile(revisionFile).run(['up', '-d', '--pull', 'missing', '--wait'])
-        expect((await request(`${BASE_URL}/api/setup/status`)).status).toBe(200)
+        await execa('docker', ['tag', `${IMAGE}:${imageTag}`, `${IMAGE}:smoke-next`])
+        const { stdout } = await runLauncher(current(), ['update', '--to', 'smoke-next'])
+        expect(stdout).toContain(`Updated from ${imageTag} to smoke-next.`)
+        const env = await readFile(current().envFile, 'utf8')
+        expect(envValue(env, 'IMAGE_TAG')).toBe('smoke-next')
+        expect(envValue(env, 'MAILER_PREVIOUS_IMAGE_TAG')).toBe(imageTag)
+        const snapshots = await readdir(join(current().dir, 'backups', 'snapshots'))
+        expect(snapshots).toHaveLength(1)
+        expect((await readdir(join(current().dir, 'backups', 'snapshots', snapshots[0]!))).sort()).toEqual([
+            '.env',
+            'compose.yml',
+            'mailer.sh',
+        ])
+        expect(existsSync(join(current().dir, '.update-lock'))).toBe(false)
         expect(await compose.containerId('backend')).not.toBe(oldId)
+        expect((await request(`${BASE_URL}/api/setup/status`)).status).toBe(200)
+    })
+
+    it('mailer.sh update to the running version changes nothing', async () => {
+        const oldId = await compose.containerId('backend')
+        const { stdout } = await runLauncher(current(), ['update', '--to', 'smoke-next'])
+        expect(stdout).toContain('Already on smoke-next.')
+        expect(await compose.containerId('backend')).toBe(oldId)
     })
 })

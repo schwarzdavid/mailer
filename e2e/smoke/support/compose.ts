@@ -36,22 +36,13 @@ export interface ComposeConfig {
 
 export class Compose {
     readonly stack: SmokeStack
-    readonly extraFiles: string[]
 
-    constructor(stack: SmokeStack, extraFiles: string[] = []) {
+    constructor(stack: SmokeStack) {
         this.stack = stack
-        this.extraFiles = extraFiles
-    }
-
-    withFile(file: string): Compose {
-        return new Compose(this.stack, [...this.extraFiles, file])
     }
 
     run(args: string[], options: RunOptions = {}): Promise<RunResult> {
-        const files = [this.stack.composeFile, this.stack.overrideFile, ...this.extraFiles].flatMap((file) => [
-            '-f',
-            file,
-        ])
+        const files = [this.stack.composeFile, this.stack.overrideFile].flatMap((file) => ['-f', file])
         return docker(
             ['compose', '-p', PROJECT_NAME, '--project-directory', this.stack.dir, ...files, ...args],
             options,
